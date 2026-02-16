@@ -1,0 +1,9 @@
+// https://github.com/formosa-crypto/formosa-xmss/blob/main/ref-jasmin/xmss.jazz
+// https://github.com/Klinkerklank/libjade/blob/feature/sha_improved/src/crypto_hash/sha256/amd64/ref_alt/hash.jazz
+
+export fn spx() -> reg u64
+{
+  reg u64 r;
+  r = 0x0000000000000000;
+  return r;
+}
