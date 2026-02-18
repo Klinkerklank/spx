@@ -1,9 +1,38 @@
 // https://github.com/formosa-crypto/formosa-xmss/blob/main/ref-jasmin/xmss.jazz
-// https://github.com/Klinkerklank/libjade/blob/feature/sha_improved/src/crypto_hash/sha256/amd64/ref_alt/hash.jazz
 
-export fn spx() -> reg u64
+require "params.jinc"
+require "wots/wots.jinc"
+require "xmss/xmss.jinc"
+require "fors/fors.jinc"
+require "ht/ht.jinc"
+require "spx.jinc"
+
+export fn spx(reg u64 adrs_addr) -> reg u8
 {
-  reg u64 r;
-  r = 0x0000000000000000;
+  stack u32[8] adrs;
+  adrs = __init_adrs();
+
+  reg u32 tmp;
+  tmp = 1;
+  adrs = __adrs_set_layer_addr(adrs, tmp);
+  tmp = 0;
+  adrs = __adrs_set_type_and_clear(adrs, tmp);
+  tmp = 2;
+  adrs = __adrs_set_key_pair_addr(adrs, tmp);
+  tmp = 3;
+  adrs = __adrs_set_chain_addr(adrs, tmp);
+  tmp = 4;
+  adrs = __adrs_set_hash_addr(adrs, tmp);
+
+  inline int i;
+  for i=0 to 8 {
+    [:u32 (adrs_addr + (4 * i))] = adrs[i];
+  }
+
+  // return value r being 0 indicates succesful execution of the spx function
+  reg u8 r;
+  r = 0x0;
   return r;
 }
+
+// TODO REMOVE: TESTING FUNCTIONS THAT ARE NOT PART OF SLH-DSS

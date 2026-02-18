@@ -19,16 +19,15 @@ param int SPX_H_PRIME = SPX_H / SPX_D;
 param int SPX_T = 1 << SPX_A; // SPX_T = 2^SPX_A
 param int SPX_M = 30; // TODO formula
 
-// byte offsets within the ADRS data structure
-// TODO or are word offsets more useful?
-param int SPX_ADRS_OFFSET_LAYER      = 0;
-param int SPX_ADRS_OFFSET_TREE       = 4;
-param int SPX_ADRS_OFFSET_TYPE       = 16;
-param int SPX_ADRS_OFFSET_KEYPAIR    = 20;
-param int SPX_ADRS_OFFSET_CHAIN      = 24;
-param int SPX_ADRS_OFFSET_HASH       = 28;
-param int SPX_ADRS_OFFSET_TREEHEIGHT = 24;
-param int SPX_ADRS_OFFSET_TREEINDEX  = 28;
+// word offsets within the ADRS data structure
+param int SPX_ADRS_OFFSET_LAYERADDR   = 0;
+param int SPX_ADRS_OFFSET_TREEADDR    = 1;
+param int SPX_ADRS_OFFSET_TYPE        = 4;
+param int SPX_ADRS_OFFSET_KEYPAIRADDR = 5;
+param int SPX_ADRS_OFFSET_CHAINADDR   = 6;
+param int SPX_ADRS_OFFSET_HASHADDR    = 7;
+param int SPX_ADRS_OFFSET_TREEHEIGHT  = 6;
+param int SPX_ADRS_OFFSET_TREEINDEX   = 7;
 
 // ADRS constant values for the type field
 param int SPX_ADRS_TYPE_WOTS_HASH  = 0;
