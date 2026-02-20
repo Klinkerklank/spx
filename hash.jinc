@@ -1,0 +1,108 @@
+require "../libjade/oldsrc-should-delete/crypto_hash/sha256/amd64/ref/hash.jazz"
+require "../libjade/oldsrc-should-delete/crypto_xof/shake256/amd64/ref/xof.jazz"
+
+// SHAKE256(R || PK.seed || PK.root || M, 8m)
+fn H_msg(
+    stack u8[SPX_N] r,
+    stack u8[SPX_N] pkseed,
+    stack u8[SPX_N] pkroot,
+    stack u64 m_addr,
+    stack u64 m_len
+) -> stack u8[SPX_M]
+{
+    stack u8[3*SPX_N + SPX_M] buf;
+    stack u8[SPX_M] out;
+
+    inline int i;
+
+    // copy R
+    for i=0 to SPX_N {
+        buf[i] = r[i];
+    }
+
+    // copy PK.seed
+    for i=0 to SPX_N {
+        buf[SPX_N + i] = pkseed[i];
+    }
+
+    // copy PK.root
+    for i=0 to SPX_N {
+        buf[2*SPX_N + i] = pkroot[i];
+    }
+
+    // copy M
+    for i=0 to SPX_M {
+        buf[3*SPX_N + i] = [:u8 (m_addr + i)];
+    }
+
+    reg u64 total_len;
+    total_len = 3*SPX_N + SPX_M;
+
+    reg u64 out_addr;
+    reg u64 buf_addr;
+    reg u64 ret;
+
+    out_addr = out;
+    buf_addr = buf;
+
+    // jade_xof_shake256_amd64_ref(reg u64 output output_length input input_length)
+    ret = jade_xof_shake256_amd64_ref(
+        out_addr,
+        8*SPX_M,
+        buf_addr,
+        total_len
+    );
+
+    return out;
+}
+
+// SHAKE256(PK.seed || ADRS || SK.seed, 8n)
+fn PRF(
+    stack u8[SPX_N] pkseed,
+    stack u8[SPX_N] skseed,
+    stack u32[8] adrs
+) -> stack u8[SPX_N]
+{
+    return out;
+}
+
+// SHAKE256(SK.prf || opt_rand || M, 8n)
+fn PRF_msg(
+    stack u8[SPX_N] skprf,
+    stack u8[SPX_N] opt_rand,
+    stack u64 m_addr,
+    stack u64 m_len
+) -> stack u8[SPX_N]
+{
+    return out;
+}
+
+// SHAKE256(PK.seed || ADRS || M1, 8n)
+fn F(
+    stack u8[SPX_N] pkseed,
+    stack u32[8] adrs,
+    stack u8[SPX_N] m1
+) -> stack u8[SPX_N]
+{
+    return out;
+}
+
+// SHAKE256(PK.seed || ADRS || M2, 8n)
+fn H(
+    stack u8[SPX_N] pkseed,
+    stack u32[8] adrs,
+    stack u8[2*SPX_N] m2
+) -> stack u8[SPX_N]
+{
+    return out;
+}
+
+// SHAKE256(PK.seed || ADRS || Ml, 8n)
+fn T_len(
+    stack u8[SPX_N] pkseed,
+    stack u32[8] adrs,
+    stack u8[SPX_N] ml
+) -> stack u8[SPX_LEN]
+{
+    return out;
+}

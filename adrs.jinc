@@ -1,7 +1,7 @@
 // https://github.com/formosa-crypto/formosa-xmss/blob/main/ref-jasmin/hash_address/hash_address.jinc
 
 // create the adrs data structure and set all 32-bit words to 0
-inline fn __init_adrs() -> stack u32[8] {
+inline fn init_adrs() -> stack u32[8] {
   stack u32[8] adrs;
 
   inline int i;
@@ -12,12 +12,12 @@ inline fn __init_adrs() -> stack u32[8] {
   return adrs;
 }
 
-inline fn __adrs_set_layer_addr(stack u32[8] adrs, reg u32 l) -> stack u32[8] {
+inline fn adrs_set_layer_addr(stack u32[8] adrs, reg u32 l) -> stack u32[8] {
   adrs[SPX_ADRS_OFFSET_LAYERADDR] = l;
   return adrs;
 }
 
-inline fn __adrs_set_tree_addr(stack u32[8] adrs, reg u32[3] t) -> stack u32[8] {
+inline fn adrs_set_tree_addr(stack u32[8] adrs, reg u32[3] t) -> stack u32[8] {
   // value of t consists of three words, take those words one at a time
   inline int i;
   for i=0 to 3 {
@@ -27,7 +27,7 @@ inline fn __adrs_set_tree_addr(stack u32[8] adrs, reg u32[3] t) -> stack u32[8] 
   return adrs;
 }
 
-inline fn __adrs_set_type_and_clear(stack u32[8] adrs, reg u32 Y) -> stack u32[8] {
+inline fn adrs_set_type_and_clear(stack u32[8] adrs, reg u32 Y) -> stack u32[8] {
   adrs[SPX_ADRS_OFFSET_TYPE] = Y;
 
   // set the last three words of adrs to 0
@@ -39,80 +39,39 @@ inline fn __adrs_set_type_and_clear(stack u32[8] adrs, reg u32 Y) -> stack u32[8
   return adrs;
 }
 
-inline fn __adrs_set_key_pair_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
+inline fn adrs_set_key_pair_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
   adrs[SPX_ADRS_OFFSET_KEYPAIRADDR] = i;
   return adrs;
 }
 
-inline fn __adrs_set_chain_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
+inline fn adrs_set_chain_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
   adrs[SPX_ADRS_OFFSET_CHAINADDR] = i;
   return adrs;
 }
 
-inline fn __adrs_set_tree_height(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
+inline fn adrs_set_tree_height(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
   adrs[SPX_ADRS_OFFSET_TREEHEIGHT] = i;
   return adrs;
 }
 
-inline fn __adrs_set_hash_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
+inline fn adrs_set_hash_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
   adrs[SPX_ADRS_OFFSET_HASHADDR] = i;
   return adrs;
 }
 
-inline fn __adrs_set_tree_index(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
+inline fn adrs_set_tree_index(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
   adrs[SPX_ADRS_OFFSET_TREEINDEX] = i;
   return adrs;
 }
 
-inline fn __adrs_get_key_pair_addr(stack u32[8] adrs) -> reg u32 {
+inline fn adrs_get_key_pair_addr(stack u32[8] adrs) -> reg u32 {
   reg u32 i;
   i = adrs[SPX_ADRS_OFFSET_KEYPAIRADDR];
   return i;
 }
 
-inline fn __adrs_get_tree_index(stack u32[8] adrs) -> reg u32 {
+inline fn adrs_get_tree_index(stack u32[8] adrs) -> reg u32 {
   reg u32 i;
   i = adrs[SPX_ADRS_OFFSET_TREEINDEX];
-  return i;
-}
-
-// TODO REMOVE: TESTING FUNCTIONS THAT ARE NOT PART OF SLH-DSS
-
-inline fn __adrs_get_layer_addr(stack u32[8] adrs) -> reg u32 {
-  reg u32 l;
-  l = adrs[SPX_ADRS_OFFSET_LAYERADDR];
-  return l;
-}
-
-inline fn __adrs_get_tree_addr(stack u32[8] adrs) -> reg u32[3] {
-  reg u32[3] t;
-  inline int i;
-  for i=0 to 3 {
-    t[i] = adrs[SPX_ADRS_OFFSET_TREEADDR + i];
-  }
-  return t;
-}
-
-inline fn __adrs_get_type(stack u32[8] adrs) -> reg u32 {
-  reg u32 Y;
-  Y = adrs[SPX_ADRS_OFFSET_TYPE];
-  return Y;
-}
-
-inline fn __adrs_get_chain_addr(stack u32[8] adrs) -> reg u32 {
-  reg u32 i;
-  i = adrs[SPX_ADRS_OFFSET_CHAINADDR];
-  return i;
-}
-
-inline fn __adrs_get_hash_addr(stack u32[8] adrs) -> reg u32 {
-  reg u32 i;
-  i = adrs[SPX_ADRS_OFFSET_HASHADDR];
-  return i;
-}
-
-inline fn __adrs_get_tree_height(stack u32[8] adrs) -> reg u32 {
-  reg u32 i;
-  i = adrs[SPX_ADRS_OFFSET_TREEHEIGHT];
   return i;
 }

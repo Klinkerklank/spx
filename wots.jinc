@@ -1,0 +1,38 @@
+// algorithm 5 from SLH-DSS
+// fn chain(
+//     stack u8[SPX_N] X,
+//     stack u32 i s,
+//     stack u8[SPX_N] PKseed,
+//     stack u32[8] ADRS
+// ) -> stack u8[SPX_N]
+// {
+//     return tmp;
+// }
+
+// algorithm 6 from SLH-DSS
+// fn wots_pkgen(
+//     stack u8[SPX_N] SKseed PKseed,
+//     stack u32[8] ADRS
+// ) -> stack u8[SPX_N]
+// {
+//     return pk;
+// }
+
+// algorithm 7 from SLH-DSS
+// fn wots_sign(
+//     stack u8[SPX_N] M SKseed PKseed,
+//     stack u32[8] ADRS
+// ) -> stack u8[SPX_LEN * SPX_N]
+// {
+//     return sig;
+// }
+
+// algorithm 8 from SLH-DSS
+// fn wots_pkfromsig(
+//     stack u8[SPX_LEN * SPX_N] sig,
+//     stack u8[SPX_N] M PKseed,
+//     stack u32[8] ADRS
+// ) -> stack u8[SPX_N]
+// {
+//     return pk_sig;
+// }

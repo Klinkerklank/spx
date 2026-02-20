@@ -7,29 +7,38 @@ require "fors/fors.jinc"
 require "ht/ht.jinc"
 require "spx.jinc"
 
-export fn spx(reg u64 adrs_addr) -> reg u8
+export fn spx_sign(reg u64 hash_addr m_addr m_len) -> reg u8
+{
+  
+
+  // return value r being 0 indicates succesful execution of the spx function
+  reg u8 r;
+  r = 0x0;
+  return r;
+}
+
+export fn test_adrs(reg u64 adrs_addr) -> reg u8
 {
   stack u32[8] adrs;
-  adrs = __init_adrs();
+  adrs = init_adrs();
 
   reg u32 tmp;
   tmp = 1;
-  adrs = __adrs_set_layer_addr(adrs, tmp);
+  adrs = adrs_set_layer_addr(adrs, tmp);
   tmp = 0;
-  adrs = __adrs_set_type_and_clear(adrs, tmp);
+  adrs = adrs_set_type_and_clear(adrs, tmp);
   tmp = 2;
-  adrs = __adrs_set_key_pair_addr(adrs, tmp);
+  adrs = adrs_set_key_pair_addr(adrs, tmp);
   tmp = 3;
-  adrs = __adrs_set_chain_addr(adrs, tmp);
+  adrs = adrs_set_chain_addr(adrs, tmp);
   tmp = 4;
-  adrs = __adrs_set_hash_addr(adrs, tmp);
+  adrs = adrs_set_hash_addr(adrs, tmp);
 
   inline int i;
   for i=0 to 8 {
     [:u32 (adrs_addr + (4 * i))] = adrs[i];
   }
 
-  // return value r being 0 indicates succesful execution of the spx function
   reg u8 r;
   r = 0x0;
   return r;

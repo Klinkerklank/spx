@@ -1,0 +1,36 @@
+// modified algorithm 1 from SLH-DSS
+// fn gen_all_len (
+//     int n lg_w
+// )
+// {
+//     set SPX_W
+//     set SPX_LEN_1
+//     compute SPX_LEN_2
+//     set SPX_LEN
+// }
+
+// algorithm 2 from SLH-DSS
+// fn to_int(
+//     stack u8[n] X,
+//     stack u32 n
+// ) -> stack u32
+// {
+//     return total;
+// }
+
+// algorithm 3 from SLH-DSS
+// fn to_byte(
+//     stack u32 x n
+// ) -> stack u8[n]
+// {
+//     return S;
+// }
+
+// algorithm 4 from SLH-DSS
+// fn base_2b(
+//     stack u8[?] X,
+//     stack u32 b out_len
+// ) -> stack u32[out_len]
+// {
+//     return base_b;
+// }

@@ -1,0 +1,33 @@
+// algorithm 9 from SLH-DSS
+// fn xmss_node(
+//     stack u8[SPX_N] SKseed,
+//     stack u32 i z,
+//     stack u8[SPX_N] PKseed,
+//     stack u32[8] ADRS
+// ) -> stack u8[SPX_N]
+// {
+//     return node;
+// }
+
+// algorithm 10 from SLH-DSS
+// fn xmss_sign(
+//     stack u8[SPX_N] M SKseed,
+//     stack u32 idx,
+//     stack u8[SPX_N] PKseed,
+//     stack u32[8] ADRS
+// ) -> stack u8[(SPX_LEN + SPX_H_PRIME) * SPX_N]
+// {
+//     return SIG_XMSS;
+// }
+
+// algorithm 11 from SLH-DSS
+// fn xmss_pkfromsig(
+//     stack u32 idx,
+//     stack u8[(SPX_LEN + SPX_H_PRIME) * SPX_N] SIG_XMSS,
+//     stack u8[SPX_N] M,
+//     stack u8[SPX_N] PKseed,
+//     stack u32[8] ADRS
+// ) -> stack u8[SPX_N]
+// {
+//     return node[0];
+// }

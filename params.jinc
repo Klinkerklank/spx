@@ -1,7 +1,7 @@
 // https://github.com/Klinkerklank/libjade/blob/feature/sha_improved/src/crypto_hash/sha256/amd64/ref_alt/sha256_constants.jinc
 // https://github.com/formosa-crypto/formosa-xmss/blob/main/ref-jasmin/params/params-xmss-sha2_20_512.jinc
 
-// main SPX parameters
+// main SPHINCS+ parameters
 // initialised to approved parameter set of top row of SLH-DSS Table 2
 param int SPX_N    = 16; // 16, 24, 32
 param int SPX_LG_W = 4;  // 4
@@ -10,7 +10,7 @@ param int SPX_D    = 7;  // 7, 8, 17, 22
 param int SPX_A    = 12; // 6, 8, 9, 12, 14
 param int SPX_K    = 14; // 14, 17, 22, 33, 35
 
-// computed SPX parameters
+// computed SPHINCS+ parameters
 param int SPX_W = 1 << SPX_LG_W; // SPX_W = 2^SPX_LG_W
 param int SPX_LEN_1 = 32; // TODO formula
 param int SPX_LEN_2 = 3; // TODO formula
