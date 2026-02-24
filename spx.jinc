@@ -1,14 +1,3 @@
-require "params.jinc" // SPHINCS+ parameters
-require "hash.jinc"   // hash function implementations
-require "adrs.jinc"   // ADRS data structure
-
-require "misc.jinc" // algorithms 1-4   of SLH-DSS
-require "wots.jinc" // algorithms 5-8   of SLH-DSS
-require "xmss.jinc" // algorithms 9-11  of SLH-DSS
-require "ht.jinc"   // algorithms 12-13 of SLH-DSS
-require "fors.jinc" // algorithms 14-17 of SLH-DSS
-require "spx.jinc"  // algorithms 18-23 of SLH-DSS
-
 // algorithm 18 from SLH-DSS
 // fn slh_keygen_internal(
 //     stack u8[SPX_N] SKseed SKprf PKseed
@@ -31,34 +20,6 @@ require "spx.jinc"  // algorithms 18-23 of SLH-DSS
 // fn slh_verify_internal(
 //     stack u8[? * SPX_N] M,
 //     stack u8[(1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N] SIG,
-//     stack u8[2 * SPX_N] PK
-// ) -> stack u32
-// {
-//     return bool;
-// }
-
-// algorithm 21 from SLH-DSS
-// fn slh_keygen(
-// ) -> stack u8[4 * SPX_N]
-// {
-//     return SK;
-// }
-
-// algorithm 22 from SLH-DSS
-// fn slh_sign(
-//     ? M,
-//     ? ctx,
-//     stack u8[4 * SPX_N] SK
-// ) -> stack u8[(1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N]
-// {
-//     return SIG;
-// }
-
-// algorithm 24 from SLH-DSS
-// fn slh_verify(
-//     ? M,
-//     stack u8[(1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N] SIG,
-//     ? ctx,
 //     stack u8[2 * SPX_N] PK
 // ) -> stack u32
 // {

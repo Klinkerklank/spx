@@ -1,23 +1,31 @@
 // https://github.com/formosa-crypto/formosa-xmss/blob/main/ref-jasmin/xmss.jazz
 
-require "params.jinc"
-require "wots/wots.jinc"
-require "xmss/xmss.jinc"
-require "fors/fors.jinc"
-require "ht/ht.jinc"
-require "spx.jinc"
+require "params.jinc" // SPHINCS+ parameters
+require "adrs.jinc"   // ADRS data structure
+// require "hash.jinc"   // hash function implementations
 
-export fn spx_sign(reg u64 hash_addr m_addr m_len) -> reg u8
-{
+// require "sha256/sha256.jinc"
+
+// require "misc.jinc" // algorithms 1-4   of SLH-DSS
+// require "wots.jinc" // algorithms 5-8   of SLH-DSS
+// require "xmss.jinc" // algorithms 9-11  of SLH-DSS
+// require "ht.jinc"   // algorithms 12-13 of SLH-DSS
+// require "fors.jinc" // algorithms 14-17 of SLH-DSS
+// require "spx.jinc"  // algorithms 18-23 of SLH-DSS
+
+// export
+// fn spx_sign(reg u64 hash_addr m_addr m_len) -> reg u8
+// {
   
 
-  // return value r being 0 indicates succesful execution of the spx function
-  reg u8 r;
-  r = 0x0;
-  return r;
-}
+//   // return value r being 0 indicates succesful execution of the spx function
+//   reg u8 r;
+//   r = 0x0;
+//   return r;
+// }
 
-export fn test_adrs(reg u64 adrs_addr) -> reg u8
+export
+fn test_adrs(reg u64 adrs_addr) -> reg u8
 {
   stack u32[8] adrs;
   adrs = init_adrs();
@@ -44,4 +52,33 @@ export fn test_adrs(reg u64 adrs_addr) -> reg u8
   return r;
 }
 
-// TODO REMOVE: TESTING FUNCTIONS THAT ARE NOT PART OF SLH-DSS
+// algorithm 21 from SLH-DSS
+// export
+// fn slh_keygen(
+// ) -> stack u8[4 * SPX_N]
+// {
+//     return SK;
+// }
+
+// algorithm 22 from SLH-DSS
+// export
+// fn slh_sign(
+//     ? M,
+//     ? ctx,
+//     stack u8[4 * SPX_N] SK
+// ) -> stack u8[(1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N]
+// {
+//     return SIG;
+// }
+
+// algorithm 24 from SLH-DSS
+// export
+// fn slh_verify(
+//     ? M,
+//     stack u8[(1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N] SIG,
+//     ? ctx,
+//     stack u8[2 * SPX_N] PK
+// ) -> stack u32
+// {
+//     return bool;
+// }
