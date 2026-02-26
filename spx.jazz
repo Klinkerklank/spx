@@ -1,10 +1,6 @@
-// https://github.com/formosa-crypto/formosa-xmss/blob/main/ref-jasmin/xmss.jazz
-
 require "params.jinc" // SPHINCS+ parameters
 require "adrs.jinc"   // ADRS data structure
-// require "hash.jinc"   // hash function implementations
-
-// require "sha256/sha256.jinc"
+require "hash.jinc"   // hash function implementations
 
 // require "misc.jinc" // algorithms 1-4   of SLH-DSS
 // require "wots.jinc" // algorithms 5-8   of SLH-DSS
@@ -12,17 +8,6 @@ require "adrs.jinc"   // ADRS data structure
 // require "ht.jinc"   // algorithms 12-13 of SLH-DSS
 // require "fors.jinc" // algorithms 14-17 of SLH-DSS
 // require "spx.jinc"  // algorithms 18-23 of SLH-DSS
-
-// export
-// fn spx_sign(reg u64 hash_addr m_addr m_len) -> reg u8
-// {
-  
-
-//   // return value r being 0 indicates succesful execution of the spx function
-//   reg u8 r;
-//   r = 0x0;
-//   return r;
-// }
 
 export
 fn test_adrs(reg u64 adrs_addr) -> reg u8
@@ -45,6 +30,29 @@ fn test_adrs(reg u64 adrs_addr) -> reg u8
   inline int i;
   for i=0 to 8 {
     [:u32 (adrs_addr + (4 * i))] = adrs[i];
+  }
+
+  reg u8 r;
+  r = 0x0;
+  return r;
+}
+
+// bash command to manually check what the output should be for SHA256 with a 64-byte all-zero input:
+// printf '\x00%.0s' {1..64} | sha256sum
+export
+fn test_sha256(reg u64 out_addr) -> reg u8 {
+  stack u8[SPX_N + SPX_N + 32] buf;
+  inline int i;
+  for i = 0 to SPX_N + SPX_N + 32 {
+    buf[i] = 0x0;
+  }
+  
+  stack u8[32] tmp;
+  tmp = hash_PRF::__sha256(tmp, buf);
+
+  // write tmp into C buffer manually
+  for i = 0 to 32 {
+    [:u8 (out_addr + i)] = tmp[i];
   }
 
   reg u8 r;
