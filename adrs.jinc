@@ -1,5 +1,3 @@
-// https://github.com/formosa-crypto/formosa-xmss/blob/main/ref-jasmin/hash_address/hash_address.jinc
-
 // create the adrs data structure and set all 32-bit words to 0
 inline fn init_adrs() -> stack u32[8] {
   stack u32[8] adrs;
@@ -27,13 +25,13 @@ inline fn adrs_set_tree_addr(stack u32[8] adrs, reg u32[3] t) -> stack u32[8] {
   return adrs;
 }
 
-inline fn adrs_set_type_and_clear(stack u32[8] adrs, reg u32 Y) -> stack u32[8] {
+inline fn adrs_set_type_and_clear(stack u32[8] adrs, int Y) -> stack u32[8] {
   adrs[SPX_ADRS_OFFSET_TYPE] = Y;
 
   // set the last three words of adrs to 0
   inline int i;
   for i=5 to 8 {
-    adrs[i] = 0;
+    adrs[i] = 0x0;
   }
 
   return adrs;

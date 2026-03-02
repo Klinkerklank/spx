@@ -3,7 +3,7 @@ require "adrs.jinc"   // ADRS data structure
 require "hash.jinc"   // hash function implementations
 
 // require "misc.jinc" // algorithms 1-4   of SLH-DSS
-// require "wots.jinc" // algorithms 5-8   of SLH-DSS
+require "wots.jinc" // algorithms 5-8   of SLH-DSS
 // require "xmss.jinc" // algorithms 9-11  of SLH-DSS
 // require "ht.jinc"   // algorithms 12-13 of SLH-DSS
 // require "fors.jinc" // algorithms 14-17 of SLH-DSS
@@ -29,7 +29,7 @@ fn test_adrs(reg u64 adrs_addr) -> reg u8
 
   inline int i;
   for i=0 to 8 {
-    [:u32 (adrs_addr + (4 * i))] = adrs[i];
+    [:u32 (adrs_addr + 4*i)] = adrs[i];
   }
 
   reg u8 r;
@@ -37,22 +37,31 @@ fn test_adrs(reg u64 adrs_addr) -> reg u8
   return r;
 }
 
-// bash command to manually check what the output should be for SHA256 with a 64-byte all-zero input:
-// printf '\x00%.0s' {1..64} | sha256sum
+// bash command to manually check what the output should be for SHA256 with a 96-byte all-zero input:
+// printf '\x00%.0s' {1..96} | sha256sum
 export
 fn test_sha256(reg u64 out_addr) -> reg u8 {
-  stack u8[SPX_N + SPX_N + 32] buf;
+  stack u8[SPX_N] pkseed;
+  stack u32[8] adrs;
+  stack u8[SPX_N] m1;
+  
   inline int i;
-  for i = 0 to SPX_N + SPX_N + 32 {
-    buf[i] = 0x0;
+  for i = 0 to SPX_N {
+    pkseed[i] = 0x0;
+  }
+  for i = 0 to 8 {
+    adrs[i] = 0x0;
+  }
+  for i = 0 to SPX_N {
+    m1[i] = 0x0;
   }
   
-  stack u8[32] tmp;
-  tmp = hash_PRF::__sha256(tmp, buf);
+  stack u8[SPX_N] digest;
+  digest = F(pkseed, adrs, m1);
 
-  // write tmp into C buffer manually
-  for i = 0 to 32 {
-    [:u8 (out_addr + i)] = tmp[i];
+  // write digest into C buffer manually
+  for i = 0 to SPX_N {
+    [:u8 (out_addr + i)] = digest[i];
   }
 
   reg u8 r;

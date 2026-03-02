@@ -4,25 +4,20 @@ require "sha256_in_ptr/sha256_in_ptr.jinc"
 // namespaces for the hash functions with fixed input lengths:
 
 // PRF(PK.seed, SK.seed, ADRS)
-namespace hash_PRF {
-    param int INLEN = SPX_N + SPX_N + 32;
+// F(PK.seed, ADRS, M_1), where M_1 is one n-byte chain value in WOTS
+namespace sha256_2n32 {
+    param int INLEN = 2*SPX_N + 32;
     require "sha256_array/sha256_array.jinc"
 }
 
-// F(PK.seed, ADRS, M_1), where M_1 is one n-byte chain value in WOTS 
-// namespace hash_F {
-//     param int INLEN = SPX_N + 32 + SPX_N;
-//     require "sha256_array/sha256_array.jinc"
-// }
-
 // H(PK.seed, ADRS, M_2), where M_2 = (lnode || rnode) in XMSS node computation
-// namespace hash_H {
-//     param int INLEN = SPX_N + 32 + 2*SPX_N;
-//     require "sha256_array/sha256_array.jinc"
-// }
+namespace sha256_3n32 {
+    param int INLEN = 3*SPX_N + 32;
+    require "sha256_array/sha256_array.jinc"
+}
 
 // T_len(PK.seed, ADRS, M_len), where M_len is an array of n-byte chain values, one for each of the len chains in WOTS
-// namespace hash_T_len {
-//     param int INLEN = SPX_N + 32 + SPX_LEN*SPX_N;
-//     require "sha256_array/sha256_array.jinc"
-// }
+namespace sha256_n32len {
+    param int INLEN = SPX_N + 32 + SPX_LEN*SPX_N;
+    require "sha256_array/sha256_array.jinc"
+}

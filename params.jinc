@@ -1,6 +1,6 @@
 // main SPHINCS+ parameters
 // initialised to approved parameter set of top row of SLH-DSS Table 2
-param int SPX_N    = 16; // 16, 24, 32
+param int SPX_N    = 32; // 16, 24, 32
 param int SPX_LG_W = 4;  // 4
 param int SPX_H    = 63; // 63, 64, 66, 68
 param int SPX_D    = 7;  // 7, 8, 17, 22

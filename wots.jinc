@@ -1,22 +1,79 @@
 // algorithm 5 from SLH-DSS
-// fn chain(
-//     stack u8[SPX_N] X,
-//     stack u32 i s,
-//     stack u8[SPX_N] PKseed,
-//     stack u32[8] ADRS
-// ) -> stack u8[SPX_N]
-// {
-//     return tmp;
-// }
+inline fn chain(
+    stack u8[SPX_N] X,
+    stack u32 i s,
+    stack u8[SPX_N] PKseed,
+    stack u32[8] ADRS
+) -> stack u8[SPX_N]
+{
+    // copy input string X into a new string tmp
+    stack u8[SPX_N] tmp;
+    inline int i = 0 to SPX_N {
+        tmp[i] = X[i]
+    }
+
+    reg u32 j;
+    j = i;
+    while j < i + s {
+        ADRS = adrs_set_hash_addr(j);
+        tmp = F(PKseed, ADRS, tmp);
+        j += 1;
+    }
+
+    return tmp;
+}
 
 // algorithm 6 from SLH-DSS
-// fn wots_pkgen(
-//     stack u8[SPX_N] SKseed PKseed,
-//     stack u32[8] ADRS
-// ) -> stack u8[SPX_N]
-// {
-//     return pk;
-// }
+inline fn wots_pkgen(
+    stack u8[SPX_N] SKseed PKseed,
+    stack u32[8] ADRS
+) -> stack u8[SPX_N]
+{
+    // copy address to create key generation key address
+    stack u32[8] skADRS;
+    inline int i;
+    for i = 0 to 4 { // don't need to copy the last four bytes since those are set to zero in adrs_set_type_and_clear
+        skADRS[i] = ADRS[i];
+    }
+
+    skADRS = adrs_set_type_and_clear(skADRS, SPX_ADRS_TYPE_WOTS_PRF);
+    reg u32 keypairaddr;
+    keypairaddr = adrs_get_key_pair_addr(ADRS);
+    skADRS = adrs_set_key_pair_addr(skADRS, keypairaddr);
+
+    stack u8[SPX_LEN][SPX_N] tmp;
+    for i = 0 to SPX_LEN {
+        skADRS = adrs_set_chain_addr(skADRS, i);
+        
+        // compute the secret value for chain i
+        stack u32[SPX_N] sk;
+        sk = PRF(PKseed, SKseed, skADRS);
+        ADRS = adrs_set_chain_addr(ADRS, i);
+        
+        // compute the public value for chain i
+        stack u8[SPX_N] pub;
+        pub = chain(sk, 0, w-1, PKseed, ADRS);
+        for j = 0 to SPX_N {
+            tmp[i][j] = pub[j];
+        }
+    }
+
+    // copy address to create WOTS public key address
+    stack u32[8] wotspkADRS;
+    for i = 0 to 4 { // don't need to copy the last four bytes since those are set to zero in adrs_set_type_and_clear
+        wotspkADRS[i] = ADRS[i];
+    }
+    wotspkADRS = adrs_set_type_and_clear(wotspkADRS, SPX_ADRS_TYPE_WOTS_PK);
+    reg u32 keypairaddr;
+    keypairaddr = adrs_get_key_pair_addr(ADRS);
+    wotspkADRS = adrs_set_key_pair_addr(wotspkADRS, keypairaddr);
+
+    // compress WOTS public key
+    stack u8[SPX_N] pk;
+    pk = T_len(PKseed, wotspkADRS, tmp);
+
+    return pk;
+}
 
 // algorithm 7 from SLH-DSS
 // fn wots_sign(
