@@ -9,8 +9,8 @@ param int SPX_K    = 14; // 14, 17, 22, 33, 35
 
 // computed SPHINCS+ parameters
 param int SPX_W = 1 << SPX_LG_W; // SPX_W = 2^SPX_LG_W
-param int SPX_LEN_1 = 32; // TODO formula
-param int SPX_LEN_2 = 3; // TODO formula
+param int SPX_LEN_1 = (8*SPX_N + SPX_LG_W - 1) / SPX_LG_W;
+param int SPX_LEN_2 = ; // TODO formula
 param int SPX_LEN = SPX_LEN_1 + SPX_LEN_2;
 param int SPX_H_PRIME = SPX_H / SPX_D;
 param int SPX_T = 1 << SPX_A; // SPX_T = 2^SPX_A

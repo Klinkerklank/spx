@@ -1,0 +1,45 @@
+// hash function family identifiers
+param int SPX_HASH_SHA2  = 0;
+param int SPX_HASH_SHAKE = 1;
+// hash function family used
+param int SPX_HASHFAM    = 0;
+
+// SPHINCS+ parameters
+param int SPX_N = 32;
+param int SPX_M = 49; // ceil((SPX_H - SPX_H_PRIME) / 8) + ceil((SPX_H_PRIME) / 8) + ceil((SPX_K + SPX_A) / 8)
+
+// WOTS+ parameters
+param int SPX_LG_W  = 4;
+param int SPX_W     = 16; // 2^SPX_LG_W
+param int SPX_LEN_1 = 64; // ceil(8*SPX_N / SPX_LG_W)
+param int SPX_LEN_2 = 3; // floor(log2(SPX_LEN_1 * (SPX_W - 1)) / SPX_LG_W) + 1
+param int SPX_LEN   = 67; // SPX_LEN_1 + SPX_LEN_2
+
+// hypertree parameters
+param int SPX_H       = 68;
+param int SPX_D       = 17;
+param int SPX_H_PRIME = 4; // SPX_H / SPX_D
+
+// FORS parameters
+param int SPX_A = 9;
+param int SPX_K = 35;
+param int SPX_T = 512; // 2^SPX_A
+
+// word offsets within the ADRS data structure
+param int SPX_ADRS_OFFSET_LAYERADDR   = 0;
+param int SPX_ADRS_OFFSET_TREEADDR    = 1;
+param int SPX_ADRS_OFFSET_TYPE        = 4;
+param int SPX_ADRS_OFFSET_KEYPAIRADDR = 5;
+param int SPX_ADRS_OFFSET_CHAINADDR   = 6;
+param int SPX_ADRS_OFFSET_HASHADDR    = 7;
+param int SPX_ADRS_OFFSET_TREEHEIGHT  = 6;
+param int SPX_ADRS_OFFSET_TREEINDEX   = 7;
+
+// ADRS constant values for the type field
+param int SPX_ADRS_TYPE_WOTS_HASH  = 0;
+param int SPX_ADRS_TYPE_WOTS_PK    = 1;
+param int SPX_ADRS_TYPE_TREE       = 2;
+param int SPX_ADRS_TYPE_FORS_TREE  = 3;
+param int SPX_ADRS_TYPE_FORS_ROOTS = 4;
+param int SPX_ADRS_TYPE_WOTS_PRF   = 5;
+param int SPX_ADRS_TYPE_FORS_PRF   = 6;
