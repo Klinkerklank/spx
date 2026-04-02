@@ -76,13 +76,18 @@ inline fn wots_pkgen(
 }
 
 // algorithm 7 from SLH-DSS
-// fn wots_sign(
-//     stack u8[SPX_N] M SKseed PKseed,
-//     stack u32[8] ADRS
-// ) -> stack u8[SPX_LEN * SPX_N]
-// {
-//     return sig;
-// }
+fn wots_sign(
+    stack u8[SPX_N] M SKseed PKseed,
+    stack u32[8] ADRS
+) -> stack u8[SPX_LEN * SPX_N]
+{
+    reg u32 csum;
+    csum = 0x0;
+    
+    
+
+    return sig;
+}
 
 // algorithm 8 from SLH-DSS
 // fn wots_pkfromsig(

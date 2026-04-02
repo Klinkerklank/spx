@@ -1,8 +1,8 @@
-require "params.jinc" // SPHINCS+ parameters
+require "params/params-spx-sha2-128f.jinc" // SPHINCS+ parameters
 require "adrs.jinc"   // ADRS data structure
 require "hash.jinc"   // hash function implementations
 
-// require "misc.jinc" // algorithms 1-4   of SLH-DSS
+require "misc.jinc" // algorithms 1-4   of SLH-DSS
 require "wots.jinc" // algorithms 5-8   of SLH-DSS
 // require "xmss.jinc" // algorithms 9-11  of SLH-DSS
 // require "ht.jinc"   // algorithms 12-13 of SLH-DSS

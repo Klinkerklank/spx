@@ -4,6 +4,9 @@ param int SPX_HASH_SHAKE = 1;
 // hash function family used
 param int SPX_HASHFAM    = 0;
 
+// security category of parameter set
+param int SPX_SEC_CAT = 1;
+
 // SPHINCS+ parameters
 param int SPX_N = 16;
 param int SPX_M = 34; // ceil((SPX_H - SPX_H_PRIME) / 8) + ceil((SPX_H_PRIME) / 8) + ceil((SPX_K + SPX_A) / 8)
@@ -24,6 +27,20 @@ param int SPX_H_PRIME = 3; // SPX_H / SPX_D
 param int SPX_A = 6;
 param int SPX_K = 33;
 param int SPX_T = 64; // 2^SPX_A
+
+// SHA2 fixed hash function input and output sizes
+param int SHA256_IN  = 64;
+param int SHA256_OUT = 32;
+param int SHA512_IN  = 128;
+param int SHA512_OUT = 64;
+// hash function SHA-X for H_msg, PRF_msg, H, T_len, and T_k dependent on security category SECCAT
+// X = 256 if SECCAT = 1, X = 512 if SECCAT = 3 or 5
+param int SHAX_IN    = 64;
+param int SHAX_OUT   = 32;
+// hash function SHA-X for H_msg, PRF_msg, H, T_len, and T_k dependent on security category SECCAT
+// X = 256 if SECCAT = 1, X = 512 if SECCAT = 3 or 5
+param int SHA_HMAC_PREFIX = 80; // SHAX_IN + SPX_N
+param int SHA_MGF1_PREFIX = 48; // 3*SPX_N
 
 // word offsets within the ADRS data structure
 param int SPX_ADRS_OFFSET_LAYERADDR   = 0;

@@ -4,6 +4,9 @@ param int SPX_HASH_SHAKE = 1;
 // hash function family used
 param int SPX_HASHFAM    = 1;
 
+// security category of parameter set
+param int SPX_SEC_CAT = 3;
+
 // SPHINCS+ parameters
 param int SPX_N = 24;
 param int SPX_M = 42; // ceil((SPX_H - SPX_H_PRIME) / 8) + ceil((SPX_H_PRIME) / 8) + ceil((SPX_K + SPX_A) / 8)

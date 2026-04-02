@@ -1,181 +1,343 @@
-require "sha256/core_hash_sha256.jinc"
+#[inline] if (SPX_HASHFAM == SPX_HASH_SHA2) {
+    require "sha256/core_hash_sha256.jinc"
+}
+
+from Stdlib require "memcpy/memcpy.jinc"
+from Stdlib require "bytes/bytes.jinc"
 
 // TODO look into hardware-accelerated SHA256 instructions
 // TODO look into SHA256 AVX implementation at https://github.com/strub/sha256
 
-// fn H_msg(
-//     stack u8[SPX_N] r,
-//     stack u8[SPX_N] pkseed,
-//     stack u8[SPX_N] pkroot,
-//     stack u64 m_addr,
-//     stack u64 m_len
-// ) -> stack u8[SPX_M]
-// {
-//     return out;
-// }
+// H_msg(R, PK.seed, PK.root, M) =
+// SHAKE:        SHAKE256(R || PK.seed || PK.root || M, 8m)
+// SHA2-128:     MGF1-SHA-256(R || PK.seed || SHA-256(R || PK.seed || PK.root || M), m)
+// SHA2-192/256: MGF1-SHA-512(R || PK.seed || SHA-512(R || PK.seed || PK.root || M), m)
+fn H_msg(
+    reg ptr u8[SPX_M] out,
+    reg ptr u8[SPX_N] r,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u8[SPX_N] pkroot,
+    reg u64 m_addr m_len
+) -> stack u8[SPX_M]
+{
+    inline int i;
+    stack u8[SHA_MGF1_PREFIX] buf; // buffer for inner hash call
+    for i=0 to SPX_N { buf[i] = r[i]; } // copy R
+    for i=0 to SPX_N { buf[SPX_N + i] = pkseed[i]; } // copy PK.seed
+    for i=0 to SPX_N { buf[2*SPX_N + i] = pkroot[i]; } // copy PK.root
 
+    // compute seedhash = sha256(R || PK.seed || PK.root || M)
+    stack u8[SHA256_OUT] seedhash;
+    seedhash = sha256_mgf1_msg::__sha256_prefix_ptr(seedhash, buf, m_addr, m_len);
+
+    stack u8[2*SPX_N + SHA256_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
+    for i=0 to SPX_N { seed[i] = r[i]; } // copy R
+    for i=0 to SPX_N { seed[SPX_N + i] = pkseed[i]; } // copy PK.seed
+    for i=0 to SHA256_OUT/8 { seed[:u64 2*SPX_N + i] = seedhash[:u64 i]; } // copy the inner message digest
+    
+    // need ceil(SPX_M / SHA256_OUT) hashes of SHA256_OUT bytes each, to surpass at least SPX_M bytes
+    stack u8[((SPX_M + SHA256_OUT - 1) / SHA256_OUT) * SHA256_OUT] concat;
+    for i=0 to ((SPX_M + SHA256_OUT - 1) / SHA256_OUT) {
+        seed[:u32 2*SPX_N + SHA256_OUT] = i; // set last 4 bytes to counter
+        // compute sha2(seed) including counter
+        stack u8[SHA256_OUT] tmp;
+        tmp = sha256_mgf1_seed::__sha256(tmp, seed);
+        // save the hash value
+        concat[i*((SPX_M + SHA256_OUT - 1) / SHA256_OUT) : (i+1)*((SPX_M + SHA256_OUT - 1) / SHA256_OUT)] = copy_nbytes(concat[i*((SPX_M + SHA256_OUT - 1) / SHA256_OUT) : (i+1)*((SPX_M + SHA256_OUT - 1) / SHA256_OUT)], tmp);
+    }
+    
+    // truncate the concatenated hash outputs to the correct length by copying only the first SPX_M bytes
+    out[0 : SPX_M] = copy_nbytes(out[0 : SPX_M], concat);
+    return out;
+}
+
+// PRF_msg(SK.prf, opt_rand, M) =
+// SHAKE:        SHAKE256(SK.prf || opt_rand || M, 8n)
+// SHA2-128:     Trunc_n(HMAC-SHA-256(SK.prf, opt_rand || M))
+// SHA2-192/256: Trunc_n(HMAC-SHA-512(SK.prf, opt_rand || M))
+fn PRF_msg(
+    reg ptr u8[SPX_N] out,
+    reg ptr u8[SPX_N] skprf,
+    reg ptr u8[SPX_N] opt_rand,
+    reg u64 m_addr m_len
+) -> reg ptr u8[SPX_N]
+{
+    stack u8[SHA256_IN] key; // buffer for the key
+    key[0 : SPX_N] = copy_nbytes(key[0 : SPX_N], skprf); // first part of the key is SK.prf
+    // pad the rest of the key with zeroes
+    reg u64 pad;
+    pad = SPX_N;
+    while (pad < SHA256_IN) {
+        key[pad] = 0;
+        pad += 1;
+    }
+
+    inline int i;
+    stack u8[SHA_HMAC_PREFIX] ibuf; // buffer for inner hash call
+    for i=0 to SHA256_IN/8 { ibuf[:u64 i*8] = 0x3636363636363636; } // set ipad
+    for i=0 to SHA256_IN/8 { ibuf[:u64 i*8] ^= key[:u64 i*8]; }     // bitwise xor ipad with the key
+    for i=0 to SPX_N { ibuf[SHA256_IN + i] = opt_rand[i]; }         // append opt_rand
+
+    // compute sha256((key xor ipad) || opt_rand || M)
+    stack u8[SHA2_OUT] inner; // buffer for inner hash value
+    inner = sha256_hmac_inner::__sha256_prefix_ptr(inner, ibuf, m_addr, m_len);
+
+    stack u8[SHA256_IN + SHA256_OUT] obuf; // buffer for outer hash call
+    for i=0 to SHA256_IN/8 { obuf[:u64 i*8] = 0x5C5C5C5C5C5C5C5C; }           // set opad
+    for i=0 to SHA256_IN/8 { obuf[:u64 i*8] ^= key[:u64 i*8]; }               // bitwise xor opad with the key
+    for i=0 to SHA256_OUT/8 { obuf[:u64 SHA256_IN + i*8] = inner[:u64 i*8]; } // append the inner hash value
+
+    // compute sha256((key xor opad) || inner)
+    stack u8[SHA2_OUT] hmac;
+    hmac = sha256_hmac_outer::__sha256(hmac, obuf);
+
+    // truncate the message digest to the correct length by copying only the first SPX_N bytes
+    out[0 : SPX_N] = copy_nbytes(out[0 : SPX_N], hmac);
+    return out;
+}
+
+// PRF(PK.seed, SK.seed, ADRS) =
+// SHAKE:            SHAKE256(PK.seed || ADRS || SK.seed, 8n)
+// SHA2-128/192/256: Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || SK.seed))
 fn PRF(
-    stack u8[SPX_N] pkseed,
-    stack u8[SPX_N] skseed,
-    stack u32[8] adrs
-) -> stack u8[SPX_N]
+    reg ptr u8[SPX_N] out,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u8[SPX_N] skseed,
+    reg ptr u32[8] adrs
+) -> reg ptr u8[SPX_N]
 {
     // declare a stack buffer that will contain the concatenated inputs
-    stack u8[2*SPX_N + 32] buf;
-
-    inline int i;
+    // buf = PK.seed || toByte(0,64-n) || ADRS^c || SK.seed
+    //     = SPX_N    + (64-SPX_N)      + 22      + SPX_N
+    //     =      SHA256_IN             + 22      + SPX_N
+    stack u8[SHA256_IN + 22 + SPX_N] buf;
 
     // 1. copy PK.seed
-    for i = 0 to SPX_N {
-        buf[i] = pkseed[i];
+    // -> buf = PK.seed
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+
+    // 2. pad with zeroes
+    // -> buf = PK.seed || zero-padding
+    reg u64 pad;
+    pad = SPX_N;
+    while (pad < SHA256_IN) {
+        buf[pad] = 0;
+        pad += 1;
     }
 
-    // 2. copy SK.seed
-    for i = 0 to SPX_N {
-        buf[SPX_N + i] = skseed[i];
-    }
+    // 3. copy ADRS^c
+    // -> buf = PK.seed || zero-padding || ADRS^c
+    stack u8[22] adrsc;
+    adrsc = adrs_compress(adrsc, adrs);
+    buf[SHA256_IN : SHA256_IN+22] = #copy(adrsc);
 
-    // 3. copy ADRS
-    // ADRS consists of 32-bit words, the bytes of which are Little Endian. SHA256 expects Big Endian.
-    // Hence we write the four bytes in a word in the reverse order into the buffer.
-    reg u32 adrs_word;
-    for i = 0 to 8 {
-        adrs_word = adrs[i];
-        buf[2*SPX_N + 4*i + 3] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[2*SPX_N + 4*i + 2] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[2*SPX_N + 4*i + 1] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[2*SPX_N + 4*i + 0] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-    }
+    // 4. copy SK.seed
+    // -> buf = PK.seed || zero-padding || ADRS^c || SK.seed
+    buf[SHA256_IN+22 : SHA256_IN+22+SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SHA256_IN+22+SPX_N], skseed);
 
-    // declare a stack buffer that will hold the full message digest
-    stack u8[32] digest;
-    digest = sha256_2n32::__sha256(digest, buf);
+    // compute the digest
+    stack u8[SHA256_OUT] digest;
+    digest = sha256_tl_1n::__sha256(digest, buf);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
-    stack u8[SPX_N] trunc;
-    for i = 0 to SPX_N {
-        trunc[i] = digest[i];
-    }
-
-    return trunc;
+    out[0 : SPX_N] = copy_nbytes(out[0 : SPX_N], digest);
+    return out;
 }
 
-// fn PRF_msg(
-//     stack u8[SPX_N] skprf,
-//     stack u8[SPX_N] opt_rand,
-//     stack u64 m_addr,
-//     stack u64 m_len
-// ) -> stack u8[SPX_N]
-// {
-//     return out;
-// }
-
+// F(PK.seed, ADRS, M_1) =
+// SHAKE:            SHAKE256(PK.seed || ADRS || M_1, 8n)
+// SHA2-128/192/256: Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_1))
 inline fn F(
-    stack u8[SPX_N] pkseed,
-    stack u32[8] adrs,
-    stack u8[SPX_N] m1
-) -> stack u8[SPX_N]
+    reg ptr u8[SPX_N] out,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u32[8] adrs,
+    reg ptr u8[SPX_N] m1
+) -> reg ptr u8[SPX_N]
 {
     // declare a stack buffer that will contain the concatenated inputs
-    stack u8[2*SPX_N + 32] buf;
-
-    inline int i;
+    // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_1
+    //     = SPX_N    + (64-SPX_N)      + 22      + SPX_N
+    //     =      SHA256_IN             + 22      + SPX_N
+    stack u8[SHA256_IN + 22 + SPX_N] buf;
 
     // 1. copy PK.seed
-    for i = 0 to SPX_N {
-        buf[i] = pkseed[i];
+    // -> buf = PK.seed
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+
+    // 2. pad with zeroes
+    // -> buf = PK.seed || zero-padding
+    reg u64 pad;
+    pad = SPX_N;
+    while (pad < SHA256_IN) {
+        buf[pad] = 0;
+        pad += 1;
     }
 
-    // 2. copy ADRS
-    // ADRS consists of 32-bit words, the bytes of which are Little Endian. SHA256 expects Big Endian.
-    // Hence we write the four bytes in a word in the reverse order into the buffer.
-    reg u32 adrs_word;
-    for i = 0 to 8 {
-        adrs_word = adrs[i];
-        buf[SPX_N + 4*i + 3] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[SPX_N + 4*i + 2] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[SPX_N + 4*i + 1] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[SPX_N + 4*i + 0] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-    }
+    // 3. copy ADRS^c
+    // -> buf = PK.seed || zero-padding || ADRS^c
+    stack u8[22] adrsc;
+    adrsc = adrs_compress(adrsc, adrs);
+    buf[SHA256_IN : SHA256_IN+22] = #copy(adrsc);
 
-    // 3. copy M_1
-    for i = 0 to SPX_N {
-        buf[SPX_N + 32 + i] = m1[i];
-    }
+    // 4. copy M_1
+    // -> buf = PK.seed || zero-padding || ADRS^c || M_1
+    buf[SHA256_IN+22 : SHA256_IN+22+SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SHA256_IN+22+SPX_N], m1);
 
-    // declare a stack buffer that will hold the full message digest
-    stack u8[32] digest;
-    digest = sha256_2n32::__sha256(digest, buf);
+    // compute the digest
+    stack u8[SHA256_OUT] digest;
+    digest = sha256_tl_1n::__sha256(digest, buf);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
-    stack u8[SPX_N] trunc;
-    for i = 0 to SPX_N {
-        trunc[i] = digest[i];
-    }
-
-    return trunc;
+    out[0 : SPX_N] = copy_nbytes(out[0 : SPX_N], digest);
+    return out;
 }
 
+// H(PK.seed, ADRS, M_2) =
+// SHAKE:        SHAKE256(PK.seed || ADRS || M_2, 8n)
+// SHA2-128:     Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_2))
+// SHA2-192/256: Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_2))
 fn H(
-    stack u8[SPX_N] pkseed,
-    stack u32[8] adrs,
-    stack u8[2*SPX_N] m2
-) -> stack u8[SPX_N]
+    reg ptr u8[SPX_N] out,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u32[8] adrs,
+    reg ptr u8[2*SPX_N] m2
+) -> reg ptr u8[SPX_N]
 {
     // declare a stack buffer that will contain the concatenated inputs
-    stack u8[3*SPX_N + 32] buf;
-
-    inline int i;
+    // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_2     (for sha2-128)
+    //     = SPX_N    + (64-SPX_N)      + 22      + 2*SPX_N (for sha2-128)
+    //     =        ... (128-SPX_N) ...                     (for sha2-192 and sha2-256)
+    //     =       SHAX_IN              + 22      + 2*SPX_N (any case)
+    stack u8[SHAX_IN + 22 + 2*SPX_N] buf;
 
     // 1. copy PK.seed
-    for i = 0 to SPX_N {
-        buf[i] = pkseed[i];
+    // -> buf = PK.seed
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+
+    // 2. pad with zeroes
+    // -> buf = PK.seed || zero-padding
+    reg u64 pad;
+    pad = SPX_N;
+    while (pad < SHAX_IN) {
+        buf[pad] = 0;
+        pad += 1;
     }
 
-    // 2. copy ADRS
-    // ADRS consists of 32-bit words, the bytes of which are Little Endian. SHA256 expects Big Endian.
-    // Hence we write the four bytes in a word in the reverse order into the buffer.
-    reg u32 adrs_word;
-    for i = 0 to 8 {
-        adrs_word = adrs[i];
-        buf[SPX_N + 4*i + 3] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[SPX_N + 4*i + 2] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[SPX_N + 4*i + 1] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-        adrs_word >>= 8;
-        buf[SPX_N + 4*i + 0] = adrs_word; // automatically truncates adrs_word to the rightmost 8 bits
-    }
+    // 3. copy ADRS^c
+    // -> buf = PK.seed || zero-padding || ADRS^c
+    stack u8[22] adrsc;
+    adrsc = adrs_compress(adrsc, adrs);
+    buf[SHAX_IN : SHAX_IN+22] = #copy(adrsc);
 
-    // 3. copy M_2
-    for i = 0 to 2*SPX_N {
-        buf[SPX_N + 32 + i] = m2[i];
-    }
+    // 4. copy M_2
+    // -> buf = PK.seed || zero-padding || ADRS^c || M_2
+    buf[SHAX_IN+22 : SHAX_IN+22+2*SPX_N] = copy_nbytes(buf[SHAX_IN+22 : SHAX_IN+22+2*SPX_N], m2);
 
-    // declare a stack buffer that will hold the full message digest
-    stack u8[32] digest;
-    digest = sha256_3n32::__sha256(digest, buf);
+    // compute the digest
+    stack u8[SHAX_OUT] digest;
+    digest = sha256_tl_2n::__sha256(digest, buf);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
-    stack u8[SPX_N] trunc;
-    for i = 0 to SPX_N {
-        trunc[i] = digest[i];
-    }
-
-    return trunc;
+    out[0 : SPX_N] = copy_nbytes(out[0 : SPX_N], digest);
+    return out;
 }
 
+// T_len(PK.seed, ADRS, M_len) =
+// SHAKE:        SHAKE256(PK.seed || ADRS || M_len, 8n)
+// SHA2-128:     Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_len))
+// SHA2-192/256: Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_len))
 fn T_len(
-    stack u8[SPX_N] pkseed,
-    stack u32[8] adrs,
-    stack u8[SPX_LEN][SPX_N] ml
-) -> stack u8[SPX_N]
+    reg ptr u8[SPX_N] out,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u32[8] adrs,
+    reg ptr u8[SPX_LEN*SPX_N] mlen
+) -> reg ptr u8[SPX_N]
 {
+    // declare a stack buffer that will contain the concatenated inputs
+    // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_len         (for sha2-128)
+    //     = SPX_N    + (64-SPX_N)      + 22      + SPX_LEN*SPX_N (for sha2-128)
+    //     =        ... (128-SPX_N) ...                           (for sha2-192 and sha2-256)
+    //     =       SHAX_IN              + 22      + SPX_LEN*SPX_N (any case)
+    stack u8[SHAX_IN + 22 + SPX_LEN*SPX_N] buf;
+
+    // 1. copy PK.seed
+    // -> buf = PK.seed
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+
+    // 2. pad with zeroes
+    // -> buf = PK.seed || zero-padding
+    reg u64 pad;
+    pad = SPX_N;
+    while (pad < SHAX_IN) {
+        buf[pad] = 0;
+        pad += 1;
+    }
+
+    // 3. copy ADRS^c
+    // -> buf = PK.seed || zero-padding || ADRS^c
+    stack u8[22] adrsc;
+    adrsc = adrs_compress(adrsc, adrs);
+    buf[SHAX_IN : SHAX_IN+22] = #copy(adrsc);
+
+    // 4. copy M_len
+    // -> buf = PK.seed || zero-padding || ADRS^c || M_len
+    buf[SHAX_IN+22 : SHAX_IN+22+SPX_LEN*SPX_N] = copy_nbytes(buf[SHAX_IN+22 : SHAX_IN+22+SPX_LEN*SPX_N], mlen);
+
+    // compute the digest
+    stack u8[SHAX_OUT] digest;
+    digest = sha256_compress_wots::__sha256(digest, buf);
+
+    // truncate the message digest to the correct length by copying only the first SPX_N bytes
+    out[0 : SPX_N] = copy_nbytes(out[0 : SPX_N], digest);
+    return out;
+}
+
+// T_k(PK.seed, ADRS, M_k) =
+// SHAKE:        SHAKE256(PK.seed || ADRS || M_k, 8n)
+// SHA2-128:     Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_k))
+// SHA2-192/256: Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_k))
+fn T_k(
+    reg ptr u8[SPX_N] out,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u32[8] adrs,
+    reg ptr u8[SPX_K*SPX_N] mk
+) -> reg ptr u8[SPX_N]
+{
+    // declare a stack buffer that will contain the concatenated inputs
+    // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_k         (for sha2-128)
+    //     = SPX_N    + (64-SPX_N)      + 22      + SPX_K*SPX_N (for sha2-128)
+    //     =        ... (128-SPX_N) ...                         (for sha2-192 and sha2-256)
+    //     =       SHAX_IN              + 22      + SPX_K*SPX_N (any case)
+    stack u8[SHAX_IN + 22 + SPX_K*SPX_N] buf;
+
+    // 1. copy PK.seed
+    // -> buf = PK.seed
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+
+    // 2. pad with zeroes
+    // -> buf = PK.seed || zero-padding
+    reg u64 pad;
+    pad = SPX_N;
+    while (pad < SHAX_IN) {
+        buf[pad] = 0;
+        pad += 1;
+    }
+
+    // 3. copy ADRS^c
+    // -> buf = PK.seed || zero-padding || ADRS^c
+    stack u8[22] adrsc;
+    adrsc = adrs_compress(adrsc, adrs);
+    buf[SHAX_IN : SHAX_IN+22] = #copy(adrsc);
+
+    // 4. copy M_k
+    // -> buf = PK.seed || zero-padding || ADRS^c || M_k
+    buf[SHAX_IN+22 : SHAX_IN+22+SPX_K*SPX_N] = copy_nbytes(buf[SHAX_IN+22 : SHAX_IN+22+SPX_K*SPX_N], mk);
+
+    // compute the digest
+    stack u8[SHAX_OUT] digest;
+    digest = sha256_compress_fors::__sha256(digest, buf);
+
+    // truncate the message digest to the correct length by copying only the first SPX_N bytes
+    out[0 : SPX_N] = copy_nbytes(out[0 : SPX_N], digest);
     return out;
 }

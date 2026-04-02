@@ -1,75 +1,157 @@
-// create the adrs data structure and set all 32-bit words to 0
-inline fn init_adrs() -> stack u32[8] {
-  stack u32[8] adrs;
-
+// set every word in adrs to 0
+inline
+fn adrs_init(
+  reg ptr u32[8] adrs
+) -> reg ptr u32[8]
+{
+  // set all u32 words of adrs to 0 in as few instructions as possible
+  // i.e. set to 0 with 64 bits at a time
   inline int i;
-  for i=0 to 8 {
-    adrs[i] = 0;
+  for i=0 to 4 { adrs[:u64 i] = 0; }
+  return adrs;
+}
+
+// compress adrs to adrs^c, for SHA implementations
+inline
+fn adrs_compress(
+  reg ptr u32[8] adrs
+) -> reg ptr u8[22]
+{
+  stack u8[22] compressed;
+  inline int i;
+
+  // ADRS^c = ADRS[3] ∥ ADRS[8 ∶ 16] ∥ ADRS[19] ∥ ADRS[20 ∶ 32]
+  compressed[0] = adrs[:u8 3];
+  for i=0 to 8 { compressed[i+1] = adrs[:u8 i+8]; }
+  compressed[9] = adrs[:u8 19];
+  for i=0 to 12 { compressed[i+10] = adrs[:u8 i+20]; }
+}
+
+// translate u32[8] adrs to u8[32] bytestring
+inline
+fn adrs_to_bytes(
+  reg ptr u8[32] bytes,
+  reg ptr u32[8] adrs
+) -> reg ptr u8[32]
+{
+  reg u64 i = 0;
+  reg u64 subarray_start_index;
+  reg ptr u8[4] buf;
+
+  while (i < 8) {
+    subarray_start_index = i; subarray_start_index <<= 2; // subarray_start_index = i * 4
+    buf = bytes[subarray_start_index : 4];
+    buf = __u32_to_bytes(buf, addr[i]);
+    bytes[subarray_start_index : 4] = buf;
+    i += 1;
   }
 
+  return bytes;
+}
+
+////////////////////////////////
+
+inline
+fn adrs_set_layer_addr(
+  reg ptr u32[8] adrs,
+  reg u32 layer
+) -> reg ptr u32[8]
+{
+  adrs[SPX_ADRS_OFFSET_LAYERADDR] = layer;
   return adrs;
 }
 
-inline fn adrs_set_layer_addr(stack u32[8] adrs, reg u32 l) -> stack u32[8] {
-  adrs[SPX_ADRS_OFFSET_LAYERADDR] = l;
-  return adrs;
-}
-
-inline fn adrs_set_tree_addr(stack u32[8] adrs, reg u32[3] t) -> stack u32[8] {
-  // value of t consists of three words, take those words one at a time
+inline
+fn adrs_set_tree_addr(
+  reg ptr u32[8] adrs,
+  reg ptr u32[3] tree
+) -> reg ptr u32[8]
+{
+  // tree consists of three words, take those words one at a time
   inline int i;
-  for i=0 to 3 {
-    adrs[SPX_ADRS_OFFSET_TREEADDR + i] = t[i];
-  }
-
+  for i=0 to 3 { adrs[SPX_ADRS_OFFSET_TREEADDR + i] = tree[i]; }
   return adrs;
 }
 
-inline fn adrs_set_type_and_clear(stack u32[8] adrs, int Y) -> stack u32[8] {
-  adrs[SPX_ADRS_OFFSET_TYPE] = Y;
-
-  // set the last three words of adrs to 0
-  inline int i;
-  for i=5 to 8 {
-    adrs[i] = 0x0;
-  }
-
+inline
+fn adrs_set_type_and_clear(
+  reg ptr u32[8] adrs,
+  reg u32 type
+) -> reg ptr u32[8]
+{
+  // set the last four words of adrs (including type field) to 0
+  for i=2 to 4 { adrs[:u64 i] = 0; }
+  // set type to the requested value
+  adrs[SPX_ADRS_OFFSET_TYPE] = type;
   return adrs;
 }
 
-inline fn adrs_set_key_pair_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
-  adrs[SPX_ADRS_OFFSET_KEYPAIRADDR] = i;
+inline
+fn adrs_set_key_pair_addr(
+  reg ptr u32[8] adrs,
+  reg u32 keypair
+) -> reg ptr u32[8]
+{
+  adrs[SPX_ADRS_OFFSET_KEYPAIRADDR] = keypair;
   return adrs;
 }
 
-inline fn adrs_set_chain_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
-  adrs[SPX_ADRS_OFFSET_CHAINADDR] = i;
+inline
+fn adrs_set_chain_addr(
+  reg ptr u32[8] adrs,
+  reg u32 chain
+) -> reg ptr u32[8]
+{
+  adrs[SPX_ADRS_OFFSET_CHAINADDR] = chain;
   return adrs;
 }
 
-inline fn adrs_set_tree_height(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
-  adrs[SPX_ADRS_OFFSET_TREEHEIGHT] = i;
+inline
+fn adrs_set_tree_height(
+  reg ptr u32[8] adrs,
+  reg u32 height
+) -> reg ptr u32[8]
+{
+  adrs[SPX_ADRS_OFFSET_TREEHEIGHT] = height;
   return adrs;
 }
 
-inline fn adrs_set_hash_addr(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
-  adrs[SPX_ADRS_OFFSET_HASHADDR] = i;
+inline
+fn adrs_set_hash_addr(
+  reg ptr u32[8] adrs,
+  reg u32 hashaddr
+) -> reg ptr u32[8]
+{
+  adrs[SPX_ADRS_OFFSET_HASHADDR] = hashaddr;
   return adrs;
 }
 
-inline fn adrs_set_tree_index(stack u32[8] adrs, reg u32 i) -> stack u32[8] {
-  adrs[SPX_ADRS_OFFSET_TREEINDEX] = i;
+inline
+fn adrs_set_tree_index(
+  reg ptr u32[8] adrs,
+  reg u32 treeindex
+) -> reg ptr u32[8]
+{
+  adrs[SPX_ADRS_OFFSET_TREEINDEX] = treeindex;
   return adrs;
 }
 
-inline fn adrs_get_key_pair_addr(stack u32[8] adrs) -> reg u32 {
-  reg u32 i;
-  i = adrs[SPX_ADRS_OFFSET_KEYPAIRADDR];
-  return i;
+inline
+fn adrs_get_key_pair_addr(
+  reg ptr u32[8] adrs
+) -> reg u32
+{
+  reg u32 keypair;
+  keypair = adrs[SPX_ADRS_OFFSET_KEYPAIRADDR];
+  return keypair;
 }
 
-inline fn adrs_get_tree_index(stack u32[8] adrs) -> reg u32 {
-  reg u32 i;
-  i = adrs[SPX_ADRS_OFFSET_TREEINDEX];
-  return i;
+inline
+fn adrs_get_tree_index(
+  reg ptr u32[8] adrs
+) -> reg u32
+{
+  reg u32 treeindex;
+  treeindex = adrs[SPX_ADRS_OFFSET_TREEINDEX];
+  return treeindex;
 }
