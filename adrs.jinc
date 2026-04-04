@@ -1,34 +1,3 @@
-// set every word in adrs to 0
-inline
-fn adrs_init(
-  reg ptr u32[8] adrs
-) -> reg ptr u32[8]
-{
-  // set all u32 words of adrs to 0 in as few instructions as possible
-  // i.e. set to 0 with 64 bits at a time
-  inline int i;
-  for i=0 to 4 { adrs[:u64 i] = 0; }
-  return adrs;
-}
-
-// compress adrs to adrs^c, for SHA implementations
-inline
-fn adrs_compress(
-  reg ptr u8[22] out,
-  reg ptr u32[8] adrs
-) -> reg ptr u8[22]
-{
-  inline int i;
-
-  // ADRS^c = ADRS[3] ∥ ADRS[8 ∶ 16] ∥ ADRS[19] ∥ ADRS[20 ∶ 32]
-  out[0] = adrs[:u8 3];
-  for i=0 to 8 { out[i+1] = adrs[:u8 i+8]; }
-  out[9] = adrs[:u8 19];
-  for i=0 to 12 { out[i+10] = adrs[:u8 i+20]; }
-
-  return out;
-}
-
 // translate u32[8] adrs to u8[32] bytestring
 inline
 fn adrs_to_bytes(
@@ -52,6 +21,40 @@ fn adrs_to_bytes(
   }
 
   return bytes;
+}
+
+// set every word in adrs to 0
+inline
+fn adrs_init(
+  reg ptr u32[8] adrs
+) -> reg ptr u32[8]
+{
+  // set all u32 words of adrs to 0 in as few instructions as possible
+  // i.e. set to 0 with 64 bits at a time
+  inline int i;
+  for i=0 to 4 { adrs[:u64 i] = 0; }
+  return adrs;
+}
+
+// compress adrs to adrs^c, for SHA implementations
+inline
+fn adrs_compress(
+  reg ptr u8[22] out,
+  reg ptr u32[8] adrs
+) -> reg ptr u8[22]
+{
+  inline int i;
+
+  stack u8[32] adrs_b;
+  adrs_b = adrs_to_bytes(adrs_b, adrs);
+
+  // ADRS^c = ADRS[3] ∥ ADRS[8 ∶ 16] ∥ ADRS[19] ∥ ADRS[20 ∶ 32]
+  out[0] = adrs_b[:u8 3];
+  for i=0 to 8 { out[i+1] = adrs_b[:u8 i+8]; }
+  out[9] = adrs_b[:u8 19];
+  for i=0 to 12 { out[i+10] = adrs_b[:u8 i+20]; }
+
+  return out;
 }
 
 ////////////////////////////////
