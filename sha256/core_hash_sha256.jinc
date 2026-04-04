@@ -1,3 +1,5 @@
+require "common/sha256_common.jinc"
+
 namespace sha256_hmac_inner {
     param int PREFIXLEN = SHA_HMAC_PREFIX;
     require "sha256_prefix_ptr/sha256_prefix_ptr.jinc"

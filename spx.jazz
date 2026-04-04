@@ -2,8 +2,8 @@ require "params/params-spx-sha2-128f.jinc" // SPHINCS+ parameters
 require "adrs.jinc"   // ADRS data structure
 require "hash.jinc"   // hash function implementations
 
-require "misc.jinc" // algorithms 1-4   of SLH-DSS
-require "wots.jinc" // algorithms 5-8   of SLH-DSS
+// require "misc.jinc" // algorithms 1-4   of SLH-DSS
+// require "wots.jinc" // algorithms 5-8   of SLH-DSS
 // require "xmss.jinc" // algorithms 9-11  of SLH-DSS
 // require "ht.jinc"   // algorithms 12-13 of SLH-DSS
 // require "fors.jinc" // algorithms 14-17 of SLH-DSS
@@ -13,7 +13,7 @@ export
 fn test_adrs(reg u64 adrs_addr) -> reg u8
 {
   stack u32[8] adrs;
-  adrs = init_adrs();
+  adrs = adrs_init(adrs);
 
   reg u32 tmp;
   tmp = 1;
@@ -47,17 +47,17 @@ fn test_sha256(reg u64 out_addr) -> reg u8 {
   
   inline int i;
   for i = 0 to SPX_N {
-    pkseed[i] = 0x0;
+    pkseed[i] = 0;
   }
   for i = 0 to 8 {
-    adrs[i] = 0x0;
+    adrs[i] = 0;
   }
   for i = 0 to SPX_N {
-    m1[i] = 0x0;
+    m1[i] = 0;
   }
   
   stack u8[SPX_N] digest;
-  digest = F(pkseed, adrs, m1);
+  digest = F(digest, pkseed, adrs, m1);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
@@ -65,7 +65,7 @@ fn test_sha256(reg u64 out_addr) -> reg u8 {
   }
 
   reg u8 r;
-  r = 0x0;
+  r = 0;
   return r;
 }
 

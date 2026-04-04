@@ -272,3 +272,34 @@ fn _blocks_1_ref(reg ptr u32[8] _H, reg ptr u32[32] sblocks, reg u64 nblocks) ->
   _H = H;
   return _H, sblocks;
 }
+
+inline fn __store_ref_array(
+  reg ptr u8[32] out,
+  stack u32[8] H
+) -> reg ptr u8[32]
+{
+  inline int i;
+  reg u32 v;
+
+  for i=0 to 8 { 
+    v = H[i];
+    v = #BSWAP_32(v); 
+    out.[:u32 4*i] = v;
+  }
+  return out;
+}
+
+inline fn __store_ref(
+  reg u64 out,
+  stack u32[8] H
+)
+{
+  inline int i;
+  reg u32 v;
+
+  for i=0 to 8 {
+    v = H[i];
+    v = #BSWAP_32(v);
+    [:u32 out + i*4] = v;
+  }
+}
