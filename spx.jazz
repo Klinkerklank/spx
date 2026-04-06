@@ -10,7 +10,7 @@ require "hash.jinc"   // hash function implementations
 // require "spx.jinc"  // algorithms 18-23 of SLH-DSS
 
 export
-fn test_adrs(reg u64 adrs_addr adrsc_addr) -> reg u8
+fn test_ADRS(reg u64 adrs_addr adrsc_addr) -> reg u8
 {
   stack u32[8] adrs;
   adrs = adrs_init(adrs);
@@ -85,23 +85,68 @@ fn test_adrsc(reg u64 adrs_addr) -> reg u8
   return r;
 }
 
+export
+fn test_H_msg(reg u64 out m mlen) -> reg u8 {
+  stack u8[SPX_N] R pkseed pkroot;
+  
+  inline int i;
+  for i = 0 to SPX_N {
+    R[i]      = 0x00;
+    pkseed[i] = 0x00;
+    pkroot[i] = 0x00;
+  }
+  
+  stack u8[SPX_M] digest;
+  digest = H_msg(digest, R, pkseed, pkroot, m, mlen);
+
+  // write digest into C buffer manually
+  for i = 0 to SPX_M {
+    [:u8 (out + i)] = digest[i];
+  }
+
+  reg u8 r;
+  r = 0;
+  return r;
+}
+
+export
+fn test_PRF_msg(reg u64 out m mlen) -> reg u8 {
+  stack u8[SPX_N] skprf opt_rand;
+  
+  inline int i;
+  for i = 0 to SPX_N {
+    skprf[i]    = 0x00;
+    opt_rand[i] = 0x00;
+  }
+  
+  stack u8[SPX_N] digest;
+  digest = PRF_msg(digest, skprf, opt_rand, m, mlen);
+
+  // write digest into C buffer manually
+  for i = 0 to SPX_N {
+    [:u8 (out + i)] = digest[i];
+  }
+
+  reg u8 r;
+  r = 0;
+  return r;
+}
+
 // bash command to manually check what the output should be for SHA256 with a 96-byte all-zero input:
 // printf '\x00%.0s' {1..96} | sha256sum
 export
-fn test_sha256(reg u64 out_addr) -> reg u8 {
+fn test_F(reg u64 out) -> reg u8 {
   stack u8[SPX_N] pkseed;
   stack u32[8] adrs;
   stack u8[SPX_N] m1;
   
   inline int i;
   for i = 0 to SPX_N {
-    pkseed[i] = 0;
+    pkseed[i] = 0x00;
+    m1[i]     = 0x00;
   }
   for i = 0 to 8 {
-    adrs[i] = 0;
-  }
-  for i = 0 to SPX_N {
-    m1[i] = 0;
+    adrs[i] = 0x00000000;
   }
   
   stack u8[SPX_N] digest;
@@ -109,7 +154,97 @@ fn test_sha256(reg u64 out_addr) -> reg u8 {
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
-    [:u8 (out_addr + i)] = digest[i];
+    [:u8 (out + i)] = digest[i];
+  }
+
+  reg u8 r;
+  r = 0;
+  return r;
+}
+
+export
+fn test_H(reg u64 out) -> reg u8 {
+  stack u8[SPX_N] pkseed;
+  stack u32[8] adrs;
+  stack u8[2*SPX_N] m2;
+  
+  inline int i;
+  for i = 0 to SPX_N {
+    pkseed[i] = 0x00;
+  }
+  for i = 0 to 8 {
+    adrs[i] = 0x00000000;
+  }
+  for i = 0 to 2*SPX_N {
+    m2[i] = 0x00;
+  }
+  
+  stack u8[SPX_N] digest;
+  digest = H(digest, pkseed, adrs, m2);
+
+  // write digest into C buffer manually
+  for i = 0 to SPX_N {
+    [:u8 (out + i)] = digest[i];
+  }
+
+  reg u8 r;
+  r = 0;
+  return r;
+}
+
+export
+fn test_T_len(reg u64 out) -> reg u8 {
+  stack u8[SPX_N] pkseed;
+  stack u32[8] adrs;
+  stack u8[SPX_LEN*SPX_N] mlen;
+  
+  inline int i;
+  for i = 0 to SPX_N {
+    pkseed[i] = 0x00;
+  }
+  for i = 0 to 8 {
+    adrs[i] = 0x00000000;
+  }
+  for i = 0 to SPX_LEN*SPX_N {
+    mlen[i] = 0x00;
+  }
+  
+  stack u8[SPX_N] digest;
+  digest = T_len(digest, pkseed, adrs, mlen);
+
+  // write digest into C buffer manually
+  for i = 0 to SPX_N {
+    [:u8 (out + i)] = digest[i];
+  }
+
+  reg u8 r;
+  r = 0;
+  return r;
+}
+
+export
+fn test_T_k(reg u64 out) -> reg u8 {
+  stack u8[SPX_N] pkseed;
+  stack u32[8] adrs;
+  stack u8[SPX_K*SPX_N] mk;
+  
+  inline int i;
+  for i = 0 to SPX_N {
+    pkseed[i] = 0x00;
+  }
+  for i = 0 to 8 {
+    adrs[i] = 0x00000000;
+  }
+  for i = 0 to SPX_K*SPX_N {
+    mk[i] = 0x00;
+  }
+  
+  stack u8[SPX_N] digest;
+  digest = T_k(digest, pkseed, adrs, mk);
+
+  // write digest into C buffer manually
+  for i = 0 to SPX_N {
+    [:u8 (out + i)] = digest[i];
   }
 
   reg u8 r;

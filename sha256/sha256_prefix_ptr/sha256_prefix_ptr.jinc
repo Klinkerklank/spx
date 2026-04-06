@@ -66,18 +66,21 @@ fn _blocks_0_ref(
   return _H, m, mlen;
 }
 
-fn _blocks_0_prefix(
+inline fn _blocks_0_prefix(
   reg ptr u32[8] _H,
-  reg ptr u8[PREFIXLEN] prefix
+  stack u8[PREFIXLEN] prefix
 ) -> reg ptr u32[8]
 {
+  () = #spill(_H);
+
   inline int i t;
-  reg u32 T1 T2 a b c d e f g h r v;
+  reg u32 T1 T2 a b c d e f g h r;
   stack u32[64] W;
   reg ptr u32[64] Kp;
   stack ptr u32[8] Hp;
   reg ptr u32[8] H;
-  reg u64 tr;
+  // reg u64 tr;
+  inline int tr;
 
   Kp = SHA256_K;
   Hp = _H;
@@ -86,10 +89,8 @@ fn _blocks_0_prefix(
 
   // there are PREFIXLEN/64 full blocks of prefix available
   for i=0 to PREFIXLEN/64 {
-    for t=0 to 16 {
-      v = prefix[:u32 i*64 + t*4];
-      v = #BSWAP_32(v);
-      W[t] = v;
+    for t=0 to 64 {
+      W[:u8 i*64 + t] = prefix[i*64 + t];
     }
 
     for t=16 to 64 { W = __Wt_ref(W, t); }
@@ -97,8 +98,8 @@ fn _blocks_0_prefix(
     a, b, c, d, e, f, g, h, H = __load_H_ref(H);
     Hp = H;
 
-    tr = 0;
-    while(tr < 64) {
+    for tr=0 to 64 {
+    // while(tr < 64) {
       //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
       T1  = h;
       r   = __BSIG1_ref(e);
@@ -125,17 +126,19 @@ fn _blocks_0_prefix(
 
     H = __store_H_ref(H,a,b,c,d,e,f,g,h);
   }
-
+  
+  () = #unspill(_H);
   _H = H;
   return _H;
 }
 
-fn _blocks_0_prefix_msg(
+inline fn _blocks_0_prefix_msg(
   reg ptr u32[8] _H,
-  reg ptr u8[PREFIXLEN] prefix,
+  stack u8[PREFIXLEN] prefix,
   reg u64 m mlen
 ) -> reg ptr u32[8], reg u64, reg u64
 {
+  () = #spill(m, mlen);
   inline int i t;
   reg u32 T1 T2 a b c d e f g h r;
   stack u32[64] W;
@@ -157,7 +160,6 @@ fn _blocks_0_prefix_msg(
   for i=PREFIXLEN%64 to 64 {
     W[:u8 i] = [:u8 m + i-(PREFIXLEN%64)];
   }
-  () = #spill(m);
 
   for t=16 to 64 { W = __Wt_ref(W, t); }
 
@@ -194,9 +196,9 @@ fn _blocks_0_prefix_msg(
 
   // processed exactly 64-PREFIXLEN%64 message bytes,
   // with the other PREFIXLEN%64 bytes having been prefix bytes
-  () = #unspill(m);
-  m += 64-PREFIXLEN%64;
-  mlen -= 64-PREFIXLEN%64;
+  () = #unspill(m, mlen);
+  m += 64-(PREFIXLEN%64);
+  mlen -= 64-(PREFIXLEN%64);
 
   _H = H;
   return _H, m, mlen;
@@ -242,7 +244,7 @@ inline fn __lastblocks_ref(
 }
 
 inline fn __lastblocks_prefix(
-  reg ptr u8[PREFIXLEN] prefix,
+  stack u8[PREFIXLEN] prefix,
   reg u64 m mlen bits
 ) -> stack u32[32], reg u64
 {
@@ -290,7 +292,7 @@ inline fn __lastblocks_prefix(
 
 inline fn __sha256_prefix_ptr(
   reg ptr u8[32] out,
-  reg ptr u8[PREFIXLEN] prefix,
+  stack u8[PREFIXLEN] prefix,
   reg u64 m mlen
 ) -> reg ptr u8[32]
 {
@@ -298,15 +300,13 @@ inline fn __sha256_prefix_ptr(
   stack u32[8] H;
   reg ptr u32[8] Hp;
   stack u32[32] sblocks;
-  reg ptr u32[32] sblocksp;
-
-  () = #spill(out);
 
   // compute number of message bits for the length encoding later
   bits = mlen;       // bytelength of the message
   bits += PREFIXLEN; // bytelength of the prefix
   bits <<= 3;        // convert number of bytes to number of bits
-  () = #spill(bits);
+  
+  () = #spill(out, bits, nblocks); // make space in the registers
 
   H = __initH_ref();
   Hp = H;
@@ -335,12 +335,16 @@ inline fn __sha256_prefix_ptr(
 
   // handle the last block of prefix and message content,
   // and add the padding and length encoding (which may then require an additional block)
-  () = #unspill(bits); // bitlength of concatenation of prefix and message
-  if (PREFIXLEN % 64 + mlen < 64) { // can't fill a full block with the prefix remainder and the entire message
+  () = #unspill(nblocks, bits);
+  reg u64 rest_len;
+  rest_len = PREFIXLEN % 64;
+  rest_len += mlen;
+  if (rest_len < 64) { // can't fill a full block with the prefix remainder and the entire message
     sblocks, nblocks = __lastblocks_prefix(prefix, m, mlen, bits);
   } else { // only message bytes remain to be processed
     sblocks, nblocks = __lastblocks_ref(m, mlen, bits);
   }
+  reg ptr u32[32] sblocksp;
   sblocksp = sblocks;
   Hp, _ = _blocks_1_ref(Hp, sblocksp, nblocks);
 

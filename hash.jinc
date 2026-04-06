@@ -19,32 +19,46 @@ fn H_msg(
 {
     inline int i;
     stack u8[SHA_MGF1_PREFIX] buf; // buffer for inner hash call
-    for i=0 to SPX_N { buf[i] = r[i]; } // copy R
-    for i=0 to SPX_N { buf[SPX_N + i] = pkseed[i]; } // copy PK.seed
-    for i=0 to SPX_N { buf[2*SPX_N + i] = pkroot[i]; } // copy PK.root
+    for i=0 to SPX_N {
+        buf[i] = r[i];                // copy R
+        buf[SPX_N + i] = pkseed[i];   // copy PK.seed
+        buf[2*SPX_N + i] = pkroot[i]; // copy PK.root
+    }
 
     // compute seedhash = sha256(R || PK.seed || PK.root || M)
     stack u8[SHA256_OUT] seedhash;
-    () = #spill(out, r, pkseed, pkroot); // make space in the registers
+    () = #spill(out, r, pkseed); // make space in the registers
     seedhash = sha256_mgf1_msg::__sha256_prefix_ptr(seedhash, buf, m_addr, m_len);
-    () = #spill(m_addr, m_len); // make space in the registers
+    () = #unspill(r, pkseed); // make space in the registers
 
     stack u8[2*SPX_N + SHA256_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
-    for i=0 to SPX_N { seed[i] = r[i]; } // copy R
-    for i=0 to SPX_N { seed[SPX_N + i] = pkseed[i]; } // copy PK.seed
-    for i=0 to SHA256_OUT/8 { seed[:u64 2*SPX_N + i] = seedhash[:u64 i]; } // copy the inner message digest
+    for i=0 to SPX_N {
+        seed[i] = r[i];              // copy R
+        seed[SPX_N + i] = pkseed[i]; // copy PK.seed
+    }
+    for i=0 to SHA256_OUT { seed[2*SPX_N + i] = seedhash[i]; } // copy the inner message digest
     
     // need ceil(SPX_M / SHA256_OUT) hashes of SHA256_OUT bytes each, to surpass at least SPX_M bytes
     stack u8[((SPX_M + SHA256_OUT - 1) / SHA256_OUT) * SHA256_OUT] concat;
-    for i=0 to ((SPX_M + SHA256_OUT - 1) / SHA256_OUT) {
-        seed[:u32 2*SPX_N + SHA256_OUT] = i; // set last 4 bytes to counter
-        // compute sha2(seed) including counter
-        stack u8[SHA256_OUT] tmp;
-        tmp = sha256_mgf1_seed::__sha256(tmp, seed);
-        // save the hash value
+    inline int count;
+    for count=0 to (SPX_M + SHA256_OUT - 1) / SHA256_OUT {
+        // set last four bytes to counter
         inline int j;
-        for j=0 to (SPX_M + SHA256_OUT - 1) / SHA256_OUT {
-            concat[i*((SPX_M + SHA256_OUT - 1) / SHA256_OUT) + j] = tmp[j];
+        reg u32 tmp;
+        tmp = count;
+        seed[2*SPX_N + SHA256_OUT + 0] = tmp; // automatically casts to right-most byte
+        for j=1 to 4 {
+            tmp >>= 8;
+            seed[2*SPX_N + SHA256_OUT + j] = tmp; // automatically casts to right-most byte
+        }
+        
+        // compute sha2(seed), where seed includes counter
+        stack u8[SHA256_OUT] digest;
+        digest = sha256_mgf1_seed::__sha256(digest, seed);
+
+        // save the hash value
+        for j=0 to SHA256_OUT {
+            concat[count*SHA256_OUT + j] = digest[j];
         }
     }
     
@@ -77,19 +91,27 @@ fn PRF_msg(
     }
 
     stack u8[SHA_HMAC_PREFIX] ibuf; // buffer for inner hash call
-    for i=0 to SHA256_IN/8 { ibuf[:u64 i*8] = 0x3636363636363636; } // set ipad
-    for i=0 to SHA256_IN/8 { ibuf[:u64 i*8] ^= key[:u64 i*8]; }     // bitwise xor ipad with the key
-    for i=0 to SPX_N { ibuf[SHA256_IN + i] = opt_rand[i]; }         // append opt_rand
+    for i=0 to SHA256_IN {
+        reg u8 xor;
+        xor = 0x36;    // set ipad
+        xor ^= key[i]; // bitwise xor ipad with the key
+        ibuf[i] = xor; 
+    }
+    for i=0 to SPX_N { ibuf[SHA256_IN + i] = opt_rand[i]; } // append opt_rand
 
     // compute sha256((key xor ipad) || opt_rand || M)
     stack u8[SHA256_OUT] inner; // buffer for inner hash value
-    () = #spill(out, skprf, opt_rand); // make space in the registers
+    () = #spill(out); // make space in the registers
     inner = sha256_hmac_inner::__sha256_prefix_ptr(inner, ibuf, m_addr, m_len);
 
     stack u8[SHA256_IN + SHA256_OUT] obuf; // buffer for outer hash call
-    for i=0 to SHA256_IN/8 { obuf[:u64 i*8] = 0x5C5C5C5C5C5C5C5C; }           // set opad
-    for i=0 to SHA256_IN/8 { obuf[:u64 i*8] ^= key[:u64 i*8]; }               // bitwise xor opad with the key
-    for i=0 to SHA256_OUT/8 { obuf[:u64 SHA256_IN + i*8] = inner[:u64 i*8]; } // append the inner hash value
+    for i=0 to SHA256_IN {
+        reg u8 xor;
+        xor = 0x5C;    // set opad
+        xor ^= key[i]; // bitwise xor opad with the key
+        obuf[i] = xor;
+    }
+    for i=0 to SHA256_OUT { obuf[SHA256_IN + i] = inner[i]; } // append the inner hash value
 
     // compute sha256((key xor opad) || inner)
     stack u8[SHA256_OUT] hmac;
@@ -155,7 +177,7 @@ fn PRF(
 // F(PK.seed, ADRS, M_1) =
 // SHAKE:            SHAKE256(PK.seed || ADRS || M_1, 8n)
 // SHA2-128/192/256: Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_1))
-inline fn F(
+fn F(
     reg ptr u8[SPX_N] out,
     reg ptr u8[SPX_N] pkseed,
     reg ptr u32[8] adrs,
