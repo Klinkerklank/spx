@@ -131,7 +131,7 @@ fn PRF(
     reg ptr u8[SPX_N] pkseed,
     reg ptr u8[SPX_N] skseed,
     reg ptr u32[8] adrs
-) -> reg ptr u8[SPX_N]
+) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || SK.seed
@@ -165,13 +165,13 @@ fn PRF(
 
     // compute the digest
     stack u8[SHA256_OUT] digest;
-    () = #spill(out, pkseed, skseed, adrs); // make space in the registers
+    () = #spill(out, adrs); // make space in the registers
     digest = sha256_tl_1n::__sha256(digest, buf);
-    () = #unspill(out);
+    () = #unspill(out, adrs);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
-    return out;
+    return out, adrs;
 }
 
 // F(PK.seed, ADRS, M_1) =
@@ -182,7 +182,7 @@ fn F(
     reg ptr u8[SPX_N] pkseed,
     reg ptr u32[8] adrs,
     reg ptr u8[SPX_N] m1
-) -> reg ptr u8[SPX_N]
+) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_1
@@ -216,13 +216,13 @@ fn F(
 
     // compute the digest
     stack u8[SHA256_OUT] digest;
-    () = #spill(out, pkseed, adrs, m1); // make space in the registers
+    () = #spill(out, adrs); // make space in the registers
     digest = sha256_tl_1n::__sha256(digest, buf);
-    () = #unspill(out);
+    () = #unspill(out, adrs);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
-    return out;
+    return out, adrs;
 }
 
 // H(PK.seed, ADRS, M_2) =
@@ -234,7 +234,7 @@ fn H(
     reg ptr u8[SPX_N] pkseed,
     reg ptr u32[8] adrs,
     reg ptr u8[2*SPX_N] m2
-) -> reg ptr u8[SPX_N]
+) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_2     (for sha2-128)
@@ -269,13 +269,13 @@ fn H(
 
     // compute the digest
     stack u8[SHAX_OUT] digest;
-    () = #spill(out, pkseed, adrs, m2); // make space in the registers
+    () = #spill(out, adrs); // make space in the registers
     digest = sha256_tl_2n::__sha256(digest, buf);
-    () = #unspill(out);
+    () = #unspill(out, adrs);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
-    return out;
+    return out, adrs;
 }
 
 // T_len(PK.seed, ADRS, M_len) =
@@ -287,7 +287,7 @@ fn T_len(
     reg ptr u8[SPX_N] pkseed,
     reg ptr u32[8] adrs,
     reg ptr u8[SPX_LEN*SPX_N] ml
-) -> reg ptr u8[SPX_N]
+) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_len         (for sha2-128)
@@ -322,13 +322,13 @@ fn T_len(
 
     // compute the digest
     stack u8[SHAX_OUT] digest;
-    () = #spill(out, pkseed, adrs, ml); // make space in the registers
+    () = #spill(out, adrs); // make space in the registers
     digest = sha256_compress_wots::__sha256(digest, buf);
-    () = #unspill(out);
+    () = #unspill(out, adrs);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
-    return out;
+    return out, adrs;
 }
 
 // T_k(PK.seed, ADRS, M_k) =
@@ -340,7 +340,7 @@ fn T_k(
     reg ptr u8[SPX_N] pkseed,
     reg ptr u32[8] adrs,
     reg ptr u8[SPX_K*SPX_N] mk
-) -> reg ptr u8[SPX_N]
+) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_k         (for sha2-128)
@@ -375,11 +375,11 @@ fn T_k(
 
     // compute the digest
     stack u8[SHAX_OUT] digest;
-    () = #spill(out, pkseed, adrs, mk); // make space in the registers
+    () = #spill(out, adrs); // make space in the registers
     digest = sha256_compress_fors::__sha256(digest, buf);
-    () = #unspill(out);
+    () = #unspill(out, adrs);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
-    return out;
+    return out, adrs;
 }

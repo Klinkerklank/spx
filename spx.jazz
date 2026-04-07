@@ -3,7 +3,7 @@ require "adrs/adrs.jinc" // ADRS data structure
 require "hash/hash.jinc" // hash function implementations
 
 // require "misc.jinc"      // algorithms 1-4   of SLH-DSS
-// require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
+require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
 // require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
 // require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
 // require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
@@ -150,7 +150,7 @@ fn test_F(reg u64 out) -> reg u8 {
   }
   
   stack u8[SPX_N] digest;
-  digest = F(digest, pkseed, adrs, m1);
+  digest, adrs = F(digest, pkseed, adrs, m1);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
@@ -180,7 +180,7 @@ fn test_H(reg u64 out) -> reg u8 {
   }
   
   stack u8[SPX_N] digest;
-  digest = H(digest, pkseed, adrs, m2);
+  digest, adrs = H(digest, pkseed, adrs, m2);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
@@ -210,7 +210,7 @@ fn test_T_len(reg u64 out) -> reg u8 {
   }
   
   stack u8[SPX_N] digest;
-  digest = T_len(digest, pkseed, adrs, mlen);
+  digest, adrs = T_len(digest, pkseed, adrs, mlen);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
@@ -240,7 +240,7 @@ fn test_T_k(reg u64 out) -> reg u8 {
   }
   
   stack u8[SPX_N] digest;
-  digest = T_k(digest, pkseed, adrs, mk);
+  digest, adrs = T_k(digest, pkseed, adrs, mk);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {

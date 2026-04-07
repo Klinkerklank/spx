@@ -1,100 +1,350 @@
+namespace basew_chain_lengths {
+  param int OUTLEN = SPX_LEN_1;
+  param int INLEN = SPX_N;
+  require "basew.jinc"
+}
+
+namespace basew_checksum {
+  param int OUTLEN = SPX_LEN_2;
+  param int INLEN  = (SPX_LEN_2 * SPX_LG_W + 7) / 8;
+  require "basew.jinc"
+}
+
 // algorithm 5 from SLH-DSS
-inline fn chain(
-    stack u8[SPX_N] X,
-    stack u32 i s,
-    stack u8[SPX_N] PKseed,
-    stack u32[8] ADRS
-) -> stack u8[SPX_N]
+inline
+fn chain(
+    reg ptr u8[SPX_N] out, // also 'in' (chain function is in-place)
+    reg u32 start steps,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u32[8] adrs
+) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
-    // copy input string X into a new string tmp
-    stack u8[SPX_N] tmp;
-    inline int i = 0 to SPX_N {
-        tmp[i] = X[i]
+    () = #spill(out, pkseed, adrs);
+
+    reg u32 i t;
+    i = start;
+    t = start; t += steps; 
+    while (i < t) {
+        () = #spill(i, t);
+
+        () = #unspill(adrs);
+        adrs = adrs_set_hash_addr(adrs, i);
+        
+        () = #unspill(pkseed, out);
+        out, adrs = F(out, pkseed, adrs, out);
+        () = #spill(out, adrs);
+
+        () = #unspill(i, t);
+        i += 1;
     }
 
-    reg u32 j;
-    j = i;
-    while j < i + s {
-        ADRS = adrs_set_hash_addr(j);
-        tmp = F(PKseed, ADRS, tmp);
-        j += 1;
+    () = #unspill(adrs);
+
+    return out;
+}
+
+inline
+fn expand_seed(
+    reg ptr u8[SPX_LEN * SPX_N] outseeds,
+    reg ptr u8[SPX_N] skseed pkseed,
+    reg ptr u32[8] adrs
+) -> reg ptr u8[SPX_LEN * SPX_N], reg ptr u32[8]
+{  
+    reg ptr u8[SPX_N] ith_seed;
+    reg ptr u8[32] adrs_bytes;
+
+    // NOTE: BUF = pub_seed || adrs_as_bytes
+    stack u8[SPX_N + 32] buf;
+    
+    reg u64 i;
+    reg u64 subarray_start_index;
+
+    reg u32 chain_addr;
+
+    () = #spill(outseeds, skseed);
+
+    // set_hash_addr(adrs, 0);
+    // set_key_and_mask(adrs, 0);
+    adrs = adrs_set_hash_addr(adrs, 0);
+    adrs = __set_key_and_mask(adrs, 0);
+
+    // memcpy(buf, pub_seed, params->n);
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pub_seed);
+
+    i = 0;
+    while (i < SPX_LEN) {
+        // NOTE: adrs is live at the beggining of the loop => we must unspill it at the end
+        // set_chain_addr(adrs, i);
+        chain_addr = (32u) i;
+        adrs = adrs_set_chain_addr(adrs, chain_addr);
+        () = #spill(adrs);
+
+        // addr_to_bytes(buf + params->n, adrs);
+        adrs_bytes = buf[SPX_N : 32];
+        adrs_bytes = adrs_to_bytes(adrs_bytes, adrs);
+        buf[SPX_N : 32] = adrs_bytes;
+
+        () = #unspill(outseeds, skseed);
+
+        // start index = SPX_N * i
+        if (SPX_N == 32) { // this if is resolved at compile time
+            subarray_start_index = i;
+            subarray_start_index <<= 5;
+        } else {
+            subarray_start_index = i;
+            subarray_start_index *= SPX_N;
+        }
+
+        ith_seed = outseeds[subarray_start_index : SPX_N];
+        ith_seed = PRF(ith_seed, buf, skseed);
+        outseeds[subarray_start_index : SPX_N] = ith_seed;
+
+        () = #spill(outseeds);
+        () = #unspill(adrs);
+
+        i += 1;
     }
 
-    return tmp;
+    () = #unspill(outseeds);
+
+    return outseeds, adrs;
+}
+
+// just computes the checksum
+inline
+fn __csum(reg ptr u32[SPX_LEN_1] m_base_w) -> reg u64
+{
+    reg u64 csum i t u;
+
+    csum = 0;
+
+    // for (i = 0; i < params->wots_len1; i++) { csum += params->wots_w - 1 - m_base_w[i]; }
+    i = 0;
+    while (i < SPX_LEN_1) {
+      t = SPX_W - 1;
+      u = (64u) m_base_w[i];
+      t -= u; 
+      csum += t;
+      i += 1;
+    }
+
+    return csum;
+}
+
+inline
+fn wots_checksum(
+    reg ptr u32[SPX_LEN_2] csum_base_w,
+    reg ptr u32[SPX_LEN] m_base_w
+) -> reg ptr u32[SPX_LEN_2]
+{
+    stack u8[(SPX_LEN_2 * SPX_LG_W + 7) / 8] csum_bytes;
+    reg ptr u8[(SPX_LEN_2 * SPX_LG_W + 7) / 8] csum_bytes_p;
+
+    reg u64 csum u;
+
+    inline int k;
+
+    reg ptr u32[SPX_LEN_1] buf;
+
+    buf = m_base_w[0 : SPX_LEN_1];
+    csum = __csum(buf); // Compute the checksum using only the first len1 bytes
+
+    // csum = csum << (8 - ((params->wots_len2 * params->wots_log_w) % 8));
+    k = (SPX_LEN_2 * SPX_LG_W) % 8;
+
+    u = 8;
+    u -= k; // u holds the value of (8 - ((params->wots_len2 * params->wots_log_w) % 8))
+    csum <<= (u & 63);
+
+    // ull_to_bytes(csum_bytes, sizeof(csum_bytes), csum);
+    csum_bytes_p = csum_bytes;
+    csum_bytes_p = bytes_wots_checksum::ull_to_bytes(csum_bytes_p, csum);
+
+    // base_w(params, csum_base_w, params->wots_len2, csum_bytes);
+    csum_base_w = basew_checksum::__base_w(csum_base_w, csum_bytes_p);
+
+    return csum_base_w;
+}
+
+inline
+fn chain_lengths(
+    reg ptr u32[SPX_LEN] lengths,
+    reg ptr u8[XMSS_N] msg
+) -> reg ptr u32[SPX_LEN]
+{
+    reg ptr u32[SPX_LEN_1] t0;
+    reg ptr u32[SPX_LEN_2] t1;
+  
+    // base_w(params, lengths, params->wots_len1, msg);
+    t0 = lengths[0 : SPX_LEN_1];
+    t0 = basew_chain_lengths::__base_w(t0, msg);
+    lengths[0 : SPX_LEN_1] = t0;
+
+    // wots_checksum(params, lengths + params->wots_len1, lengths);
+    t1 = lengths[SPX_LEN_1 : SPX_LEN_2];
+    t1 = __wots_checksum(t1, lengths);
+    lengths[SPX_LEN_1 : SPX_LEN_2] = t1;
+
+    return lengths;
 }
 
 // algorithm 6 from SLH-DSS
-inline fn wots_pkgen(
-    stack u8[SPX_N] SKseed PKseed,
-    stack u32[8] ADRS
-) -> stack u8[SPX_N]
+inline
+fn wots_pkgen(
+    reg ptr u8[SPX_N] pk,
+    reg ptr u8[SPX_N] skseed pkseed,
+    reg ptr u32[8] adrs
+) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
-    // copy address to create key generation key address
-    stack u32[8] skADRS;
-    inline int i;
-    for i = 0 to 4 { // don't need to copy the last four bytes since those are set to zero in adrs_set_type_and_clear
-        skADRS[i] = ADRS[i];
-    }
+    stack u8[SPX_LEN * SPX_N] pkchains;
+    reg u32 chain;
+    reg ptr u8[SPX_N] t; // ith seed
 
-    skADRS = adrs_set_type_and_clear(skADRS, SPX_ADRS_TYPE_WOTS_PRF);
-    reg u32 keypairaddr;
-    keypairaddr = adrs_get_key_pair_addr(ADRS);
-    skADRS = adrs_set_key_pair_addr(skADRS, keypairaddr);
+    reg u64 i;
+    reg u64 subarray_start_index;
 
-    stack u8[SPX_LEN][SPX_N] tmp;
-    for i = 0 to SPX_LEN {
-        skADRS = adrs_set_chain_addr(skADRS, i);
-        
-        // compute the secret value for chain i
-        stack u32[SPX_N] sk;
-        sk = PRF(PKseed, SKseed, skADRS);
-        ADRS = adrs_set_chain_addr(ADRS, i);
-        
-        // compute the public value for chain i
-        stack u8[SPX_N] pub;
-        pub = chain(sk, 0, w-1, PKseed, ADRS);
-        for j = 0 to SPX_N {
-            tmp[i][j] = pub[j];
+    () = #spill(pkseed);
+
+    // expand_seed(params, pkchains, skseed, pkseed, adrs);
+    pkchains, adrs = expand_seed(pkchains, skseed, pkseed, adrs);
+    () = #spill(pkchains);
+
+    i = 0;
+    while (i < SPX_LEN) {
+        // set_chain_adrs(adrs, i);
+        chain = (32u) i;
+        adrs = __set_chain_addr(adrs, chain);
+
+        () = #unspill(pkchains, pkseed);
+
+        // start index = SPX_N * i
+        if (SPX_N == 32) { // this if is resolved at compile time
+            subarray_start_index = i;
+            subarray_start_index <<= 5;
+        } else {
+            subarray_start_index = i;
+            subarray_start_index *= SPX_N;
         }
+
+        t = pkchains[subarray_start_index : SPX_N];
+        t, adrs = chain(t, 0, SPX_W-1, pkseed, adrs);
+        pkchains[subarray_start_index : SPX_N] = t;
+        () = #spill(pkchains);
+
+        i += 1;
     }
 
-    // copy address to create WOTS public key address
-    stack u32[8] wotspkADRS;
-    for i = 0 to 4 { // don't need to copy the last four bytes since those are set to zero in adrs_set_type_and_clear
-        wotspkADRS[i] = ADRS[i];
-    }
-    wotspkADRS = adrs_set_type_and_clear(wotspkADRS, SPX_ADRS_TYPE_WOTS_PK);
-    reg u32 keypairaddr;
-    keypairaddr = adrs_get_key_pair_addr(ADRS);
-    wotspkADRS = adrs_set_key_pair_addr(wotspkADRS, keypairaddr);
-
-    // compress WOTS public key
-    stack u8[SPX_N] pk;
-    pk = T_len(PKseed, wotspkADRS, tmp);
-
-    return pk;
+    () = #unspill(pk);
+    pk = T_len(pk, pkseed, adrs, pkchains);
+    return pk, adrs;
 }
 
 // algorithm 7 from SLH-DSS
+inline
 fn wots_sign(
-    stack u8[SPX_N] M SKseed PKseed,
-    stack u32[8] ADRS
-) -> stack u8[SPX_LEN * SPX_N]
+    reg ptr u8[SPX_LEN * SPX_N] sig,
+    reg ptr u8[SPX_N] m skseed pkseed,
+    reg ptr u32[8] adrs
+) -> reg ptr u8[SPX_LEN * SPX_N], reg ptr u32[8]
 {
-    reg u32 csum;
-    csum = 0x0;
-    
-    
+    stack u32[SPX_LEN] lengths;
 
-    return sig;
+    reg u32 chain;
+
+    reg u64 i;
+    reg u64 subarray_start_index;
+
+    () = #spill(pkseed);
+
+    // chain_lengths(params, lengths, m);
+    lengths = __chain_lengths_(lengths, m);
+
+    // expand_seed(params, sig, skseed, pkseed, adrs);
+    sig, adrs = expand_seed(sig, skseed, pkseed, adrs);
+
+    i = 0;
+    while (i < SPX_LEN) {
+        // set_chain_addr(adrs, i);
+        chain = (32u) i;
+        adrs = __set_chain_addr(adrs, chain);
+
+        // start index = SPX_N * i
+        if (SPX_N == 32) { // this if is resolved at compile time
+            subarray_start_index = i;
+            subarray_start_index <<= 5;
+        } else {
+            subarray_start_index = i;
+            subarray_start_index *= SPX_N;
+        }
+
+        () = #spill(i);
+
+        // gen_chain(params, sig + i * params->n, sig + i * params->n, 0, lengths[i], pkseed, adrs);
+        () = #unspill(pkseed);
+        sig[subarray_start_index : SPX_N], adrs = __gen_chain_inplace_(sig[subarray_start_index : SPX_N], 0, lengths[i], pkseed, adrs);
+
+        () = #unspill(i);
+
+        i += 1;
+    }
+
+    return sig, adrs;
 }
 
 // algorithm 8 from SLH-DSS
-// fn wots_pkfromsig(
-//     stack u8[SPX_LEN * SPX_N] sig,
-//     stack u8[SPX_N] M PKseed,
-//     stack u32[8] ADRS
-// ) -> stack u8[SPX_N]
-// {
-//     return pk_sig;
-// }
+inline
+fn wots_pkfromsig(
+    reg ptr u8[SPX_N] pk,
+    reg u64 sig_ptr,
+    reg ptr u8[SPX_N] m pkseed,
+    reg ptr u32[8] adrs
+) -> reg ptr u8[SPX_LEN * SPX_N], reg ptr u32[8]
+{
+    stack u32[SPX_LEN] lengths;
+
+    reg u32 start steps chain_addr;
+    reg u64 t;
+    
+    reg u64 i;
+    reg u64 subarray_start_index;
+
+    () = #spill(pkseed, sig_ptr);
+
+    // chain_lengths(params, lengths, m);
+    lengths = __chain_lengths(lengths, m);
+
+    i = 0;
+    while (i < SPX_LEN) {
+        // set_chain_addr(adrs, i);
+        chain_addr = (32u) i;
+        adrs = adrs_set_chain_addr(adrs, chain_addr);
+
+        // gen_chain(params, pk + i * params->n, sig + i * params->n, lengths[i], params->wots_w - 1 - lengths[i], pkseed, adrs);
+        start = lengths[i];
+        steps = XMSS_WOTS_W - 1; steps -= lengths[i];
+        
+        // start index = SPX_N * i
+        if (SPX_N == 32) { // this if is resolved at compile time
+            subarray_start_index = i;
+            subarray_start_index <<= 5;
+        } else {
+            subarray_start_index = i;
+            subarray_start_index *= SPX_N;
+        }
+
+        () = #spill(i);
+
+        () = #unspill(pkseed, sig_ptr);
+        t = sig_ptr; 
+        t += subarray_start_index;
+        
+        pk[subarray_start_index : SPX_N] = __memcpy_u8u8p(pk[subarray_start_index : SPX_N], t);
+        pk[subarray_start_index : SPX_N], adrs = chain(pk[subarray_start_index : SPX_N], start, steps, pkseed, adrs);
+
+        () = #unspill(i);
+
+        i += 1;
+    }
+    
+    return pk, adrs;
+}
