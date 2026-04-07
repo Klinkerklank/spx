@@ -5,11 +5,13 @@ param int SPX_HASH_SHAKE = 1;
 param int SPX_HASHFAM    = 0;
 
 // security category of parameter set
-param int SPX_SEC_CAT = 3;
+param int SPX_SEC_CAT = 3; // from SLH-DSS Table 2
 
 // SPHINCS+ parameters
 param int SPX_N = 24;
 param int SPX_M = 42; // ceil((SPX_H - SPX_H_PRIME) / 8) + ceil((SPX_H_PRIME) / 8) + ceil((SPX_K + SPX_A) / 8)
+param int SPX_PK_BYTES = 48; // public key = (PK.seed, PK.root), each of SPX_N bytes 
+param int SPX_SIG_BYTES = 35664; // (1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N, see SLH-DSS Algorithm 20
 
 // WOTS+ parameters
 param int SPX_LG_W  = 4;
@@ -33,12 +35,12 @@ param int SHA256_IN  = 64;
 param int SHA256_OUT = 32;
 param int SHA512_IN  = 128;
 param int SHA512_OUT = 64;
-// hash function SHA-X for H_msg, PRF_msg, H, T_len, and T_k dependent on security category SECCAT
-// X = 256 if SECCAT = 1, X = 512 if SECCAT = 3 or 5
+// hash function SHA-X for H_msg, PRF_msg, H, T_len, and T_k, dependent on security category SECCAT
+// X = 256 if SPX_SEC_CAT == 1, X = 512 if SPX_SEC_CAT == 3 or SPX_SEC_CAT == 5
 param int SHAX_IN    = 128;
 param int SHAX_OUT   = 64;
-// hash function SHA-X for H_msg, PRF_msg, H, T_len, and T_k dependent on security category SECCAT
-// X = 256 if SECCAT = 1, X = 512 if SECCAT = 3 or 5
+// hash function SHA-X for H_msg, PRF_msg, H, T_len, and T_k, dependent on security category SECCAT
+// X = 256 if SPX_SEC_CAT == 1, X = 512 if SPX_SEC_CAT == 3 or SPX_SEC_CAT == 5
 param int SHA_HMAC_PREFIX = 152; // SHAX_IN + SPX_N
 param int SHA_MGF1_PREFIX = 72; // 3*SPX_N
 

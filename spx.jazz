@@ -1,13 +1,13 @@
 require "params/params-spx-sha2-128f.jinc" // SPHINCS+ parameters
-require "adrs.jinc"   // ADRS data structure
-require "hash.jinc"   // hash function implementations
+require "adrs/adrs.jinc" // ADRS data structure
+require "hash/hash.jinc" // hash function implementations
 
-// require "misc.jinc" // algorithms 1-4   of SLH-DSS
-// require "wots.jinc" // algorithms 5-8   of SLH-DSS
-// require "xmss.jinc" // algorithms 9-11  of SLH-DSS
-// require "ht.jinc"   // algorithms 12-13 of SLH-DSS
-// require "fors.jinc" // algorithms 14-17 of SLH-DSS
-// require "spx.jinc"  // algorithms 18-23 of SLH-DSS
+// require "misc.jinc"      // algorithms 1-4   of SLH-DSS
+// require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
+// require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
+// require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
+// require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
+// require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 
 export
 fn test_ADRS(reg u64 adrs_addr adrsc_addr) -> reg u8
