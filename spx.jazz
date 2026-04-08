@@ -34,14 +34,14 @@ fn test_ADRS(reg u64 adrs_addr adrsc_addr) -> reg u8
 
   inline int i;
   for i=0 to 8 {
-    [:u32 (adrs_addr + 4*i)] = adrs[i];
+	[:u32 (adrs_addr + 4*i)] = adrs[i];
   }
-  
+
   stack u8[22] adrsc;
   adrsc = adrs_compress(adrsc, adrs);
 
   for i=0 to 22 {
-    [:u8 (adrsc_addr + i)] = adrsc[i];
+	[:u8 (adrsc_addr + i)] = adrsc[i];
   }
 
   reg u8 r;
@@ -77,7 +77,7 @@ fn test_adrsc(reg u64 adrs_addr) -> reg u8
 
   inline int i;
   for i=0 to 8 {
-    [:u32 (adrs_addr + 4*i)] = adrs[i];
+	[:u32 (adrs_addr + 4*i)] = adrs[i];
   }
 
   reg u8 r;
@@ -88,20 +88,20 @@ fn test_adrsc(reg u64 adrs_addr) -> reg u8
 export
 fn test_H_msg(reg u64 out m mlen) -> reg u8 {
   stack u8[SPX_N] R pkseed pkroot;
-  
+
   inline int i;
   for i = 0 to SPX_N {
-    R[i]      = 0x00;
-    pkseed[i] = 0x00;
-    pkroot[i] = 0x00;
+	R[i]      = 0x00;
+	pkseed[i] = 0x00;
+	pkroot[i] = 0x00;
   }
-  
+
   stack u8[SPX_M] digest;
   digest = H_msg(digest, R, pkseed, pkroot, m, mlen);
 
   // write digest into C buffer manually
   for i = 0 to SPX_M {
-    [:u8 (out + i)] = digest[i];
+	[:u8 (out + i)] = digest[i];
   }
 
   reg u8 r;
@@ -112,19 +112,19 @@ fn test_H_msg(reg u64 out m mlen) -> reg u8 {
 export
 fn test_PRF_msg(reg u64 out m mlen) -> reg u8 {
   stack u8[SPX_N] skprf opt_rand;
-  
+
   inline int i;
   for i = 0 to SPX_N {
-    skprf[i]    = 0x00;
-    opt_rand[i] = 0x00;
+	skprf[i]    = 0x00;
+	opt_rand[i] = 0x00;
   }
-  
+
   stack u8[SPX_N] digest;
   digest = PRF_msg(digest, skprf, opt_rand, m, mlen);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
-    [:u8 (out + i)] = digest[i];
+	[:u8 (out + i)] = digest[i];
   }
 
   reg u8 r;
@@ -132,29 +132,54 @@ fn test_PRF_msg(reg u64 out m mlen) -> reg u8 {
   return r;
 }
 
-// bash command to manually check what the output should be for SHA256 with a 96-byte all-zero input:
-// printf '\x00%.0s' {1..96} | sha256sum
+export
+fn test_PRF(reg u64 out) -> reg u8 {
+  stack u8[SPX_N] pkseed skseed;
+  stack u32[8] adrs;
+
+  inline int i;
+  for i = 0 to SPX_N {
+	pkseed[i] = 0x00;
+	skseed[i] = 0x00;
+  }
+  for i = 0 to 8 {
+	adrs[i] = 0x00000000;
+  }
+
+  stack u8[SPX_N] digest;
+  digest, adrs = PRF(digest, pkseed, skseed, adrs);
+
+  // write digest into C buffer manually
+  for i = 0 to SPX_N {
+	[:u8 (out + i)] = digest[i];
+  }
+
+  reg u8 r;
+  r = 0;
+  return r;
+}
+
 export
 fn test_F(reg u64 out) -> reg u8 {
   stack u8[SPX_N] pkseed;
   stack u32[8] adrs;
   stack u8[SPX_N] m1;
-  
+
   inline int i;
   for i = 0 to SPX_N {
-    pkseed[i] = 0x00;
-    m1[i]     = 0x00;
+	pkseed[i] = 0x00;
+	m1[i]     = 0x00;
   }
   for i = 0 to 8 {
-    adrs[i] = 0x00000000;
+	adrs[i] = 0x00000000;
   }
-  
+
   stack u8[SPX_N] digest;
   digest, adrs = F(digest, pkseed, adrs, m1);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
-    [:u8 (out + i)] = digest[i];
+	[:u8 (out + i)] = digest[i];
   }
 
   reg u8 r;
@@ -167,24 +192,24 @@ fn test_H(reg u64 out) -> reg u8 {
   stack u8[SPX_N] pkseed;
   stack u32[8] adrs;
   stack u8[2*SPX_N] m2;
-  
+
   inline int i;
   for i = 0 to SPX_N {
-    pkseed[i] = 0x00;
+	pkseed[i] = 0x00;
   }
   for i = 0 to 8 {
-    adrs[i] = 0x00000000;
+	adrs[i] = 0x00000000;
   }
   for i = 0 to 2*SPX_N {
-    m2[i] = 0x00;
+	m2[i] = 0x00;
   }
-  
+
   stack u8[SPX_N] digest;
   digest, adrs = H(digest, pkseed, adrs, m2);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
-    [:u8 (out + i)] = digest[i];
+	[:u8 (out + i)] = digest[i];
   }
 
   reg u8 r;
@@ -197,24 +222,24 @@ fn test_T_len(reg u64 out) -> reg u8 {
   stack u8[SPX_N] pkseed;
   stack u32[8] adrs;
   stack u8[SPX_LEN*SPX_N] mlen;
-  
+
   inline int i;
   for i = 0 to SPX_N {
-    pkseed[i] = 0x00;
+	pkseed[i] = 0x00;
   }
   for i = 0 to 8 {
-    adrs[i] = 0x00000000;
+	adrs[i] = 0x00000000;
   }
   for i = 0 to SPX_LEN*SPX_N {
-    mlen[i] = 0x00;
+	mlen[i] = 0x00;
   }
-  
+
   stack u8[SPX_N] digest;
   digest, adrs = T_len(digest, pkseed, adrs, mlen);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
-    [:u8 (out + i)] = digest[i];
+	[:u8 (out + i)] = digest[i];
   }
 
   reg u8 r;
@@ -227,25 +252,66 @@ fn test_T_k(reg u64 out) -> reg u8 {
   stack u8[SPX_N] pkseed;
   stack u32[8] adrs;
   stack u8[SPX_K*SPX_N] mk;
-  
+
   inline int i;
   for i = 0 to SPX_N {
-    pkseed[i] = 0x00;
+	pkseed[i] = 0x00;
   }
   for i = 0 to 8 {
-    adrs[i] = 0x00000000;
+	adrs[i] = 0x00000000;
   }
   for i = 0 to SPX_K*SPX_N {
-    mk[i] = 0x00;
+	mk[i] = 0x00;
   }
-  
+
   stack u8[SPX_N] digest;
   digest, adrs = T_k(digest, pkseed, adrs, mk);
 
   // write digest into C buffer manually
   for i = 0 to SPX_N {
-    [:u8 (out + i)] = digest[i];
+	[:u8 (out + i)] = digest[i];
   }
+
+  reg u8 r;
+  r = 0;
+  return r;
+}
+
+export
+fn test_wots(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
+  () = #spill(pk_addr, pksig_addr, sig_addr);
+
+  stack u8[SPX_N] pk;
+  stack u8[SPX_N] pksig;
+  stack u8[SPX_LEN * SPX_N] sig;
+
+  stack u8[SPX_N] skseed;
+  stack u8[SPX_N] pkseed;
+  stack u32[8] adrs;
+  stack u8[SPX_N] m;
+
+  inline int i;
+  for i=0 to SPX_N {
+	skseed[i] = 0x00;
+	pkseed[i] = 0x00;
+	m[i]      = 0x00;
+  }
+  for i=0 to 8 {
+	adrs[i] = 0x00000000;
+  }
+
+  pk,    adrs = wots_pkgen(pk, skseed, pkseed, adrs);
+  sig,   adrs = wots_sign(sig, m, skseed, pkseed, adrs);
+  pksig, adrs = wots_pkfromsig(pksig, sig, m, pkseed, adrs);
+
+  () = #unspill(pk_addr, pksig_addr, sig_addr);
+
+  // write into C buffer manually
+  for i=0 to SPX_N {
+	[:u8 pk_addr + i]    = pk[i];
+	[:u8 pksig_addr + i] = pksig[i];
+  }
+  for i=0 to SPX_LEN*SPX_N { [:u8 sig_addr + i] = sig[i]; }
 
   reg u8 r;
   r = 0;

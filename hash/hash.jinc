@@ -29,7 +29,7 @@ fn H_msg(
     stack u8[SHA256_OUT] seedhash;
     () = #spill(out, r, pkseed); // make space in the registers
     seedhash = sha256_mgf1_msg::__sha256_prefix_ptr(seedhash, buf, m_addr, m_len);
-    () = #unspill(r, pkseed); // make space in the registers
+    () = #unspill(r, pkseed);
 
     stack u8[2*SPX_N + SHA256_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
     for i=0 to SPX_N {

@@ -57,6 +57,16 @@ fn adrs_compress(
   return out;
 }
 
+inline
+fn adrs_clone(
+  reg ptr u32[8] adrs_new adrs
+) -> reg ptr u32[8]
+{
+  inline int i;
+  for i=0 to 8 { adrs_new [i] = adrs[i]; }
+  return adrs_new;
+}
+
 ////////////////////////////////
 
 inline

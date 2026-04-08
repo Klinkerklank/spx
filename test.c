@@ -6,12 +6,16 @@
 // clear; cd ~/spx; jasminc -o spx.s spx.jazz; echo '.section .note.GNU-stack,"",@progbits' >> spx.s; gcc spx.s test.c -o test -no-pie; ./test
 
 uint8_t test_ADRS(uint64_t adrs_addr, uint64_t adrsc_addr);
+
 uint8_t test_H_msg(uint64_t digest, uint64_t m_addr, uint64_t m_len);
 uint8_t test_PRF_msg(uint64_t digest, uint64_t m_addr, uint64_t m_len);
+uint8_t test_PRF(uint64_t digest);
 uint8_t test_F(uint64_t digest);
 uint8_t test_H(uint64_t digest);
 uint8_t test_T_len(uint64_t digest);
 uint8_t test_T_k(uint64_t digest);
+
+uint8_t test_wots(uint64_t pk, uint64_t pksig, uint64_t sig);
 
 int ADRS() {
     uint32_t adrs[8] = {0};
@@ -82,7 +86,7 @@ int H_msg() {
     for (int i = 0; i < sizeof(digest); i++) {
         printf("%02X", digest[i]);
         if (i%2 == 1) {
-        printf(" ");
+            printf(" ");
         }
     }
     printf("\n\n");
@@ -111,7 +115,24 @@ int PRF_msg() {
     for (int i = 0; i < sizeof(digest); i++) {
         printf("%02X", digest[i]);
         if (i%2 == 1) {
-        printf(" ");
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    return 0;
+}
+
+int PRF() {
+    uint8_t digest[16] = {0};
+    uint8_t r = test_PRF((uint64_t)digest);
+    assert(r == 0);
+
+    printf("PRF:\n");
+    for (int i = 0; i < sizeof(digest); i++) {
+        printf("%02X", digest[i]);
+        if (i%2 == 1) {
+            printf(" ");
         }
     }
     printf("\n\n");
@@ -128,7 +149,7 @@ int F() {
     for (int i = 0; i < sizeof(digest); i++) {
         printf("%02X", digest[i]);
         if (i%2 == 1) {
-        printf(" ");
+            printf(" ");
         }
     }
     printf("\n\n");
@@ -145,7 +166,7 @@ int H() {
     for (int i = 0; i < sizeof(digest); i++) {
         printf("%02X", digest[i]);
         if (i%2 == 1) {
-        printf(" ");
+            printf(" ");
         }
     }
     printf("\n\n");
@@ -162,7 +183,7 @@ int T_len() {
     for (int i = 0; i < sizeof(digest); i++) {
         printf("%02X", digest[i]);
         if (i%2 == 1) {
-        printf(" ");
+            printf(" ");
         }
     }
     printf("\n\n");
@@ -179,7 +200,44 @@ int T_k() {
     for (int i = 0; i < sizeof(digest); i++) {
         printf("%02X", digest[i]);
         if (i%2 == 1) {
-        printf(" ");
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    return 0;
+}
+
+int wots() {
+    uint8_t pk[16]    = {0};
+    uint8_t pksig[16] = {0};
+    uint8_t sig[560]  = {0};
+    uint8_t r = test_wots((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
+    assert(r == 0);
+
+    printf("WOTS+ public key:\n");
+    for (int i=0; i < sizeof(pk); i++) {
+        printf("%02X", pk[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    printf("WOTS+ public key from signature:\n");
+    for (int i=0; i < sizeof(pksig); i++) {
+        printf("%02X", pksig[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    printf("WOTS+ signature:\n");
+    for (int i=0; i < sizeof(sig); i++) {
+        printf("%02X", sig[i]);
+        if (i%2 == 1) {
+            printf(" ");
         }
     }
     printf("\n\n");
@@ -189,12 +247,16 @@ int T_k() {
 
 int main() {
     // ADRS();
-    H_msg();
-    PRF_msg();
-    F();
-    H();
-    T_len();
-    T_k();
+
+    // H_msg();
+    // PRF_msg();
+    // PRF();
+    // F();
+    // H();
+    // T_len();
+    // T_k();
+
+    wots();
 
     return 0;
 }

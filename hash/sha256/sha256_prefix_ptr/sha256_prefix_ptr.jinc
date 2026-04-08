@@ -68,7 +68,7 @@ fn _blocks_0_ref(
 
 inline fn _blocks_0_prefix(
   reg ptr u32[8] _H,
-  stack u8[PREFIXLEN] prefix
+  reg ptr u8[PREFIXLEN] prefix
 ) -> reg ptr u32[8]
 {
   () = #spill(_H);
@@ -134,7 +134,7 @@ inline fn _blocks_0_prefix(
 
 inline fn _blocks_0_prefix_msg(
   reg ptr u32[8] _H,
-  stack u8[PREFIXLEN] prefix,
+  reg ptr u8[PREFIXLEN] prefix,
   reg u64 m mlen
 ) -> reg ptr u32[8], reg u64, reg u64
 {
@@ -244,7 +244,7 @@ inline fn __lastblocks_ref(
 }
 
 inline fn __lastblocks_prefix(
-  stack u8[PREFIXLEN] prefix,
+  reg ptr u8[PREFIXLEN] prefix,
   reg u64 m mlen bits
 ) -> stack u32[32], reg u64
 {
@@ -290,9 +290,9 @@ inline fn __lastblocks_prefix(
   return sblocks, nblocks;
 }
 
-inline fn __sha256_prefix_ptr(
+fn __sha256_prefix_ptr(
   reg ptr u8[32] out,
-  stack u8[PREFIXLEN] prefix,
+  reg ptr u8[PREFIXLEN] prefix,
   reg u64 m mlen
 ) -> reg ptr u8[32]
 {
