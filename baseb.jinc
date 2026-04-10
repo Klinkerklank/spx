@@ -1,26 +1,38 @@
+// algorithm 4 from SLH-DSS
+inline
 fn base_b(
   reg ptr u32[OUTLEN] baseb,
   reg ptr u8[INLEN] input
 ) -> reg ptr u32[OUTLEN]
 {
-    reg u32 in bits total;
-    in = 0; bits = 0; total = 0;
+    reg u64 in = 0;
+    reg u64 out = 0;
+    reg u64 bits = 0;
+    reg u8 consumed = 0;
+    reg u8 total = 0;
+    reg u32 total_32;
 
-    inline int out;
-    for out=0 to OUTLEN {
-        while (bits < LG_B) {
-            total <<= 8;
-            total += (32u) input[in];
-            in += 1;
-            bits += 8;
-        }
+    // for (consumed = 0; consumed < out_len; consumed++) 
+    while (consumed < OUTLEN) {
+        // if (bits == 0) { total = input[in]; in++; bits += 8; }
+        if (bits == 0) {
+          total = input[in];
+          in += 1;
+          bits += 8;
+        }   
 
+        // bits -= params->wots_log_w;
         bits -= LG_B;
-        reg u32 tmp;
-        tmp = total;
-        tmp >>= bits;
-        tmp &= B-1; // mod b
-        baseb[out] = tmp;
+    
+        // baseb[out] = (total >> bits) & (params->wots_w - 1);
+        total_32 = (32u) total;
+        total_32 >>= (bits & 31);
+        total_32 &= (B - 1);
+        baseb[out] = total_32;
+
+      // out++;
+      out += 1;
+      consumed += 1;
     }
 
     return baseb;

@@ -278,10 +278,15 @@ fn test_T_k(reg u64 out) -> reg u8 {
 export
 fn test_wots(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
   () = #spill(pk_addr, pksig_addr, sig_addr);
+  
+  stack u8[SPX_N] pk;
+  stack u8[SPX_LEN * SPX_N] sig;
+  stack u8[SPX_N] pksig;
 
   stack u8[SPX_N] skseed;
   stack u8[SPX_N] pkseed;
   stack u32[8] adrs;
+  stack u8[SPX_N] m;
 
   inline int i;
   for i=0 to SPX_N {
@@ -290,23 +295,19 @@ fn test_wots(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
   }
   for i=0 to 8 { adrs[i] = 0x00000000; }
 
-  stack u8[SPX_N] pk;
   pk, adrs = wots_pkgen(pk, skseed, pkseed, adrs);
   () = #unspill(pk_addr);
   for i=0 to SPX_N { [:u8 pk_addr + i] = pk[i]; }
 
-  // stack u8[SPX_N] m;
-  // for i=0 to SPX_N { m[i] = 0x00; }
+  for i=0 to SPX_N { m[i] = 0x00; }
 
-  // stack u8[SPX_LEN * SPX_N] sig;
-  // sig, adrs = wots_sign(sig, m, skseed, pkseed, adrs);
-  // () = #unspill(sig_addr);
-  // for i=0 to SPX_LEN*SPX_N { [:u8 sig_addr + i] = sig[i]; }
+  sig, adrs = wots_sign(sig, m, skseed, pkseed, adrs);
+  () = #unspill(sig_addr);
+  for i=0 to SPX_LEN*SPX_N { [:u8 sig_addr + i] = sig[i]; }
 
-  // stack u8[SPX_N] pksig;
-  // pksig, adrs = wots_pkfromsig(pksig, sig, m, pkseed, adrs);
-  // () = #unspill(pksig_addr);
-  // for i=0 to SPX_N { [:u8 pksig_addr + i] = pksig[i]; }
+  pksig, adrs = wots_pkfromsig(pksig, sig, m, pkseed, adrs);
+  () = #unspill(pksig_addr);
+  for i=0 to SPX_N { [:u8 pksig_addr + i] = pksig[i]; }
 
   reg u8 r;
   r = 0;
