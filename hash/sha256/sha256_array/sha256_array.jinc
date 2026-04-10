@@ -157,8 +157,7 @@ fn __lastblocks_ref_array(reg ptr u8[INLEN] in, reg u64 inlen offset bits) -> st
 }
 
 // OBS: This function does not have the INLEN parameter defined
-// It needs to be instantiated w/ namespaces
-inline 
+// It needs to be instantiated w/ namespaces 
 fn __sha256(reg ptr u8[32] out, reg ptr u8[INLEN] in) -> reg ptr u8[32]
 {
   reg u64 bits nblocks inlen offset;

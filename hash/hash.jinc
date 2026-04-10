@@ -38,9 +38,9 @@ fn H_msg(
 
     // compute seedhash = sha256(R || PK.seed || PK.root || M)
     stack u8[SHAX_OUT] seedhash;
-    () = #spill(r, pkseed, pkroot);
+    () = #spill(r, pkseed, pkroot, m_addr, m_len);
     seedhash = sha256_mgf1_msg::__sha256_prefix_ptr(seedhash, buf, m_addr, m_len);
-    () = #spill(m_addr, m_len);
+    () = #unspill(r, pkseed, pkroot, m_addr, m_len);
 
     for i=0 to SHAX_OUT { seed[2*SPX_N + i] = seedhash[i]; } // copy the inner message digest
     
@@ -59,7 +59,9 @@ fn H_msg(
         }
         
         // compute shaX(seed), where seed includes counter
+        () = #spill(r, pkseed, pkroot, m_addr, m_len);
         concat[count*SHAX_OUT : SHAX_OUT] = sha256_mgf1_seed::__sha256(concat[count*SHAX_OUT : SHAX_OUT], seed);
+        () = #unspill(r, pkseed, pkroot, m_addr, m_len);
     }
     
     // truncate the concatenated hash outputs to the correct length by copying only the first SPX_M bytes
@@ -205,7 +207,7 @@ fn F(
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_1)
     stack u8[SHA256_OUT] digest;
-    () = #spill(adrs, pkseed); // make space in the registers
+    () = #spill(pkseed, adrs);
     digest = sha256_tl_1n::__sha256(digest, buf);
     () = #unspill(out, adrs);
 

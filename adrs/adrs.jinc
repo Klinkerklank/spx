@@ -5,19 +5,13 @@ fn adrs_to_bytes(
   reg ptr u32[8] adrs
 ) -> reg ptr u8[32]
 {
-  reg u64 i = 0;
-  reg u64 subarray_start_index;
-  reg ptr u8[4] buf;
-
-  while (i < 8) {
-    subarray_start_index = i; subarray_start_index <<= 2; // subarray_start_index = i * 4
-    buf = bytes[subarray_start_index : 4];
+  inline int i;
+  for i=0 to 8 {
     reg u32 temp;
     temp = adrs[i];
     temp = #BSWAP_32(temp);
-    buf.[:u32 0] = temp; // unaligned access
-    bytes[subarray_start_index : 4] = buf;
-    i += 1;
+
+    bytes[:u32 i] = temp;
   }
 
   return bytes;
@@ -29,8 +23,6 @@ fn adrs_init(
   reg ptr u32[8] adrs
 ) -> reg ptr u32[8]
 {
-  // set all u32 words of adrs to 0 in as few instructions as possible
-  // i.e. set to 0 with 64 bits at a time
   inline int i;
   for i=0 to 4 { adrs[:u64 i] = 0; }
   return adrs;
@@ -49,10 +41,10 @@ fn adrs_compress(
   adrs_b = adrs_to_bytes(adrs_b, adrs);
 
   // ADRS^c = ADRS[3] ∥ ADRS[8 ∶ 16] ∥ ADRS[19] ∥ ADRS[20 ∶ 32]
-  out[0] = adrs_b[:u8 3];
-  for i=0 to 8 { out[i+1] = adrs_b[:u8 i+8]; }
-  out[9] = adrs_b[:u8 19];
-  for i=0 to 12 { out[i+10] = adrs_b[:u8 i+20]; }
+  out[0] = adrs_b[3];
+  for i=0 to 8 { out[i+1] = adrs_b[i+8]; }
+  out[9] = adrs_b[19];
+  for i=0 to 12 { out[i+10] = adrs_b[i+20]; }
 
   return out;
 }
@@ -63,7 +55,7 @@ fn adrs_clone(
 ) -> reg ptr u32[8]
 {
   inline int i;
-  for i=0 to 8 { adrs_new [i] = adrs[i]; }
+  for i=0 to 4 { adrs_new[:u64 i] = adrs[:u64 i]; }
   return adrs_new;
 }
 
@@ -160,8 +152,7 @@ fn adrs_get_key_pair_addr(
   reg ptr u32[8] adrs
 ) -> reg u32
 {
-  reg u32 keypair;
-  keypair = adrs[SPX_ADRS_OFFSET_KEYPAIRADDR];
+  reg u32 keypair = adrs[SPX_ADRS_OFFSET_KEYPAIRADDR];
   return keypair;
 }
 
@@ -170,7 +161,6 @@ fn adrs_get_tree_index(
   reg ptr u32[8] adrs
 ) -> reg u32
 {
-  reg u32 treeindex;
-  treeindex = adrs[SPX_ADRS_OFFSET_TREEINDEX];
+  reg u32 treeindex = adrs[SPX_ADRS_OFFSET_TREEINDEX];
   return treeindex;
 }

@@ -17,34 +17,19 @@ namespace baseb_wots_c {
 // algorithm 5 from SLH-DSS
 fn chain(
     reg ptr u8[SPX_N] out,
-    reg u32 start steps,
+    reg u32 i steps,
     reg ptr u8[SPX_N] pkseed,
     reg ptr u32[8] adrs
 ) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
-    () = #spill(out, pkseed, adrs);
-
-    stack u8[SPX_N] prev;
-    reg u32 i t;
-    i = start;
-    t = start; t += steps; 
+    reg u32 t; t = i; t += steps; 
     while (i < t) {
-        () = #spill(i, t);
-
-        () = #unspill(adrs);
         adrs = adrs_set_hash_addr(adrs, i);
-        
-        () = #unspill(out, pkseed);
-        inline int j;
-        for j=0 to SPX_N { prev[j] = out[j]; }
-        out, adrs = F(out, pkseed, adrs, prev);
-        () = #spill(out, adrs);
-
-        () = #unspill(i, t);
+        () = #spill(i, t, steps, pkseed);
+        out, adrs = F(out, pkseed, adrs);
+        () = #unspill(i, t, steps, pkseed);
         i += 1;
     }
-
-    () = #unspill(out, adrs);
 
     return out, adrs;
 }
@@ -55,7 +40,7 @@ fn wots_pkgen(
     reg ptr u32[8] adrs
 ) -> reg ptr u8[SPX_N], reg ptr u32[8]
 {
-    () = #spill(pk, skseed);
+    () = #spill(pk);
 
     // adrs_key is skADRS
     stack u32[8] adrs_key;
@@ -68,21 +53,27 @@ fn wots_pkgen(
     () = #spill(kpa);
 
     stack u8[SPX_LEN * SPX_N] tmp;
-    reg u32 i;
-    i = 0;
-    while (i < SPX_LEN) {
+    inline int i;
+
+    // compute all secret key values
+    for i=0 to SPX_LEN {
         adrs_key = adrs_set_chain_addr(adrs_key, i);
 
         // compute sk in tmp[i : SPX_N]
-        () = #unspill(skseed);
-        tmp[i : SPX_N], adrs_key = PRF(tmp[i : SPX_N], pkseed, skseed, adrs_key);
-        () = #spill(skseed);
+        () = #spill(skseed, pkseed, adrs);
+        tmp[i*SPX_N : SPX_N], adrs_key = PRF(tmp[i*SPX_N : SPX_N], pkseed, skseed, adrs_key);
+        () = #unspill(skseed, pkseed, adrs);
+    }
 
+    // compute all public key values
+    reg u32 start steps; start = 0; steps = SPX_W-1;
+    for i=0 to SPX_LEN {
         adrs = adrs_set_chain_addr(adrs, i);
 
         // hash the secret key value to the public key value
-        reg u32 start steps; start = 0; steps = SPX_W-1;
-        tmp[i : SPX_N], adrs = chain(tmp[i : SPX_N], start, steps, pkseed, adrs);
+        () = #spill(skseed, pkseed, start, steps);
+        tmp[i*SPX_N : SPX_N], adrs = chain(tmp[i*SPX_N : SPX_N], start, steps, pkseed, adrs);
+        () = #unspill(skseed, pkseed, start, steps);
     }
     
     // adrs_key now becomes wotspkADRS
@@ -116,110 +107,130 @@ fn csum(
 }
 
 // algorithm 7 from SLH-DSS
-fn wots_sign(
-    reg ptr u8[SPX_LEN * SPX_N] sig,
-    reg ptr u8[SPX_N] m skseed pkseed,
-    reg ptr u32[8] adrs
-) -> reg ptr u8[SPX_LEN * SPX_N], reg ptr u32[8]
-{
-    () = #spill(skseed);
+// fn wots_sign(
+//     reg ptr u8[SPX_LEN * SPX_N] sig,
+//     reg ptr u8[SPX_N] m skseed pkseed,
+//     reg ptr u32[8] adrs
+// ) -> reg ptr u8[SPX_LEN * SPX_N], reg ptr u32[8]
+// {
+//     () = #spill(sig, skseed, pkseed, adrs);
 
-    stack u32[SPX_LEN] msg;
-    msg[0 : SPX_LEN_1] = baseb_wots_m::base_b(msg[0 : SPX_LEN_1], m);
+//     stack u32[SPX_LEN] msg_stack;
+//     reg ptr u32[SPX_LEN] msg = msg_stack;
+//     msg[0 : SPX_LEN_1] = baseb_wots_m::base_b(msg[0 : SPX_LEN_1], m);
 
-    reg u32 c_u32;
-    c_u32 = csum(msg[0 : SPX_LEN_1]);
-    // c = tobyte(c_u32)
-    stack u8[(SPX_LEN_2 * SPX_LG_W + 7) / 8] c;
-    inline int j;
-    for j=0 to (SPX_LEN_2 * SPX_LG_W + 7) / 8 {
-        reg u32 tmp;
-        tmp = c_u32;
-        tmp >>= j*8;
-        tmp &= 8-1; // mod 256
-        c[((SPX_LEN_2 * SPX_LG_W + 7) / 8 - 1) - j] = (8u) tmp;
-    }
+//     reg u32 c_u32;
+//     c_u32 = csum(msg[0 : SPX_LEN_1]);
+//     // c = tobyte(c_u32)
+//     stack u8[(SPX_LEN_2 * SPX_LG_W + 7) / 8] c;
+//     inline int j;
+//     for j=0 to (SPX_LEN_2 * SPX_LG_W + 7) / 8 {
+//         reg u32 tmp;
+//         tmp = c_u32;
+//         tmp >>= j*8;
+//         tmp &= 0xFF; // mod 256
+//         c[((SPX_LEN_2 * SPX_LG_W + 7) / 8 - 1) - j] = (8u) tmp;
+//     }
 
-    msg[SPX_LEN_1 : SPX_LEN_2] = baseb_wots_c::base_b(msg[SPX_LEN_1 : SPX_LEN_2], c);
+//     msg[SPX_LEN_1 : SPX_LEN_2] = baseb_wots_c::base_b(msg[SPX_LEN_1 : SPX_LEN_2], c);
+//     () = #spill(msg);
     
-    stack u32[8] skadrs;
-    skadrs = adrs_clone(skadrs, adrs);
-    skadrs = adrs_set_type_and_clear(skadrs, SPX_ADRS_TYPE_WOTS_PRF);
+//     stack u32[8] skadrs_stack;
+//     reg ptr u32[8] skadrs = skadrs_stack;
+//     () = #unspill(adrs);
+//     skadrs = adrs_clone(skadrs, adrs);
+//     () = #spill(adrs);
+//     skadrs = adrs_set_type_and_clear(skadrs, SPX_ADRS_TYPE_WOTS_PRF);
 
-    reg u32 kpa;
-    kpa = adrs_get_key_pair_addr(adrs);
-    skadrs = adrs_set_key_pair_addr(skadrs, kpa);
+//     reg u32 kpa;
+//     kpa = adrs_get_key_pair_addr(adrs);
+//     skadrs = adrs_set_key_pair_addr(skadrs, kpa);
+//     () = #spill(skadrs);
 
-    reg u32 i;
-    i = 0;
-    while (i < SPX_LEN) {
-        skadrs = adrs_set_chain_addr(skadrs, i);
+//     () = #unspill(sig, pkseed);
+//     reg u32 i;
+//     i = 0;
+//     while (i < SPX_LEN) {
+//         () = #unspill(skadrs);
+//         skadrs = adrs_set_chain_addr(skadrs, i);
 
-        () = #unspill(skseed);
-        sig[i : SPX_N], skadrs = PRF(sig[i : SPX_N], pkseed, skseed, skadrs);
-        () = #spill(skseed);
+//         () = #unspill(skseed);
+//         sig[i : SPX_N], skadrs = PRF(sig[i : SPX_N], pkseed, skseed, skadrs);
+//         () = #spill(skseed, skadrs);
 
-        adrs = adrs_set_chain_addr(adrs, i);
+//         () = #unspill(adrs);
+//         adrs = adrs_set_chain_addr(adrs, i);
 
-        // hash the secret key value to the signature value
-        reg u32 start steps; start = 0; steps = msg[i];
-        sig[i : SPX_N], adrs = chain(sig[i : SPX_N], start, steps, pkseed, adrs);
-    }
+//         // hash the secret key value to the signature value
+//         () = #unspill(msg);
+//         reg u32 start steps; start = 0; steps = msg[i];
+//         () = #spill(msg);
+//         sig[i : SPX_N], adrs = chain(sig[i : SPX_N], start, steps, pkseed, adrs);
+//         () = #spill(adrs);
+//     }
     
-    return sig, adrs;
-}
+//     () = #unspill(adrs);
+//     return sig, adrs;
+// }
 
 // algorithm 8 from SLH-DSS
-fn wots_pkfromsig(
-    reg ptr u8[SPX_N] pksig,
-    reg ptr u8[SPX_LEN * SPX_N] sig,
-    reg ptr u8[SPX_N] m pkseed,
-    reg ptr u32[8] adrs
-) -> reg ptr u8[SPX_N], reg ptr u32[8]
-{
-    () = #spill(pksig, sig);
-    stack u32[SPX_LEN] msg;
-    msg[0 : SPX_LEN_1] = baseb_wots_m::base_b(msg[0 : SPX_LEN_1], m);
+// fn wots_pkfromsig(
+//     reg ptr u8[SPX_N] pksig,
+//     reg ptr u8[SPX_LEN * SPX_N] sig,
+//     reg ptr u8[SPX_N] m pkseed,
+//     reg ptr u32[8] adrs
+// ) -> reg ptr u8[SPX_N], reg ptr u32[8]
+// {
+//     () = #spill(pksig, sig, pkseed, adrs);
+//     stack u32[SPX_LEN] msg_stack;
+//     reg ptr u32[SPX_LEN] msg = msg_stack;
+//     msg[0 : SPX_LEN_1] = baseb_wots_m::base_b(msg[0 : SPX_LEN_1], m);
 
-    reg u32 c_u32;
-    c_u32 = csum(msg[0 : SPX_LEN_1]);
-    // c = tobyte(c_u32)
-    stack u8[(SPX_LEN_2 * SPX_LG_W + 7) / 8] c;
-    inline int j;
-    for j=0 to (SPX_LEN_2 * SPX_LG_W + 7) / 8 {
-        reg u32 tmp;
-        tmp = c_u32;
-        tmp >>= j*8;
-        tmp &= 8-1; // mod 256
-        c[((SPX_LEN_2 * SPX_LG_W + 7) / 8 - 1) - j] = (8u) tmp;
-    }
+//     reg u32 c_u32;
+//     c_u32 = csum(msg[0 : SPX_LEN_1]);
+//     // c = tobyte(c_u32)
+//     stack u8[(SPX_LEN_2 * SPX_LG_W + 7) / 8] c;
+//     inline int j;
+//     for j=0 to (SPX_LEN_2 * SPX_LG_W + 7) / 8 {
+//         reg u32 tmp;
+//         tmp = c_u32;
+//         tmp >>= j*8;
+//         tmp &= 0xFF; // mod 256
+//         c[((SPX_LEN_2 * SPX_LG_W + 7) / 8 - 1) - j] = (8u) tmp;
+//     }
 
-    msg[SPX_LEN_1 : SPX_LEN_2] = baseb_wots_c::base_b(msg[SPX_LEN_1 : SPX_LEN_2], c);
+//     msg[SPX_LEN_1 : SPX_LEN_2] = baseb_wots_c::base_b(msg[SPX_LEN_1 : SPX_LEN_2], c);
+//     () = #spill(msg);
 
-    stack u8[SPX_LEN * SPX_N] tmp;
-    reg u32 i;
-    i = 0;
-    while (i < SPX_LEN) {
-        adrs = adrs_set_chain_addr(adrs, i);
+//     () = #unspill(adrs);
+//     stack u8[SPX_LEN * SPX_N] tmp;
+//     reg u32 i;
+//     i = 0;
+//     while (i < SPX_LEN) {
+//         adrs = adrs_set_chain_addr(adrs, i);
 
-        // hash the signature value to the public key value
-        () = #unspill(sig);
-        for j=0 to SPX_N { tmp[i+j] = sig[i+j]; }
-        () = #spill(sig);
-        reg u32 start steps; start = msg[i]; steps = SPX_W-1; steps -= msg[i];
-        tmp[i : SPX_N], adrs = chain(tmp[i : SPX_N], start, steps, pkseed, adrs);
-    }
+//         // hash the signature value to the public key value
+//         () = #unspill(sig);
+//         for j=0 to SPX_N { tmp[i+j] = sig[i+j]; }
+//         () = #spill(sig);
+//         () = #unspill(msg);
+//         reg u32 start steps; start = msg[i]; steps = SPX_W-1; steps -= msg[i];
+//         () = #spill(msg);
+//         () = #unspill(pkseed);
+//         tmp[i : SPX_N], adrs = chain(tmp[i : SPX_N], start, steps, pkseed, adrs);
+//         () = #spill(pkseed);
+//     }
     
-    stack u32[8] wotspkADRS;
-    wotspkADRS = adrs_clone(wotspkADRS, adrs);
-    wotspkADRS = adrs_set_type_and_clear(wotspkADRS, SPX_ADRS_TYPE_WOTS_PK);
+//     stack u32[8] wotspkADRS;
+//     wotspkADRS = adrs_clone(wotspkADRS, adrs);
+//     wotspkADRS = adrs_set_type_and_clear(wotspkADRS, SPX_ADRS_TYPE_WOTS_PK);
 
-    reg u32 kpa;
-    kpa = adrs_get_key_pair_addr(adrs);
-    wotspkADRS = adrs_set_key_pair_addr(wotspkADRS, kpa);
+//     reg u32 kpa;
+//     kpa = adrs_get_key_pair_addr(adrs);
+//     wotspkADRS = adrs_set_key_pair_addr(wotspkADRS, kpa);
     
-    () = #unspill(pksig);
-    pksig, wotspkADRS = T_len(pksig, pkseed, wotspkADRS, tmp);
+//     () = #unspill(pksig, pkseed);
+//     pksig, wotspkADRS = T_len(pksig, pkseed, wotspkADRS, tmp);
     
-    return pksig, adrs;
-}
+//     return pksig, adrs;
+// }

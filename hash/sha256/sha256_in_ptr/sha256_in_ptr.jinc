@@ -80,7 +80,8 @@ fn _blocks_0_ref(reg ptr u32[8] _H, reg u64 in inlen) -> reg ptr u32[8], reg u64
   return _H, in, inlen;
 }
 
-inline fn __lastblocks_ref(reg u64 in inlen bits) -> stack u32[32], reg u64
+inline
+fn __lastblocks_ref(reg u64 in inlen bits) -> stack u32[32], reg u64
 {
   stack u32[32] sblocks;
   inline int k;
@@ -117,7 +118,7 @@ inline fn __lastblocks_ref(reg u64 in inlen bits) -> stack u32[32], reg u64
   return sblocks, nblocks;
 }
 
-inline fn __sha256_in_ptr(reg ptr u8[32] out, reg u64 in inlen) -> reg ptr u8[32]
+fn __sha256_in_ptr(reg ptr u8[32] out, reg u64 in inlen) -> reg ptr u8[32]
 {
   reg u64 bits nblocks;
   stack u32[8] H;

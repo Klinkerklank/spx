@@ -200,6 +200,7 @@ fn _blocks_1_ref(reg ptr u32[8] _H, reg ptr u32[32] sblocks, reg u64 nblocks) ->
 
   Kp = SHA256_K;
   Hp = _H;
+  () = #spill(_H);
   i = 0;
 
   H = Hp;
@@ -269,6 +270,7 @@ fn _blocks_1_ref(reg ptr u32[8] _H, reg ptr u32[32] sblocks, reg u64 nblocks) ->
     i += 1;
   }
 
+  () = #unspill(_H);
   _H = H;
   return _H, sblocks;
 }

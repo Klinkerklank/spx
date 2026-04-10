@@ -1,4 +1,3 @@
-inline
 fn base_b(
   reg ptr u32[OUTLEN] baseb,
   reg ptr u8[INLEN] input
