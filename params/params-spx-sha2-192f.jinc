@@ -10,8 +10,6 @@ param int SPX_SEC_CAT = 3; // from SLH-DSS Table 2
 // SPHINCS+ parameters
 param int SPX_N = 24;
 param int SPX_M = 42; // ceil((SPX_H - SPX_H_PRIME) / 8) + ceil((SPX_H_PRIME) / 8) + ceil((SPX_K + SPX_A) / 8)
-param int SPX_PK_BYTES = 48; // public key = (PK.seed, PK.root), each of SPX_N bytes 
-param int SPX_SIG_BYTES = 35664; // (1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N, see SLH-DSS Algorithm 20
 
 // WOTS+ parameters
 param int SPX_LG_W  = 4;
@@ -29,6 +27,18 @@ param int SPX_H_PRIME = 3; // SPX_H / SPX_D
 param int SPX_A = 8;
 param int SPX_K = 33;
 param int SPX_T = 256; // 2^SPX_A
+
+// Signature lengths
+// WOTS_SIG = one SPX_N-byte signature value for each of the SPX_LEN chains
+param int WOTS_SIG = 1224; // SPX_LEN * SPX_N
+// XMSS_SIG = one WOTS+ signature followed by an SPX_H_PRIME-length authentication path
+param int XMSS_SIG = 1296; // WOTS_SIG + SPX_H_PRIME*SPX_N
+// HT_SIG = one XMSS signature for each of the SPX_D layers in the hypertree
+param int HT_SIG   = 28512; // SPX_D * XMSS_SIG
+// FORS_SIG = for each of the SPX_K trees in a FORS forest, one SPX_N-byte secret value followed by an SPX_A-length authentication path
+param int FORS_SIG = 7128; // SPX_K * (1 + SPX_A) * SPX_N
+// SPX_SIG = an SPX_N-byte message randomiser follwed by one FORS signature and one hypertree signature
+param int SPX_SIG  = 35664; // SPX_N + FORS_SIG + HT_SIG
 
 // SHA2 fixed hash function input and output sizes
 param int SHA256_IN  = 64;
