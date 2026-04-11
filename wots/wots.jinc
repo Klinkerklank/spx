@@ -52,7 +52,7 @@ fn wots_pkgen(
     adrs_key = adrs_set_key_pair_addr(adrs_key, kpa);
     () = #spill(kpa);
 
-    stack u8[SPX_LEN * SPX_N] tmp;
+    stack u8[WOTS_SIG] tmp;
     inline int i;
 
     // compute all secret key values
@@ -108,10 +108,10 @@ fn csum(
 
 // algorithm 7 from SLH-DSS
 fn wots_sign(
-    reg ptr u8[SPX_LEN * SPX_N] sig,
+    reg ptr u8[WOTS_SIG] sig,
     reg ptr u8[SPX_N] m skseed pkseed,
     reg ptr u32[8] adrs
-) -> reg ptr u8[SPX_LEN * SPX_N], reg ptr u32[8]
+) -> reg ptr u8[WOTS_SIG], reg ptr u32[8]
 {
     stack u32[SPX_LEN] msg;
     msg[0 : SPX_LEN_1] = baseb_wots_m::base_b(msg[0 : SPX_LEN_1], m);
@@ -169,7 +169,7 @@ fn wots_sign(
 // algorithm 8 from SLH-DSS
 fn wots_pkfromsig(
     reg ptr u8[SPX_N] pksig,
-    reg ptr u8[SPX_LEN * SPX_N] sig,
+    reg ptr u8[WOTS_SIG] sig,
     reg ptr u8[SPX_N] m pkseed,
     reg ptr u32[8] adrs
 ) -> reg ptr u8[SPX_N], reg ptr u32[8]
@@ -196,8 +196,8 @@ fn wots_pkfromsig(
 
     inline int i;
 
-    stack u8[SPX_LEN * SPX_N] sigvals;
-    for i=0 to SPX_LEN * SPX_N { sigvals[i] = sig[i]; }
+    stack u8[WOTS_SIG] sigvals;
+    for i=0 to WOTS_SIG { sigvals[i] = sig[i]; }
 
     // compute all public key values
     reg u32 start steps;
