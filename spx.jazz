@@ -9,278 +9,230 @@ require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
 // require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
 // require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 
-export
-fn test_ADRS(reg u64 adrs_addr adrsc_addr) -> reg u8
-{
-  () = #spill(adrs_addr, adrsc_addr);
+// export
+// fn test_ADRS(reg u64 adrs_addr adrsc_addr) -> reg u8
+// {
+//   () = #spill(adrs_addr, adrsc_addr);
+//   stack u32[8] adrs;
+//   adrs = adrs_init(adrs);
 
-  stack u32[8] adrs;
-  adrs = adrs_init(adrs);
+//   reg u32 tmp;
+//   tmp = 0x111122ff;
+//   adrs = adrs_set_layer_addr(adrs, tmp);
+//   stack u32[3] tmp3;
+//   tmp3[0] = 0x33334444;
+//   tmp3[1] = 0xaaaabbbb;
+//   tmp3[2] = 0xccccdddd;
+//   adrs = adrs_set_tree_addr(adrs, tmp3);
+//   tmp = 0x555566ff;
+//   adrs = adrs_set_type_and_clear(adrs, tmp);
+//   tmp = 0xaaaabbbb;
+//   adrs = adrs_set_key_pair_addr(adrs, tmp);
+//   tmp = 0xccccdddd;
+//   adrs = adrs_set_chain_addr(adrs, tmp);
+//   tmp = 0xeeeeffff;
+//   adrs = adrs_set_hash_addr(adrs, tmp);
+  
+//   () = #unspill(adrs_addr, adrsc_addr);
 
-  reg u32 tmp;
-  tmp = 0x111122ff;
-  adrs = adrs_set_layer_addr(adrs, tmp);
-  stack u32[3] tmp3;
-  tmp3[0] = 0x33334444;
-  tmp3[1] = 0xaaaabbbb;
-  tmp3[2] = 0xccccdddd;
-  adrs = adrs_set_tree_addr(adrs, tmp3);
-  tmp = 0x555566ff;
-  adrs = adrs_set_type_and_clear(adrs, tmp);
-  tmp = 0xaaaabbbb;
-  adrs = adrs_set_key_pair_addr(adrs, tmp);
-  tmp = 0xccccdddd;
-  adrs = adrs_set_chain_addr(adrs, tmp);
-  tmp = 0xeeeeffff;
-  adrs = adrs_set_hash_addr(adrs, tmp);
+//   inline int i;
+//   for i=0 to 8 { [:u32 (adrs_addr + 4*i)] = adrs[i]; }
 
-  () = #unspill(adrs_addr);
+//   stack u8[22] adrsc;
+//   adrsc = adrs_compress(adrsc, adrs);
 
-  inline int i;
-  for i=0 to 8 { [:u32 (adrs_addr + 4*i)] = adrs[i]; }
+//   for i=0 to 22 { [:u8 (adrsc_addr + i)] = adrsc[i]; }
 
-  stack u8[22] adrsc;
-  adrsc = adrs_compress(adrsc, adrs);
+//   reg u8 r;
+//   r = 0x0;
+//   return r;
+// }
 
-  () = #unspill(adrsc_addr);
-  for i=0 to 22 { [:u8 (adrsc_addr + i)] = adrsc[i]; }
+// export
+// fn test_H_msg(reg u64 out m mlen) -> reg u8 {
+//   stack u8[SPX_N] R pkseed pkroot;
 
-  reg u8 r;
-  r = 0x0;
-  return r;
-}
+//   inline int i;
+//   for i = 0 to SPX_N {
+// 	  R[i]      = 0x00;
+// 	  pkseed[i] = 0x00;
+// 	  pkroot[i] = 0x00;
+//   }
 
-export
-fn test_adrsc(reg u64 adrs_addr) -> reg u8
-{
-  () = #spill(adrs_addr);
+//   stack u8[SPX_M] digest;
+//   () = #spill(out);
+//   digest = H_msg(digest, R, pkseed, pkroot, m, mlen);
+//   () = #unspill(out);
 
-  stack u32[8] adrs;
-  adrs = adrs_init(adrs);
+//   // write digest into C buffer manually
+//   for i = 0 to SPX_M {
+// 	  [:u8 (out + i)] = digest[i];
+//   }
 
-  reg u32 tmp;
-  tmp = 0x11112222;
-  adrs = adrs_set_layer_addr(adrs, tmp);
-  stack u32[3] tmp3;
-  tmp3[0] = 0xaaaabbbb;
-  tmp3[1] = 0xccccdddd;
-  tmp3[2] = 0xeeeeffff;
-  adrs = adrs_set_tree_addr(adrs, tmp3);
-  tmp = 0x33334444;
-  adrs = adrs_set_type_and_clear(adrs, tmp);
-  tmp = 0x55556666;
-  adrs = adrs_set_key_pair_addr(adrs, tmp);
-  tmp = 0x77778888;
-  adrs = adrs_set_chain_addr(adrs, tmp);
-  tmp = 0x99990000;
-  adrs = adrs_set_hash_addr(adrs, tmp);
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
 
-  stack u8[22] adrsc;
-  adrsc = adrs_compress(adrsc, adrs);
+// export
+// fn test_PRF_msg(reg u64 out m mlen) -> reg u8 {
+//   stack u8[SPX_N] skprf opt_rand;
 
-  () = #unspill(adrs_addr);
-  inline int i;
-  for i=0 to 8 {
-	[:u32 (adrs_addr + 4*i)] = adrs[i];
-  }
+//   inline int i;
+//   for i = 0 to SPX_N {
+//     skprf[i]    = 0x00;
+//     opt_rand[i] = 0x00;
+//   }
 
-  reg u8 r;
-  r = 0x0;
-  return r;
-}
+//   stack u8[SPX_N] digest;
+//   () = #spill(out);
+//   digest = PRF_msg(digest, skprf, opt_rand, m, mlen);
+//   () = #unspill(out);
 
-export
-fn test_H_msg(reg u64 out m mlen) -> reg u8 {
-  () = #spill(out); // make space in the registers
+//   // write digest into C buffer manually
+//   for i = 0 to SPX_N {
+// 	  [:u8 (out + i)] = digest[i];
+//   }
 
-  stack u8[SPX_N] R pkseed pkroot;
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
 
-  inline int i;
-  for i = 0 to SPX_N {
-	R[i]      = 0x00;
-	pkseed[i] = 0x00;
-	pkroot[i] = 0x00;
-  }
+// export
+// fn test_PRF(reg u64 out) -> reg u8 {
+//   stack u8[SPX_N] pkseed skseed;
+//   stack u32[8] adrs;
 
-  stack u8[SPX_M] digest;
-  digest = H_msg(digest, R, pkseed, pkroot, m, mlen);
+//   inline int i;
+//   for i = 0 to SPX_N {
+//     pkseed[i] = 0x00;
+//     skseed[i] = 0x00;
+//   }
+//   for i = 0 to 8 { adrs[i] = 0x00000000; }
 
-  // write digest into C buffer manually
-  () = #unspill(out);
-  for i = 0 to SPX_M {
-	[:u8 (out + i)] = digest[i];
-  }
+//   stack u8[SPX_N] digest;
+//   () = #spill(out);
+//   digest = PRF(digest, pkseed, skseed, adrs);
+//   () = #unspill(out);
 
-  reg u8 r;
-  r = 0;
-  return r;
-}
+//   // write digest into C buffer manually
+  
+//   for i = 0 to SPX_N {
+// 	  [:u8 (out + i)] = digest[i];
+//   }
 
-export
-fn test_PRF_msg(reg u64 out m mlen) -> reg u8 {
-  () = #spill(out); // make space in the registers
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
 
-  stack u8[SPX_N] skprf opt_rand;
+// export
+// fn test_F(reg u64 out) -> reg u8 {
+//   stack u8[SPX_N] pkseed;
+//   stack u32[8] adrs;
+//   stack u8[SPX_N] digest; // digest = m1 (F is in-place)
 
-  inline int i;
-  for i = 0 to SPX_N {
-    skprf[i]    = 0x00;
-    opt_rand[i] = 0x00;
-  }
+//   inline int i;
+//   for i = 0 to SPX_N {
+// 	  pkseed[i] = 0x00;
+// 	  digest[i] = 0x00;
+//   }
+//   for i = 0 to 8 {
+// 	  adrs[i] = 0x00000000;
+//   }
 
-  stack u8[SPX_N] digest;
-  digest = PRF_msg(digest, skprf, opt_rand, m, mlen);
+//   () = #spill(out);
+//   digest = F(digest, pkseed, adrs);
+//   () = #unspill(out);
 
-  // write digest into C buffer manually
-  () = #unspill(out);
-  for i = 0 to SPX_N {
-	  [:u8 (out + i)] = digest[i];
-  }
+//   // write digest into C buffer manually
+//   for i = 0 to SPX_N { [:u8 (out + i)] = digest[i]; }
 
-  reg u8 r;
-  r = 0;
-  return r;
-}
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
 
-export
-fn test_PRF(reg u64 out) -> reg u8 {
-  () = #spill(out);
+// export
+// fn test_H(reg u64 out) -> reg u8 {
+//   stack u8[SPX_N] pkseed;
+//   stack u32[8] adrs;
+//   stack u8[SPX_N] in1 in2;
 
-  stack u8[SPX_N] pkseed skseed;
-  stack u32[8] adrs;
+//   inline int i;
+//   for i = 0 to SPX_N { pkseed[i] = 0x00; }
+//   for i = 0 to 8 { adrs[i] = 0x00000000; }
+//   for i = 0 to SPX_N { in1[i] = 0x00; }
+//   for i = 0 to SPX_N { in2[i] = 0x00; }
 
-  inline int i;
-  for i = 0 to SPX_N {
-    pkseed[i] = 0x00;
-    skseed[i] = 0x00;
-  }
-  for i = 0 to 8 { adrs[i] = 0x00000000; }
+//   stack u8[SPX_N] digest;
+//   () = #spill(out);
+//   digest = H(digest, pkseed, adrs, in1, in2);
+//   () = #unspill(out);
 
-  stack u8[SPX_N] digest;
-  digest, adrs = PRF(digest, pkseed, skseed, adrs);
+//   // write digest into C buffer manually
+//   for i = 0 to SPX_N { [:u8 out + i] = digest[i]; }
 
-  // write digest into C buffer manually
-  () = #unspill(out);
-  for i = 0 to SPX_N {
-	[:u8 (out + i)] = digest[i];
-  }
+//   () = #unspill(out);
 
-  reg u8 r;
-  r = 0;
-  return r;
-}
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
 
-export
-fn test_F(reg u64 out) -> reg u8 {
-  () = #spill(out);
+// export
+// fn test_T_len(reg u64 out) -> reg u8 {
+//   stack u8[SPX_N] pkseed;
+//   stack u32[8] adrs;
+//   stack u8[SPX_LEN*SPX_N] mlen;
 
-  stack u8[SPX_N] pkseed;
-  stack u32[8] adrs;
-  stack u8[SPX_N] digest; // digest = m1 (F is in-place)
+//   inline int i;
+//   for i = 0 to SPX_N { pkseed[i] = 0x00; }
+//   for i = 0 to 8 { adrs[i] = 0x00000000; }
+//   for i = 0 to SPX_LEN*SPX_N { mlen[i] = 0x00; }
 
-  inline int i;
-  for i = 0 to SPX_N {
-	pkseed[i] = 0x00;
-	digest[i] = 0x00;
-  }
-  for i = 0 to 8 {
-	adrs[i] = 0x00000000;
-  }
+//   stack u8[SPX_N] digest;
+//   () = #spill(out);
+//   digest = T_len(digest, pkseed, adrs, mlen);
+//   () = #unspill(out);
 
-  digest, adrs = F(digest, pkseed, adrs);
+//   // write digest into C buffer manually
+//   for i = 0 to SPX_N { [:u8 (out + i)] = digest[i]; }
 
-  // write digest into C buffer manually
-  () = #unspill(out);
-  for i = 0 to SPX_N { [:u8 (out + i)] = digest[i]; }
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
 
-  reg u8 r;
-  r = 0;
-  return r;
-}
+// export
+// fn test_T_k(reg u64 out) -> reg u8 {
+//   stack u8[SPX_N] pkseed;
+//   stack u32[8] adrs;
+//   stack u8[SPX_K*SPX_N] mk;
 
-export
-fn test_H(reg u64 out) -> reg u8 {
-  () = #spill(out);
+//   inline int i;
+//   for i = 0 to SPX_N { pkseed[i] = 0x00; }
+//   for i = 0 to 8 { adrs[i] = 0x00000000; }
+//   for i = 0 to SPX_K*SPX_N { mk[i] = 0x00; }
 
-  stack u8[SPX_N] pkseed;
-  stack u32[8] adrs;
-  stack u8[2*SPX_N] m2;
+//   stack u8[SPX_N] digest;
+//   () = #spill(out);
+//   digest = T_k(digest, pkseed, adrs, mk);
+//   () = #unspill(out);
 
-  inline int i;
-  for i = 0 to SPX_N { pkseed[i] = 0x00; }
-  for i = 0 to 8 { adrs[i] = 0x00000000; }
-  for i = 0 to 2*SPX_N { m2[i] = 0x00; }
+//   // write digest into C buffer manually
+//   for i = 0 to SPX_N { [:u8 (out + i)] = digest[i]; }
 
-  stack u8[SPX_N] digest;
-  digest, adrs = H(digest, pkseed, adrs, m2);
-
-  // write digest into C buffer manually
-  () = #unspill(out);
-  for i = 0 to SPX_N {
-	  [:u8 (out + i)] = digest[i];
-  }
-
-  reg u8 r;
-  r = 0;
-  return r;
-}
-
-export
-fn test_T_len(reg u64 out) -> reg u8 {
-  () = #spill(out);
-
-  stack u8[SPX_N] pkseed;
-  stack u32[8] adrs;
-  stack u8[SPX_LEN*SPX_N] mlen;
-
-  inline int i;
-  for i = 0 to SPX_N { pkseed[i] = 0x00; }
-  for i = 0 to 8 { adrs[i] = 0x00000000; }
-  for i = 0 to SPX_LEN*SPX_N { mlen[i] = 0x00; }
-
-  stack u8[SPX_N] digest;
-  digest, adrs = T_len(digest, pkseed, adrs, mlen);
-
-  // write digest into C buffer manually
-  () = #unspill(out);
-  for i = 0 to SPX_N { [:u8 (out + i)] = digest[i]; }
-
-  reg u8 r;
-  r = 0;
-  return r;
-}
-
-export
-fn test_T_k(reg u64 out) -> reg u8 {
-  () = #spill(out);
-
-  stack u8[SPX_N] pkseed;
-  stack u32[8] adrs;
-  stack u8[SPX_K*SPX_N] mk;
-
-  inline int i;
-  for i = 0 to SPX_N { pkseed[i] = 0x00; }
-  for i = 0 to 8 { adrs[i] = 0x00000000; }
-  for i = 0 to SPX_K*SPX_N { mk[i] = 0x00; }
-
-  stack u8[SPX_N] digest;
-  digest, adrs = T_k(digest, pkseed, adrs, mk);
-
-  // write digest into C buffer manually
-  () = #unspill(out);
-  for i = 0 to SPX_N { [:u8 (out + i)] = digest[i]; }
-
-  reg u8 r;
-  r = 0;
-  return r;
-}
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
 
 export
 fn test_wots(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
-  () = #spill(pk_addr, pksig_addr, sig_addr);
-  
   stack u8[SPX_N] pk;
-  stack u8[SPX_LEN * SPX_N] sig;
+  stack u8[WOTS_SIG] sig;
   stack u8[SPX_N] pksig;
 
   stack u8[SPX_N] skseed;
@@ -292,18 +244,18 @@ fn test_wots(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
   for i=0 to SPX_N {
     skseed[i] = 0x00;
     pkseed[i] = 0x00;
+    m[i] = 0x00;
   }
   for i=0 to 8 { adrs[i] = 0x00000000; }
-
+  
+  () = #spill(pk_addr, pksig_addr, sig_addr);
   pk, adrs = wots_pkgen(pk, skseed, pkseed, adrs);
   () = #unspill(pk_addr);
   for i=0 to SPX_N { [:u8 pk_addr + i] = pk[i]; }
 
-  for i=0 to SPX_N { m[i] = 0x00; }
-
   sig, adrs = wots_sign(sig, m, skseed, pkseed, adrs);
   () = #unspill(sig_addr);
-  for i=0 to SPX_LEN*SPX_N { [:u8 sig_addr + i] = sig[i]; }
+  for i=0 to WOTS_SIG { [:u8 sig_addr + i] = sig[i]; }
 
   pksig, adrs = wots_pkfromsig(pksig, sig, m, pkseed, adrs);
   () = #unspill(pksig_addr);
@@ -313,6 +265,49 @@ fn test_wots(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
   r = 0;
   return r;
 }
+
+// export
+// fn test_xmss(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
+//   () = #spill(pk_addr, pksig_addr, sig_addr);
+  
+//   stack u8[SPX_N] pk;
+//   stack u8[XMSS_SIG] sig;
+//   stack u8[SPX_N] pksig;
+
+//   stack u8[SPX_N] skseed;
+//   stack u8[SPX_N] pkseed;
+//   stack u32[8] adrs;
+//   stack u8[SPX_N] m;
+
+//   inline int j;
+//   for j=0 to SPX_N {
+//     skseed[j] = 0x00;
+//     pkseed[j] = 0x00;
+//     m[j] = 0x00;
+//   }
+//   for j=0 to 8 { adrs[j] = 0x00000000; }
+
+//   reg u32 i = 0; reg u32 z = SPX_H_PRIME;
+//   () = #spill(i, z);
+//   pk, adrs = xmss_node(pk, skseed, i, z, pkseed, adrs);
+//   for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
+
+//   reg u32 idx = 0;
+//   () = #spill(idx);
+//   sig, adrs = xmss_sign(sig, m, skseed, idx, pkseed, adrs);
+//   for j=0 to XMSS_SIG { [:u8 sig_addr + j] = sig[j]; }
+
+//   pksig, adrs = xmss_pkfromsig(pksig, idx, sig, m, pkseed, adrs);
+//   for j=0 to SPX_N { [:u8 pksig_addr + j] = pksig[j]; }
+
+//   () = #unspill(pk_addr, pksig_addr, sig_addr, i, z, idx);
+
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
+
+
 
 // algorithm 21 from SLH-DSS
 // export

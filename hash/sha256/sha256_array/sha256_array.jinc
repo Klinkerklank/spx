@@ -5,7 +5,7 @@
 // OBS: This function does not have the INLEN parameter defined
 // It needs to be instantiated w/ namespaces
 fn _blocks_0_ref_array(
-  reg ptr u32[8] _H, 
+  reg ptr u32[8] _H,
   reg ptr u8[INLEN] in
 ) -> reg ptr u32[8], reg u64
 {
@@ -56,11 +56,14 @@ fn _blocks_0_ref_array(
       for t=16 to 64 { W = __Wt_ref(W, t); }
 
       a, b, c, d, e, f, g, h, H = __load_H_ref(H);
+      () = #spill(a,b,c,d,e,f,g,h);
       Hp = H;
 
       tr = 0;
       while(tr < 64)
       {
+        () = #spill(tr);
+
         //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
         T1  = h;
         r   = __BSIG1_ref(e);
@@ -69,12 +72,14 @@ fn _blocks_0_ref_array(
         T1 += r;
         T1 += Kp[tr];
         T1 += W[tr];
+        
 
         //T2 = BSIG0(a) + MAJ(a,b,c)
         T2  = __BSIG0_ref(a);
         r   = __MAJ_ref(a,b,c);
         T2 += r;
 
+        () = #unspill(a,b,c,d,e,f,g,h);
         h  = g;
         g  = f;
         f  = e;
@@ -85,10 +90,13 @@ fn _blocks_0_ref_array(
         b  = a;
         a  = T1;
         a += T2;
-
-        tr+= 1;
+        () = #spill(a,b,c,d,e,f,g,h);
+        
+        () = #unspill(tr);
+        tr += 1;
       }
 
+      () = #unspill(a,b,c,d,e,f,g,h);
       H = Hp;
       a += H[0];
       b += H[1];
@@ -98,6 +106,7 @@ fn _blocks_0_ref_array(
       f += H[5];
       g += H[6];
       h += H[7];
+      () = #spill(a,b,c,d,e,f,g,h);
 
       H = __store_H_ref(H,a,b,c,d,e,f,g,h);
 

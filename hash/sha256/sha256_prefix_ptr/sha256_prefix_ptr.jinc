@@ -13,7 +13,6 @@ fn _blocks_0_ref(
 
   Kp = SHA256_K;
   Hp = _H;
-  () = #spill(_H);
 
   H = Hp;
 
@@ -64,7 +63,6 @@ fn _blocks_0_ref(
     mlen -= 64;
   }
 
-  () = #unspill(_H);
   _H = H;
   return _H, m, mlen;
 }
@@ -86,7 +84,6 @@ fn _blocks_0_prefix(
 
   Kp = SHA256_K;
   Hp = _H;
-  () = #spill(_H);
 
   H = Hp;
 
@@ -125,7 +122,6 @@ fn _blocks_0_prefix(
     H = __store_H_ref(H,a,b,c,d,e,f,g,h);
   }
   
-  () = #unspill(_H);
   _H = H;
   return _H;
 }
@@ -138,6 +134,7 @@ fn _blocks_0_prefix_msg(
 ) -> reg ptr u32[8], reg u64, reg u64
 {
   () = #spill(m, mlen);
+
   inline int i t;
   reg u32 T1 T2 a b c d e f g h r;
   stack u32[64] W;
@@ -148,7 +145,6 @@ fn _blocks_0_prefix_msg(
 
   Kp = SHA256_K;
   Hp = _H;
-  () = #spill(_H);
 
   H = Hp;
 
@@ -200,7 +196,6 @@ fn _blocks_0_prefix_msg(
   m += 64-(PREFIXLEN%64);
   mlen -= 64-(PREFIXLEN%64);
 
-  () = #unspill(_H);
   _H = H;
   return _H, m, mlen;
 }
@@ -324,7 +319,7 @@ fn __sha256_prefix_ptr(
     // absorb PREFIXLEN/64 full blocks of prefix
     Hp = _blocks_0_prefix(Hp, prefix);
   }
-  () = #spill(prefix); // make space in the registers
+  () = #spill(prefix);
 
   // remaining prefix length < 64
   if PREFIXLEN % 64 == 0 {
@@ -336,9 +331,9 @@ fn __sha256_prefix_ptr(
     comb_len += mlen;
     if (comb_len >= 64) {
       // absorb PREFIXLEN%64 prefix bytes and fill the rest of the block with message bytes
-      () = #unspill(prefix); // make space in the registers
+      () = #unspill(prefix);
       Hp, m, mlen = _blocks_0_prefix_msg(Hp, prefix, m, mlen);
-      () = #spill(prefix); // make space in the registers
+      () = #spill(prefix);
       // prefix is now processed fully, and message partly 
       // process the rest of the message in full message blocks
       Hp, m, mlen = _blocks_0_ref(Hp, m, mlen);

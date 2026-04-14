@@ -22,6 +22,7 @@ param int SPX_LEN   = 67; // SPX_LEN_1 + SPX_LEN_2
 param int SPX_H       = 68;
 param int SPX_D       = 17;
 param int SPX_H_PRIME = 4; // SPX_H / SPX_D
+param int SPX_SUBTREE_SIZE = 32; // 2**(SPX_H_PRIME+1)
 
 // FORS parameters
 param int SPX_A = 9;
