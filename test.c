@@ -15,8 +15,8 @@
 // uint8_t test_T_len(uint64_t digest);
 // uint8_t test_T_k(uint64_t digest);
 
-uint8_t test_wots(uint64_t pk, uint64_t pksig, uint64_t sig);
-// uint8_t test_xmss(uint64_t pk, uint64_t pksig, uint64_t sig);
+// uint8_t test_wots(uint64_t pk, uint64_t pksig, uint64_t sig);
+uint8_t test_xmss(uint64_t pk, uint64_t pksig, uint64_t sig);
 
 // int ADRS() {
 //     uint32_t adrs[8] = {0};
@@ -209,51 +209,14 @@ uint8_t test_wots(uint64_t pk, uint64_t pksig, uint64_t sig);
 //     return 0;
 // }
 
-int wots() {
-    uint8_t pk[16]    = {0};
-    uint8_t pksig[16] = {0};
-    uint8_t sig[560]  = {0};
-    uint8_t r = test_wots((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
-    assert(r == 0);
-
-    printf("WOTS+ public key:\n");
-    for (int i=0; i < sizeof(pk); i++) {
-        printf("%02X", pk[i]);
-        if (i%2 == 1) {
-            printf(" ");
-        }
-    }
-    printf("\n\n");
-
-    printf("WOTS+ public key from signature:\n");
-    for (int i=0; i < sizeof(pksig); i++) {
-        printf("%02X", pksig[i]);
-        if (i%2 == 1) {
-            printf(" ");
-        }
-    }
-    printf("\n\n");
-
-    printf("WOTS+ signature:\n");
-    for (int i=0; i < sizeof(sig); i++) {
-        printf("%02X", sig[i]);
-        if (i%2 == 1) {
-            printf(" ");
-        }
-    }
-    printf("\n\n");
-
-    return 0;
-}
-
-// int xmss() {
+// int wots() {
 //     uint8_t pk[16]    = {0};
 //     uint8_t pksig[16] = {0};
-//     uint8_t sig[608]  = {0};
-//     uint8_t r = test_xmss((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
+//     uint8_t sig[560]  = {0};
+//     uint8_t r = test_wots((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
 //     assert(r == 0);
 
-//     printf("XMSS public key:\n");
+//     printf("WOTS+ public key:\n");
 //     for (int i=0; i < sizeof(pk); i++) {
 //         printf("%02X", pk[i]);
 //         if (i%2 == 1) {
@@ -262,7 +225,7 @@ int wots() {
 //     }
 //     printf("\n\n");
 
-//     printf("XMSS public key from signature:\n");
+//     printf("WOTS+ public key from signature:\n");
 //     for (int i=0; i < sizeof(pksig); i++) {
 //         printf("%02X", pksig[i]);
 //         if (i%2 == 1) {
@@ -271,7 +234,7 @@ int wots() {
 //     }
 //     printf("\n\n");
 
-//     printf("XMSS signature:\n");
+//     printf("WOTS+ signature:\n");
 //     for (int i=0; i < sizeof(sig); i++) {
 //         printf("%02X", sig[i]);
 //         if (i%2 == 1) {
@@ -282,6 +245,43 @@ int wots() {
 
 //     return 0;
 // }
+
+int xmss() {
+    uint8_t pk[16]    = {0};
+    uint8_t pksig[16] = {0};
+    uint8_t sig[608]  = {0};
+    uint8_t r = test_xmss((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
+    assert(r == 0);
+
+    printf("XMSS public key:\n");
+    for (int i=0; i < sizeof(pk); i++) {
+        printf("%02X", pk[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    printf("XMSS public key from signature:\n");
+    for (int i=0; i < sizeof(pksig); i++) {
+        printf("%02X", pksig[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    printf("XMSS signature:\n");
+    for (int i=0; i < sizeof(sig); i++) {
+        printf("%02X", sig[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    return 0;
+}
 
 int main() {
     // ADRS();
@@ -294,8 +294,8 @@ int main() {
     // T_len();
     // T_k();
 
-    wots();
-    // xmss();
+    // wots();
+    xmss();
 
     return 0;
 }

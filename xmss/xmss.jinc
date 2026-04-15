@@ -1,10 +1,12 @@
+// compute the position (label) of a tree node in the tree's flattened array 
 inline
 fn tree_label(
-    reg u32 i,
-    reg u32 z
+    reg u32 i, // node's horizontal index
+    reg u32 z  // node's height
 ) -> reg u32 {
-    () = #spill(i, z);
-    reg u32 res exp pow;
+    reg u32 res; // result
+    reg u32 exp; // exponent
+    reg u32 pow; // power = 2^exp
 
     exp = SPX_H_PRIME + 1; // exp = h' + 1
     pow = 1; pow <<= exp;  // pow = 2^(h'+1)
@@ -16,11 +18,11 @@ fn tree_label(
 
     res += i;              // res = 2^(h'+1) - 2^(h'+1-z) + i
 
-    () = #unspill(i, z);
     return res;
 }
 
-// algorithm 9 from SLH-DSS
+// algorithm 9 from SLH-DSS (iterative instead of recursive)
+// compute the node at (i,z) in an XMSS tree
 fn xmss_node(
     reg ptr u8[SPX_N] root,   // output: root of the subtree located at i,z
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -30,13 +32,11 @@ fn xmss_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> node, adrs
 {
-    // free up space in the registers by spilling every parameter that is read-only (skseed, i, z, pkseed)
-    // or only used after computationally-intensive function calls (node)
-    () = #spill(root, skseed, i, z, pkseed);
+    () = #spill(root, pkseed);
 
     // stack buffer with enough place to fit the entire (flattened) XMSS tree
     // note that only those nodes are computed that are needed to find the target node
-    stack u8[SPX_SUBTREE_SIZE * SPX_N] flat_tree; // resolved at compilation
+    stack u8[SPX_SUBTREE_SIZE * SPX_N] flat_tree;
 
     reg u32 node;  // equivalent to i
     reg u32 layer; // equivalent to z
@@ -54,13 +54,14 @@ fn xmss_node(
         rightmost += node;                 // rightmost = (i+1) * 2^(z-layer)
 
         while (node < rightmost) {
-            node_addr = node; node_addr *= SPX_N; 
+            node_addr = node; node_addr *= SPX_N;
+            () = #spill(node, node_addr, rightmost, layer);
 
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
-                () = #spill(node, layer, node_addr, rightmost);
+                () = #unspill(pkseed);
                 flat_tree[node_addr : SPX_N], adrs = wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs);
-                () = #unspill(node, layer, node_addr, rightmost);
+                () = #spill(pkseed);
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
                 reg u32 lnode rnode;
@@ -71,25 +72,27 @@ fn xmss_node(
                 lnode *= SPX_N;                       // lnode = tree_label(2*node,   layer-1) * SPX_N
                 rnode = lnode; rnode += SPX_N;        // rnode = tree_label(2*node+1, layer-1) * SPX_N
 
-                // node = H(PK.seed, ADRS, lnode || rnode)
                 stack u8[SPX_N] buf_l buf_r;
                 inline int j;
                 for j=0 to SPX_N {
                     buf_l[j] = flat_tree[lnode + j];
                     buf_r[j] = flat_tree[rnode + j];
                 }
-                () = #spill(node, layer, node_addr, rightmost, lnode, rnode, lnode_i, lnode_z);
+
+                // node = H(PK.seed, ADRS, lnode || rnode)
+                () = #unspill(pkseed);
                 flat_tree[node_addr : SPX_N] = H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
-                () = #unspill(node, layer, node_addr, rightmost, lnode, rnode, lnode_i, lnode_z);
+                () = #spill(pkseed);
             }
 
+            () = #unspill(node, node_addr, rightmost, layer);
             node += 1;
         }
 
         layer += 1;
     }
 
-    () = #unspill(root, skseed, i, z, pkseed);
+    () = #unspill(root, pkseed);
 
     inline int j;
     for j=0 to SPX_N {
@@ -100,8 +103,9 @@ fn xmss_node(
 }
 
 // algorithm 10 from SLH-DSS
+// compute an XMSS signature
 fn xmss_sign(
-    reg ptr u8[XMSS_SIG] sig, // output
+    reg ptr u8[XMSS_SIG] sig, // output: XMSS signature
     reg ptr u8[SPX_N] m,      // message to sign (XMSS public key or FORS public key)
     reg ptr u8[SPX_N] skseed, // SK.seed
     reg u32 idx,              // WOTS+ leaf index to sign with
@@ -109,26 +113,26 @@ fn xmss_sign(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig, adrs
 {
-    // free up space in the registers by spilling every parameter that is read-only (m, skseed, idx, pkseed)
-    // or only used after computationally-intensive function calls
-    () = #spill(m, skseed, idx, pkseed);
+    () = #spill(idx);
 
     // compute and store the authentication path AUTH
-    reg u32 j k;
+    reg u32 j k div;
     j = 0;
     while (j < SPX_H_PRIME) {
         // (only the least-significant bit is flipped, to get the sibling node)
-        reg u32 div; div = 1; div <<= j; // div = 2^j
+        div = 1; div <<= j; // div = 2^j
         k = idx; k = k / div;  k ^= 1;   // k = floor(idx / 2^j) xor 1
+        () = #spill(j, k);
 
         // WOTS+ sig will be placed in sig[0 : WOTS_SIG] later
         // AUTH therefore starts at WOTS_SIG, and every AUTH node is SPX_N btes long
-        () = #spill(j, k);
         sig[WOTS_SIG + j*SPX_N : SPX_N], adrs = xmss_node(sig[WOTS_SIG + j*SPX_N : SPX_N], skseed, k, j, pkseed, adrs);
-        () = #unspill(j, k);
 
+        () = #unspill(j, k);
         j += 1;
     }
+    
+    () = #unspill(idx);
 
     adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
     adrs = adrs_set_key_pair_addr(adrs, idx);
@@ -136,13 +140,13 @@ fn xmss_sign(
     // compute sig[0 : WOTS_SIG] = wots signature on message m
     sig[0 : WOTS_SIG], adrs = wots_sign(sig[0 : WOTS_SIG], m, skseed, pkseed, adrs);
 
-    () = #unspill(m, skseed, idx, pkseed);
     return sig, adrs;
 }
 
 // algorithm 11 from SLH-DSS
+// compute an XMSS tree root (public key) from an XMSS signature
 fn xmss_pkfromsig(
-    reg ptr u8[SPX_N] pk,     // output
+    reg ptr u8[SPX_N] pk,     // output: XMSS tree root (public key)
     reg u32 idx,              // WOTS+ leaf index to sign with
     reg ptr u8[XMSS_SIG] sig, // XMSS signature
     reg ptr u8[SPX_N] m,      // message to sign (XMSS public key or FORS public key)
@@ -150,32 +154,40 @@ fn xmss_pkfromsig(
     reg ptr u32[8] adrs           // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
-    // free up space in the registers by spilling every parameter that is read-only (m, skseed, idx, pkseed)
-    // or only used after computationally-intensive function calls (pk)
-    () = #spill(pk, idx, sig, m, pkseed);
+    () = #spill(pk);
 
     adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
     adrs = adrs_set_key_pair_addr(adrs, idx);
 
     stack u8[SPX_N] node0 node1;
+    () = #spill(idx);
     node0, adrs = wots_pkfromsig(node0, sig[0 : WOTS_SIG], m, pkseed, adrs); // wots_sig = sig[0 : WOTS_SIG]
+    () = #unspill(idx);
 
     adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
     adrs = adrs_set_tree_index(adrs, idx);
 
     stack u8[SPX_N] buf0 buf1;
 
-    inline int k; inline int i;
-    for k=0 to SPX_H_PRIME {
-        adrs = adrs_set_tree_height(adrs, k+1);
+    reg u32 k check div tree_index height;
+    inline int i;
 
-        reg u32 check;
-        check = idx;
-        check = check / 2^k;
-        check &= 1; // mod 2
+    k = 0;
+    while (k < SPX_H_PRIME) {
+        height = k; height += 1;
+        adrs = adrs_set_tree_height(adrs, height);
+
+        div = 1; div <<= k; // div = 2^k
+        
+        () = #spill(k);
+
+        check = idx;  // check = idx
+        check /= div; // check = idx / 2^k
+        check &= 1;   // check = (idx / 2^k) mod 2
+
         if (check == 0) { // idx/2^k is even
             // tree_index = adrs_get_tree_index(adrs) / 2
-            reg u32 tree_index = adrs_get_tree_index(adrs);
+            tree_index = adrs_get_tree_index(adrs);
             tree_index >>= 1;
 
             adrs = adrs_set_tree_index(adrs, tree_index);
@@ -187,7 +199,7 @@ fn xmss_pkfromsig(
             }
         } else { // idx/2^k is odd
             // tree_index = (adrs_get_tree_index(adrs) - 1) / 2
-            reg u32 tree_index = adrs_get_tree_index(adrs);
+            tree_index = adrs_get_tree_index(adrs);
             tree_index -= 1; tree_index >>= 1;
 
             adrs = adrs_set_tree_index(adrs, tree_index);
@@ -199,15 +211,16 @@ fn xmss_pkfromsig(
             }
         }
         
-        () = #spill(check);
         node1 = H(node1, pkseed, adrs, buf0, buf1);
-        () = #unspill(check);
 
         // node0 = node1
         for i=0 to SPX_N { node0[i] = node1[i]; }
+
+        () = #unspill(k);
+        k += 1;
     }
 
-    () = #unspill(pk, idx, sig, m, pkseed);
+    () = #unspill(pk);
     for i=0 to SPX_N { pk[i] = node0[i]; }
     return pk, adrs;
 }
