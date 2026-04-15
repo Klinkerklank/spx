@@ -23,8 +23,9 @@ fn _blocks_0_ref_array(
   inlen = INLEN;
 
   Kp = SHA256_K;
+  () = #spill(Kp);
+  
   Hp = _H;
-
   H = Hp;
 
   // NOTE:
@@ -51,7 +52,7 @@ fn _blocks_0_ref_array(
         W[t] = v;
       }
 
-      () = #spill(offset);
+      () = #spill(in, offset);
 
       for t=16 to 64 { W = __Wt_ref(W, t); }
 
@@ -65,13 +66,16 @@ fn _blocks_0_ref_array(
         () = #spill(tr);
 
         //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
-        T1  = h;
         r   = __BSIG1_ref(e);
+        T1  = h;
         T1 += r;
         r   = __CH_ref(e,f,g);
         T1 += r;
+        () = #unspill(tr, Kp);
         T1 += Kp[tr];
+        () = #spill(Kp);
         T1 += W[tr];
+        () = #spill(tr);
         
 
         //T2 = BSIG0(a) + MAJ(a,b,c)
@@ -110,11 +114,13 @@ fn _blocks_0_ref_array(
 
       H = __store_H_ref(H,a,b,c,d,e,f,g,h);
 
-      () = #unspill(offset, inlen);
+      () = #unspill(offset, inlen, in);
       offset += 64;
       inlen -= 64;
     }
   }
+  
+  () = #unspill(Kp);
 
   _H = H;
   

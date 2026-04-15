@@ -27,9 +27,9 @@ fn chain(
     while (i < t) {
         adrs = adrs_set_hash_addr(adrs, i);
 
-        () = #spill(i, t, adrs);
+        () = #spill(i, t, pkseed, adrs);
         out = F(out, pkseed, adrs);
-        () = #unspill(i, t, adrs);
+        () = #unspill(i, t, pkseed, adrs);
 
         i += 1;
     }
@@ -72,9 +72,9 @@ fn wots_pkgen(
         () = #spill(i);
 
         // compute sk in tmp[i : SPX_N]
-        () = #spill(pkseed);
+        () = #spill(pkseed, skseed);
         tmp[subarray_start_index : SPX_N] = PRF(tmp[subarray_start_index : SPX_N], pkseed, skseed, adrs_key);
-        () = #unspill(pkseed);
+        () = #unspill(pkseed, skseed);
 
         () = #unspill(i);
         i += 1;
@@ -113,9 +113,11 @@ fn wots_pkgen(
     () = #unspill(kpa);
     adrs_key = adrs_set_key_pair_addr(adrs_key, kpa);
     
+    () = #spill(adrs);
     () = #unspill(pk);
     pk = T_len(pk, pkseed, adrs_key, tmp);
-    
+
+    () = #unspill(adrs);
     return pk, adrs;
 }
 
