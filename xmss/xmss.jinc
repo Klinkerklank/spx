@@ -24,7 +24,7 @@ fn tree_label(
 // algorithm 9 from SLH-DSS (iterative instead of recursive)
 // compute the node at (i,z) in an XMSS tree
 fn xmss_node(
-    reg ptr u8[SPX_N] root,   // output: root of the subtree located at i,z
+    reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
     reg ptr u8[SPX_N] skseed, // SK.seed
     reg u32 i,                // target node index (horizontal)
     reg u32 z,                // target node height
@@ -32,7 +32,7 @@ fn xmss_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> node, adrs
 {
-    () = #spill(root, pkseed, skseed);
+    () = #spill(root, pkseed);
 
     // stack buffer with enough place to fit the entire (flattened) XMSS tree
     // note that only those nodes are computed that are needed to find the target node
@@ -44,10 +44,13 @@ fn xmss_node(
     reg u32 rightmost;
     reg u64 pow; reg u32 exp;
     reg u64 lnode rnode;
-    reg u32 lnode_i lnode_z label;
+    reg u32 lnode_i lnode_z;
+    reg u32 label;
     
     layer = 0;
     while (layer <= z) {
+        () = #spill(z);
+
         // node      = horizontal index   of the leftmost  node in the current layer
         // rightmost = horizontal index+1 of the rightmost node in the current layer
         exp = z; exp -= layer;               // exp       = z-layer
@@ -58,20 +61,24 @@ fn xmss_node(
         node      *= i;                      // node      =  i    * 2^(z-layer)
         rightmost += node;                   // rightmost = (i+1) * 2^(z-layer)
 
-        () = #spill(layer, z);
-
         while (node < rightmost) {
-            node_addr = (64u) node; node_addr *= SPX_N;
-            () = #spill(node, node_addr, rightmost, layer);
+            () = #spill(node, rightmost);
 
             if (layer == 0) {
+                () = #spill(layer);
                 // layer-0 leaf node: the node value is a WOTS+ public key
+                adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
+                adrs = adrs_set_key_pair_addr(adrs, node); // adrs type is already WOTS_HASH
+                
+                node_addr = (64u) node; node_addr *= SPX_N;
+
                 () = #spill(skseed);
                 () = #unspill(pkseed);
                 flat_tree[node_addr : SPX_N], adrs = wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs);
                 () = #spill(pkseed);
-                () = #unspill(skseed);
+                () = #unspill(skseed, layer);
             } else { // layer > 0
+                () = #spill(layer);
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
                 lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
@@ -86,28 +93,38 @@ fn xmss_node(
                     buf_l[j] = flat_tree[lnode + j];
                     buf_r[j] = flat_tree[rnode + j];
                 }
+                
+                // adrs type is already TREE
+                adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
+                adrs = adrs_set_tree_height(adrs, layer);
+                adrs = adrs_set_tree_index(adrs, node);
+                
+                label = tree_label(node, layer);
+                node_addr = (64u) label; node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
-                () = #spill(adrs, skseed);
+                () = #spill(skseed);
                 () = #unspill(pkseed);
                 flat_tree[node_addr : SPX_N] = H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
                 () = #spill(pkseed);
-                () = #unspill(adrs, skseed);
+                () = #unspill(skseed, layer);
             }
 
-            () = #unspill(node, node_addr, rightmost, layer);
+            () = #unspill(node, rightmost);
             node += 1;
         }
 
-        () = #unspill(layer, z);
+        () = #unspill(z);
         layer += 1;
     }
 
-    () = #unspill(root, pkseed, skseed);
+    label = tree_label(i, z);
+    node_addr = (64u) label; node_addr *= SPX_N;
+
+    () = #unspill(root, pkseed);
 
     inline int j;
     for j=0 to SPX_N {
-        // node_addr is still at the value of the last-computed node, i.e. the subtree root
         root[j] = flat_tree[node_addr + j];
     }
     return root, adrs;
@@ -192,14 +209,12 @@ fn xmss_pkfromsig(
     while (k < SPX_H_PRIME) {
         height = k; height += 1;
         adrs = adrs_set_tree_height(adrs, height);
-        offset = (64u) k;
-        offset *= SPX_N;
-        
-        () = #spill(k, div);
 
         check = idx;  // check = idx
         check /= div; // check = idx / 2^k
         check &= 1;   // check = (idx / 2^k) mod 2
+        
+        () = #spill(k, div);
 
         if (check == 0) { // idx/2^k is even
             // tree_index = adrs_get_tree_index(adrs) / 2
@@ -211,8 +226,7 @@ fn xmss_pkfromsig(
             // buf = node0 || AUTH[k]
             for i=0 to SPX_N {
                 buf0[i] = node0[i];
-                buf1[i] = sig[offset];
-                offset += 1;
+                buf1[i] = sig[offset + i];
             }
         } else { // idx/2^k is odd
             // tree_index = (adrs_get_tree_index(adrs) - 1) / 2
@@ -223,9 +237,8 @@ fn xmss_pkfromsig(
 
             // buf = AUTH[k] || node0
             for i=0 to SPX_N {
-                buf0[i] = sig[offset];
+                buf0[i] = sig[offset + i];
                 buf1[i] = node0[i];
-                offset += 1;
             }
         }
         

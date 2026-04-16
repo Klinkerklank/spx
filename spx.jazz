@@ -1,4 +1,4 @@
-require "params/params-spx-sha2-128f.jinc" // SPHINCS+ parameters
+require "params/params-spx-sha2-128s.jinc" // SPHINCS+ parameters
 require "adrs/adrs.jinc" // ADRS data structure
 require "hash/hash.jinc" // hash function implementations
 
@@ -278,6 +278,7 @@ fn test_xmss(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
   stack u8[SPX_N] m;
 
   inline int j;
+
   for j=0 to SPX_N {
     skseed[j] = 0x00;
     pkseed[j] = 0x00;
@@ -285,7 +286,7 @@ fn test_xmss(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
   }
   for j=0 to 8 { adrs[j] = 0x00000000; }
 
-  reg u32 i = 0; reg u32 z = SPX_H_PRIME;
+  reg u32 i = 0, z = SPX_H_PRIME;
   
   () = #spill(pk_addr, pksig_addr, sig_addr);
   pk, adrs = xmss_node(pk, skseed, i, z, pkseed, adrs);

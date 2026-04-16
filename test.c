@@ -249,7 +249,7 @@ uint8_t test_xmss(uint64_t pk, uint64_t pksig, uint64_t sig);
 int xmss() {
     uint8_t pk[16]    = {0};
     uint8_t pksig[16] = {0};
-    uint8_t sig[608]  = {0};
+    uint8_t sig[704]  = {0};
     uint8_t r = test_xmss((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
     assert(r == 0);
 
