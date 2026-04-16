@@ -1,21 +1,28 @@
 // algorithm 12 from SLH-DSS
-// fn ht_sign(
-//     stack u8[SPX_N] M,
-//     stack u8[SPX_N] SKseed PKseed,
-//     stack u32 idx_tree idx_leaf
-// ) -> stack u8[(SPX_D * SPX_LEN + SPX_H) * SPX_N]
-// {
-//     return SIG_HT;
-// }
+// compute a HT signature
+fn ht_sign(
+    reg ptr u8[HT_SIG] sig,   // output: HT signature
+    reg ptr u8[SPX_N] m,      // message to sign (FORS public key)
+    reg ptr u8[SPX_N] skseed, // SK.seed: secret seed
+    reg ptr u8[SPX_N] pkseed, // PK.seed: public seed
+    reg u32 idx_tree,         // lowest-layer XMSS tree index
+    reg u32 idx_leaf          // XMSS tree leaf index
+) -> reg ptr u8[HT_SIG] // -> sig, adrs
+{
+    return sig;
+}
 
 // algorithm 13 from SLH-DSS
-// fn ht_verify(
-//     stack u8[SPX_N] M,
-//     stack u8[(SPX_D * SPX_LEN + SPX_H) * SPX_N] SIG_HT
-//     stack u8[SPX_N] PKseed,
-//     stack u32 idx_tree idx_leaf
-//     stack u8[SPX_N] PKroot,
-// ) -> stack u32
-// {
-//     return res;
-// }
+// verify a HT signature
+fn ht_verify(
+    reg ptr u8[SPX_N] m,      // message to sign (FORS public key)
+    reg ptr u8[HT_SIG] sig,   // HT signature
+    reg ptr u8[SPX_N] pkseed, // PK.seed: public seed
+    reg u32 idx_tree,         // lowest-layer XMSS tree index
+    reg u32 idx_leaf,         // XMSS tree leaf index
+    reg ptr u8[SPX_N] pkroot  // PK.root: hypertree root
+) -> reg u8 // -> Boolean whether the HT signature is correct w.r.t. PK.root
+{
+    reg u8 res = 1;
+    return res;
+}

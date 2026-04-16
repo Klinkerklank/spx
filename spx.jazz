@@ -5,7 +5,7 @@ require "hash/hash.jinc" // hash function implementations
 // require "misc.jinc"      // algorithms 1-4   of SLH-DSS
 require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
 require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
-// require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
+require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
 // require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
 // require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 
@@ -231,6 +231,8 @@ require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
 
 // export
 // fn test_wots(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
+//   () = #spill(pk_addr, pksig_addr, sig_addr);
+
 //   stack u8[SPX_N] pk;
 //   stack u8[WOTS_SIG] sig;
 //   stack u8[SPX_N] pksig;
@@ -248,7 +250,6 @@ require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
 //   }
 //   for i=0 to 8 { adrs[i] = 0x00000000; }
   
-//   () = #spill(pk_addr, pksig_addr, sig_addr);
 //   pk, adrs = wots_pkgen(pk, skseed, pkseed, adrs);
 //   () = #unspill(pk_addr);
 //   for i=0 to SPX_N { [:u8 pk_addr + i] = pk[i]; }
@@ -266,14 +267,61 @@ require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
 //   return r;
 // }
 
+// export
+// fn test_xmss(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {  
+//   () = #spill(pk_addr, pksig_addr, sig_addr);
+
+//   stack u8[SPX_N] pk;
+//   stack u8[XMSS_SIG] sig;
+//   stack u8[SPX_N] pksig;
+
+//   stack u8[SPX_N] skseed;
+//   stack u8[SPX_N] pkseed;
+//   stack u32[8] adrs;
+//   stack u8[SPX_N] m;
+
+//   inline int j;
+
+//   for j=0 to SPX_N {
+//     skseed[j] = 0x00;
+//     pkseed[j] = 0x00;
+//     m[j] = 0x00;
+//   }
+//   for j=0 to 8 { adrs[j] = 0x00000000; }
+
+//   reg u32 i = 0, z = SPX_H_PRIME;
+  
+//   pk, adrs = xmss_node(pk, skseed, i, z, pkseed, adrs);
+//   () = #unspill(pk_addr);
+//   for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
+
+//   reg u32 idx = 0;
+//   () = #spill(idx);
+
+//   sig, adrs = xmss_sign(sig, m, skseed, idx, pkseed, adrs);
+//   () = #unspill(sig_addr);
+//   for j=0 to XMSS_SIG { [:u8 sig_addr + j] = sig[j]; }
+
+//   () = #unspill(idx);
+
+//   pksig, adrs = xmss_pkfromsig(pksig, idx, sig, m, pkseed, adrs);
+//   () = #unspill(pksig_addr);
+//   for j=0 to SPX_N { [:u8 pksig_addr + j] = pksig[j]; }
+
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
+
 export
-fn test_xmss(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {  
-  stack u8[SPX_N] pk;
-  stack u8[XMSS_SIG] sig;
-  stack u8[SPX_N] pksig;
+fn test_ht(reg u64 sig_addr) -> reg u8 {
+  () = #spill(sig_addr);
+
+  stack u8[HT_SIG] sig;
 
   stack u8[SPX_N] skseed;
   stack u8[SPX_N] pkseed;
+  stack u8[SPX_N] pkroot;
   stack u32[8] adrs;
   stack u8[SPX_N] m;
 
@@ -285,29 +333,19 @@ fn test_xmss(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
     m[j] = 0x00;
   }
   for j=0 to 8 { adrs[j] = 0x00000000; }
+  adrs = adrs_set_layer_addr(adrs, SPX_D - 1);
 
   reg u32 i = 0, z = SPX_H_PRIME;
-  
-  () = #spill(pk_addr, pksig_addr, sig_addr);
-  pk, adrs = xmss_node(pk, skseed, i, z, pkseed, adrs);
-  () = #unspill(pk_addr);
-  for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
+  pkroot, adrs = xmss_node(pkroot, skseed, i, z, pkseed, adrs);
 
-  reg u32 idx = 0;
-  () = #spill(idx);
-
-  sig, adrs = xmss_sign(sig, m, skseed, idx, pkseed, adrs);
+  reg u32 idx_tree = 0, idx_leaf = 0;
+  sig = ht_sign(sig, m, skseed, pkseed, idx_tree, idx_leaf);
   () = #unspill(sig_addr);
-  for j=0 to XMSS_SIG { [:u8 sig_addr + j] = sig[j]; }
-
-  () = #unspill(idx);
-
-  pksig, adrs = xmss_pkfromsig(pksig, idx, sig, m, pkseed, adrs);
-  () = #unspill(pksig_addr);
-  for j=0 to SPX_N { [:u8 pksig_addr + j] = pksig[j]; }
-
+  for j=0 to SPX_N { [:u8 sig_addr + j] = sig[j]; }
+  
   reg u8 r;
-  r = 0;
+  idx_tree = 0; idx_leaf = 0;
+  r = ht_verify(m, sig, pkseed, idx_tree, idx_leaf, pkroot);
   return r;
 }
 
