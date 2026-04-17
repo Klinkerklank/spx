@@ -338,13 +338,18 @@ fn test_ht(reg u64 sig_addr) -> reg u8 {
   reg u32 i = 0, z = SPX_H_PRIME;
   pkroot, adrs = xmss_node(pkroot, skseed, i, z, pkseed, adrs);
 
-  reg u32 idx_tree = 0, idx_leaf = 0;
+  stack u32[3] idx_tree; reg u32 idx_leaf;
+  idx_tree[0] = 0; idx_tree[1] = 0; idx_tree[2] = 0; idx_leaf = 0;
+
+  () = #spill(idx_leaf);
   sig = ht_sign(sig, m, skseed, pkseed, idx_tree, idx_leaf);
+  () = #unspill(idx_leaf);
+
   () = #unspill(sig_addr);
-  for j=0 to SPX_N { [:u8 sig_addr + j] = sig[j]; }
+  for j=0 to HT_SIG { [:u8 sig_addr + j] = sig[j]; }
   
+  for j=0 to SPX_N { m[j] = 0x00; }
   reg u8 r;
-  idx_tree = 0; idx_leaf = 0;
   r = ht_verify(m, sig, pkseed, idx_tree, idx_leaf, pkroot);
   return r;
 }
