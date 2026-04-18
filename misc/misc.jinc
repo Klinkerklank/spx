@@ -1,0 +1,22 @@
+// compute the position (label) of a tree node in the tree's flattened array 
+inline
+fn tree_label(
+    reg u32 i, // node's horizontal index
+    reg u32 z  // node's height
+) -> reg u32 {
+    reg u32 res; // result
+    reg u32 exp; // exponent
+    reg u64 pow; // power = 2^exp
+
+    exp = SPX_H_PRIME+1; // exp = h' + 1
+    pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(h'+1)
+    res = (32u) pow;     // res = 2^(h'+1)
+
+    exp -= z;            // exp = h' + 1 - z
+    pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(h'+1-z)
+    res -= pow;          // res = 2^(h'+1) - 2^(h'+1-z)
+
+    res += i;            // res = 2^(h'+1) - 2^(h'+1-z) + i
+
+    return res;
+}

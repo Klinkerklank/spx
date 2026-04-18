@@ -1,41 +1,320 @@
-// algorithm 14 from SLH-DSS
-// fn fors_skGen(
-//     stack u8[SPX_N] SKseed PKseed,
-//     stack u32[8] ADRS,
-//     stack u32 idx
-// ) -> stack u8[SPX_N]
-// {
-//     return res;
-// }
+namespace baseb_fors {
+  param int B      = SPX_T;
+  param int LG_B   = SPX_A;
+  param int OUTLEN = SPX_K;
+  param int INLEN  = SPX_M;
+  require "../baseb.jinc"
+}
 
-// algorithm 15 from SLH-DSS
-// fn fors_node(
-//     stack u8[SPX_N] SKseed,
-//     stack u32 i z,
-//     stack u8[SPX_N] PKseed,
-//     stack u32[8] ADRS
-// ) -> stack u8[SPX_N]
-// {
-//     return node;
-// }
+// algorithm 14 from SLH-DSS
+fn fors_skgen(
+    reg ptr u8[SPX_N] sk,
+    reg ptr u8[SPX_N] skseed,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u32[8] adrs,
+    reg u32 idx
+) -> reg ptr u8[SPX_N]
+{
+    () = #spill(sk);
+
+    stack u32[8] skadrs;
+    reg u32 kpa;
+    
+    skadrs = adrs_clone(skadrs, adrs);
+    skadrs = adrs_set_type_and_clear(skadrs, SPX_ADRS_TYPE_FORS_PRF);
+    kpa = adrs_get_key_pair_addr(adrs);
+    skadrs = adrs_set_key_pair_addr(skadrs, kpa);
+    skadrs = adrs_set_tree_index(skadrs, idx);
+    
+    () = #unspill(sk);
+    sk = PRF(sk, pkseed, skseed, skadrs);
+    return sk;
+}
+
+// algorithm 15 from SLH-DSS (iterative instead of recursive)
+// compute the node at (i,z) in a FORS tree
+fn fors_node(
+    reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg u32 i,                // target node index (horizontal)
+    reg u32 z,                // target node height
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
+{
+    () = #spill(root, pkseed);
+
+    // stack buffer with enough place to fit one entire (flattened) FORS tree
+    // note that only those nodes are computed that are needed to find the target node,
+    // so not necessarily the entire buffer is filled
+    stack u8[FORS_TREE_SIZE * SPX_N] flat_tree;
+
+    reg u32 node;  // equivalent to i
+    reg u32 layer; // equivalent to z
+    reg u64 node_addr; // byte address of 'node' in the buffer
+    reg u32 rightmost;
+    reg u64 pow; reg u32 exp;
+    reg u64 lnode rnode;
+    reg u32 lnode_i lnode_z;
+    reg u32 label;
+    
+    layer = 0;
+    while (layer <= z) {
+        () = #spill(z);
+
+        // node      = horizontal index   of the leftmost  node in the current layer
+        // rightmost = horizontal index+1 of the rightmost node in the current layer
+        exp = z; exp -= layer;               // exp       = z-layer
+        pow = 1;                             // pow       = 2^0
+        _, _, _, _, _, pow = #SHL(pow, exp); // pow       = 2^(z-layer)
+        node       = (32u) pow;              // node      = 2^(z-layer)
+        rightmost  = (32u) pow;              // rightmost = 2^(z-layer)
+        node      *= i;                      // node      =  i    * 2^(z-layer)
+        rightmost += node;                   // rightmost = (i+1) * 2^(z-layer)
+
+        while (node < rightmost) {
+            () = #spill(node, rightmost);
+
+            if (layer == 0) {
+                () = #spill(layer);
+                // layer-0 leaf node: the node value is a WOTS+ public key
+
+                flat_tree[node_addr : SPX_N] = fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
+
+                adrs = adrs_set_tree_height(adrs, layer);
+                adrs = adrs_set_key_pair_addr(adrs, node);
+                
+                node_addr = (64u) node; node_addr *= SPX_N;
+
+                () = #spill(skseed);
+                () = #unspill(pkseed);
+                flat_tree[node_addr : SPX_N] = F(flat_tree[node_addr : SPX_N], pkseed, adrs);
+                () = #spill(pkseed);
+                () = #unspill(skseed, layer);
+            } else { // layer > 0
+                () = #spill(layer);
+                // internal node: the node value is the hash of its two children lnode and rnode
+                lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
+                lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
+                label = tree_label(lnode_i, lnode_z); // lnode = tree_label(2*node,   layer-1)
+                lnode = (64u) label;
+                lnode *= SPX_N;                       // lnode = tree_label(2*node,   layer-1) * SPX_N
+                rnode = lnode; rnode += SPX_N;        // rnode = tree_label(2*node+1, layer-1) * SPX_N
+
+                stack u8[SPX_N] buf_l buf_r;
+                inline int j;
+                for j=0 to SPX_N {
+                    buf_l[j] = flat_tree[lnode + j];
+                    buf_r[j] = flat_tree[rnode + j];
+                }
+                
+                // adrs type is already TREE
+                adrs = adrs_set_tree_height(adrs, layer);
+                adrs = adrs_set_tree_index(adrs, node);
+                
+                label = tree_label(node, layer);
+                node_addr = (64u) label; node_addr *= SPX_N;
+
+                // node = H(PK.seed, ADRS, lnode || rnode)
+                () = #spill(skseed);
+                () = #unspill(pkseed);
+                flat_tree[node_addr : SPX_N] = H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
+                () = #spill(pkseed);
+                () = #unspill(skseed, layer);
+            }
+
+            () = #unspill(node, rightmost);
+            node += 1;
+        }
+
+        () = #unspill(z);
+        layer += 1;
+    }
+
+    label = tree_label(i, z);
+    node_addr = (64u) label; node_addr *= SPX_N;
+
+    () = #unspill(root, pkseed);
+
+    inline int j;
+    for j=0 to SPX_N {
+        root[j] = flat_tree[node_addr + j];
+    }
+    return root, adrs;
+}
 
 // algorithm 16 from SLH-DSS
-// fn fors_sign(
-//     stack u8[(SPX_K * SPX_A + 7) / 8] md,
-//     stack u8[SPX_N] SKseed PKseed,
-//     stack u32[8] ADRS
-// ) -> stack u8[SPX_K * (SPX_A + 1) * SPX_N]
-// {
-//     return SIG_FORS;
-// }
+// compute a FORS signature
+fn fors_sign(
+    reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
+    reg ptr u8[SPX_M] md,          // message digest
+    reg ptr u8[SPX_N] skseed,      // SK.seed
+    reg ptr u8[SPX_N] pkseed,      // PK.seed
+    reg ptr u32[8] adrs            // ADRS
+) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
+{
+    // stack variables
+    stack u32[SPX_K] indices;
+
+    // reg variables
+    reg ptr u8[SPX_N] node;
+    reg u32 i j idx div s;
+    reg u64 offset;
+    
+    // compute base-a indices
+    indices = baseb_fors::base_b(indices, md);
+    
+    offset = 0; i = 0; // div = 2^i
+    while (i < SPX_K) {
+        idx = 1; idx <<= SPX_A; idx *= i; idx += indices[i]; // idx = i*(2^a) + indices[i]
+
+        // compute the i-th secret key value
+        node = sig_fors[offset : SPX_N];
+        () = #spill(skseed, pkseed, sig_fors, i);
+        node = fors_skgen(node, skseed, pkseed, adrs, idx);
+        () = #unspill(skseed, pkseed, sig_fors, i);
+        sig_fors[offset : SPX_N] = node;
+
+        offset += SPX_N;
+
+        // compute and store the authentication path AUTH for the i-th tree in the forest
+        j = 0; div = 1; // div = 2^j
+        while (j < SPX_A) {
+            // (only the least-significant bit is flipped, to get the sibling node)
+            s = indices[i]; // s = indices[i]
+            s /= div;       // s = floor(indices[i] / 2^j)
+            s ^= 1;         // s = floor(indices[i] / 2^j) xor 1
+
+            idx = (1 << SPX_A); // idx = 2^a
+            idx /= div;         // idx = 2^(a-j)
+            idx *= i;           // idx = i*2^(a-j)
+            idx += s;           // idx = i*2^(a-j) + s
+            
+            () = #spill(offset, div, i, j);
+
+            node = sig_fors[offset : SPX_N];
+            () = #spill(skseed, pkseed, sig_fors);
+            node, adrs = fors_node(node, skseed, idx, j, pkseed, adrs);
+            () = #unspill(skseed, pkseed, sig_fors);
+            sig_fors[offset : SPX_N] = node;
+
+            () = #unspill(offset, div, i, j);
+
+            offset += SPX_N;
+            div <<= 1;
+            j += 1;
+        }
+
+        i += 1;
+    }
+
+    return sig_fors, adrs;
+}
 
 // algorithm 17 from SLH-DSS
-// fn fors_pkFromSig(
-//     stack u8[SPX_K * (SPX_A + 1) * SPX_N] SIG_FORS
-//     stack u8[(SPX_K * SPX_A + 7) / 8] md,
-//     stack u8[SPX_N] PKseed,
-//     stack u32[8] ADRS
-// ) -> stack u8[SPX_N]
-// {
-//     return pk;
-// }
+// compute a compressed FORS public key from a FORS signature
+fn fors_pkfromsig(
+    reg ptr u8[SPX_N] pk,          // output: compressed FORS public key
+    reg ptr u8[FORS_SIG] sig_fors, // FORS signature
+    reg ptr u8[SPX_M] md,          // message digest
+    reg ptr u8[SPX_N] pkseed,      // PK.seed
+    reg ptr u32[8] adrs            // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
+{
+    () = #spill(pk);
+    
+    // stack variables
+    stack u32[SPX_K] indices;
+    stack u32[8] forspkadrs;
+    stack u8[SPX_K*SPX_N] roots;
+    stack u8[SPX_N] node0 node1 buf0 buf1 sk;
+    
+    // register variables
+    reg u32 i j check div height index kpa;
+    reg u64 offset offset_roots;
+
+    inline int k;
+    
+    // compute base-a indices
+    indices = baseb_fors::base_b(indices, md);
+
+    i = 0; offset = 0; offset_roots = 0;
+    while (i < SPX_K) {
+        () = #spill(offset_roots);
+
+        sk = sig_fors[offset : SPX_N];
+        for k=0 to SPX_N { node0[k] = sk[k]; }
+
+        height = 0;
+        adrs = adrs_set_tree_height(adrs, height);
+        index = (2 << SPX_A); // index = 2^a
+        index *= i; // index = i*(2^a)
+        index += indices[i]; // index = i*(2^a) + indices[i]
+        adrs = adrs_set_tree_index(adrs, index);
+
+        node0 = F(node0, pkseed, adrs);
+
+        j = 0; div = 1; // div = 2^j
+        while (j < SPX_A) {
+            height = j; height += 1; // height = j + 1
+            adrs = adrs_set_tree_height(adrs, height);
+
+            check = indices[i]; // check = indices[i]
+            check /= div;       // check = floor(indices[i] / 2^j)
+            check &= 1;         // check = floor(indices[i] / 2^j) mod 2
+
+            () = #spill(i, j, div);
+
+            if (check == 0) { // floor(indices[i] / 2^j) is even
+                // index = adrs_get_tree_index(adrs) / 2
+                index = adrs_get_tree_index(adrs); index >>= 1;
+                adrs = adrs_set_tree_index(adrs, index);
+
+                // buf = node0 || AUTH[i]
+                for k=0 to SPX_N {
+                    buf0[i] = node0[i];
+                    buf1[i] = sig_fors[offset + i];
+                }
+            } else { // idx/2^i is odd
+                // index = (adrs_get_tree_index(adrs) - 1) / 2
+                index = adrs_get_tree_index(adrs); index -= 1; index >>= 1;
+                adrs = adrs_set_tree_index(adrs, index);
+
+                // buf = AUTH[i] || node0
+                for k=0 to SPX_N {
+                    buf0[i] = sig_fors[offset + i];
+                    buf1[i] = node0[i];
+                }
+            }
+            
+            () = #spill(sig_fors, pkseed, adrs, index, offset);
+            node1 = H(node1, pkseed, adrs, buf0, buf1);
+            () = #unspill(sig_fors, pkseed, adrs, index, offset);
+
+            // node0 = node1
+            for k=0 to SPX_N { node0[k] = node1[k]; }
+
+            () = #unspill(i, j, div);
+            div <<= 1;
+            offset += SPX_N;
+            j += 1;
+        }
+        
+        // roots[i] = node[0]
+        () = #unspill(offset_roots);
+        for k=0 to SPX_N { roots[offset + k] = node0[k]; }
+
+        offset_roots += SPX_N;
+        i += 1;
+    }
+
+    forspkadrs = adrs_clone(forspkadrs, adrs);
+    forspkadrs = adrs_set_type_and_clear(forspkadrs, SPX_ADRS_TYPE_FORS_ROOTS);
+    kpa = adrs_get_key_pair_addr(adrs);
+    forspkadrs = adrs_set_key_pair_addr(forspkadrs, kpa);
+
+    () = #unspill(pk);
+    pk = T_k(pk, pkseed, forspkadrs, roots);
+
+    return pk, adrs;
+}

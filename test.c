@@ -17,7 +17,8 @@
 
 // uint8_t test_wots(uint64_t pk, uint64_t pksig, uint64_t sig);
 // uint8_t test_xmss(uint64_t pk, uint64_t pksig, uint64_t sig);
-uint8_t test_ht(uint64_t sig);
+// uint8_t test_ht(uint64_t sig);
+uint8_t test_fors(uint64_t pk, uint64_t pksig, uint64_t sig);
 
 // int ADRS() {
 //     uint32_t adrs[8] = {0};
@@ -284,24 +285,61 @@ uint8_t test_ht(uint64_t sig);
 //     return 0;
 // }
 
-int ht() {
-    uint8_t sig[4928]  = {0};
-    uint8_t r = test_ht((uint64_t)sig);
+// int ht() {
+//     uint8_t sig[4928]  = {0};
+//     uint8_t r = test_ht((uint64_t)sig);
 
-    printf("HT signature:\n");
-    for (int i=0; i < sizeof(sig); i++) {
-        printf("%02X", sig[i]);
+//     printf("HT signature:\n");
+//     for (int i=0; i < sizeof(sig); i++) {
+//         printf("%02X", sig[i]);
+//         if (i%2 == 1) {
+//             printf(" ");
+//         }
+//     }
+//     printf("\n\n");
+
+//     printf("HT verify result:\n");
+//     if (r == 0) {
+//         printf("PASSED");
+//     } else {
+//         printf("FAILED");
+//     }
+//     printf("\n\n");
+
+//     return 0;
+// }
+
+int fors() {
+    uint8_t pk[16]    = {0};
+    uint8_t pksig[16] = {0};
+    uint8_t sig[2912]  = {0};
+    uint8_t r = test_fors((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
+    assert(r == 0);
+
+    printf("FORS public key:\n");
+    for (int i=0; i < sizeof(pk); i++) {
+        printf("%02X", pk[i]);
         if (i%2 == 1) {
             printf(" ");
         }
     }
     printf("\n\n");
 
-    printf("HT verify result:\n");
-    if (r == 0) {
-        printf("PASSED");
-    } else {
-        printf("FAILED");
+    printf("FORS public key from signature:\n");
+    for (int i=0; i < sizeof(pksig); i++) {
+        printf("%02X", pksig[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    printf("XMSS signature:\n");
+    for (int i=0; i < sizeof(sig); i++) {
+        printf("%02X", sig[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
     }
     printf("\n\n");
 
@@ -321,7 +359,8 @@ int main() {
 
     // wots();
     // xmss();
-    ht();
+    // ht();
+    fors();
 
     return 0;
 }

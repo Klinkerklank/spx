@@ -2,11 +2,11 @@ require "params/params-spx-sha2-128s.jinc" // SPHINCS+ parameters
 require "adrs/adrs.jinc" // ADRS data structure
 require "hash/hash.jinc" // hash function implementations
 
-// require "misc.jinc"      // algorithms 1-4   of SLH-DSS
+require "misc/misc.jinc" // supporting functions
 require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
 require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
 require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
-// require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
+require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
 // require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 
 // export
@@ -313,44 +313,85 @@ require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
 //   return r;
 // }
 
-export
-fn test_ht(reg u64 sig_addr) -> reg u8 {
-  () = #spill(sig_addr);
+// export
+// fn test_ht(reg u64 sig_addr) -> reg u8 {
+//   () = #spill(sig_addr);
 
-  stack u8[HT_SIG] sig;
+//   stack u8[HT_SIG] sig;
+
+//   stack u8[SPX_N] skseed;
+//   stack u8[SPX_N] pkseed;
+//   stack u8[SPX_N] pkroot;
+//   stack u32[8] adrs;
+//   stack u8[SPX_N] m;
+
+//   inline int j;
+
+//   for j=0 to SPX_N {
+//     skseed[j] = 0x00;
+//     pkseed[j] = 0x00;
+//     m[j] = 0x00;
+//   }
+//   for j=0 to 8 { adrs[j] = 0x00000000; }
+//   adrs = adrs_set_layer_addr(adrs, SPX_D - 1);
+
+//   reg u32 i = 0, z = SPX_H_PRIME;
+//   pkroot, adrs = xmss_node(pkroot, skseed, i, z, pkseed, adrs);
+
+//   stack u32[3] idx_tree; reg u32 idx_leaf;
+//   idx_tree[0] = 0; idx_tree[1] = 0; idx_tree[2] = 0; idx_leaf = 0;
+
+//   () = #spill(idx_leaf);
+//   sig = ht_sign(sig, m, skseed, pkseed, idx_tree, idx_leaf);
+//   () = #unspill(idx_leaf);
+
+//   () = #unspill(sig_addr);
+//   for j=0 to HT_SIG { [:u8 sig_addr + j] = sig[j]; }
+  
+//   for j=0 to SPX_N { m[j] = 0x00; }
+//   reg u8 r;
+//   r = ht_verify(m, sig, pkseed, idx_tree, idx_leaf, pkroot);
+//   return r;
+// }
+
+export
+fn test_fors(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {  
+  () = #spill(pk_addr, pksig_addr, sig_addr);
+
+  stack u8[SPX_N] pk;
+  stack u8[FORS_SIG] sig;
+  stack u8[SPX_N] pksig;
 
   stack u8[SPX_N] skseed;
   stack u8[SPX_N] pkseed;
-  stack u8[SPX_N] pkroot;
   stack u32[8] adrs;
-  stack u8[SPX_N] m;
+  stack u8[SPX_M] md;
 
   inline int j;
 
   for j=0 to SPX_N {
     skseed[j] = 0x00;
     pkseed[j] = 0x00;
-    m[j] = 0x00;
   }
+  for j=0 to SPX_M { md[j] = 0x00; }
   for j=0 to 8 { adrs[j] = 0x00000000; }
-  adrs = adrs_set_layer_addr(adrs, SPX_D - 1);
 
-  reg u32 i = 0, z = SPX_H_PRIME;
-  pkroot, adrs = xmss_node(pkroot, skseed, i, z, pkseed, adrs);
-
-  stack u32[3] idx_tree; reg u32 idx_leaf;
-  idx_tree[0] = 0; idx_tree[1] = 0; idx_tree[2] = 0; idx_leaf = 0;
-
-  () = #spill(idx_leaf);
-  sig = ht_sign(sig, m, skseed, pkseed, idx_tree, idx_leaf);
-  () = #unspill(idx_leaf);
-
-  () = #unspill(sig_addr);
-  for j=0 to HT_SIG { [:u8 sig_addr + j] = sig[j]; }
+  reg u32 i = 0, z = SPX_A;
   
-  for j=0 to SPX_N { m[j] = 0x00; }
+  pk, adrs = fors_node(pk, skseed, i, z, pkseed, adrs);
+  () = #unspill(pk_addr);
+  for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
+
+  sig, adrs = fors_sign(sig, md, skseed, pkseed, adrs);
+  () = #unspill(sig_addr);
+  for j=0 to FORS_SIG { [:u8 sig_addr + j] = sig[j]; }
+
+  pksig, adrs = fors_pkfromsig(pksig, sig, md, pkseed, adrs);
+  () = #unspill(pksig_addr);
+  for j=0 to SPX_N { [:u8 pksig_addr + j] = pksig[j]; }
+
   reg u8 r;
-  r = ht_verify(m, sig, pkseed, idx_tree, idx_leaf, pkroot);
+  r = 0;
   return r;
 }
 
