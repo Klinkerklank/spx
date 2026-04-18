@@ -18,16 +18,17 @@ param int SPX_LEN_1 = 32; // ceil(8*SPX_N / SPX_LG_W)
 param int SPX_LEN_2 = 3; // floor(log2(SPX_LEN_1 * (SPX_W - 1)) / SPX_LG_W) + 1
 param int SPX_LEN   = 35; // SPX_LEN_1 + SPX_LEN_2
 
-// hypertree parameters
+// hypertree and XMSS parameters
 param int SPX_H       = 66;
 param int SPX_D       = 22;
 param int SPX_H_PRIME = 3; // SPX_H / SPX_D
-param int SPX_SUBTREE_SIZE = 15; // 2**(SPX_H_PRIME+1)-1
+param int XMSS_TREE_SIZE = 15; // 2^(SPX_H_PRIME+1)-1
 
 // FORS parameters
 param int SPX_A = 6;
 param int SPX_K = 33;
 param int SPX_T = 64; // 2^SPX_A
+param int FORS_TREE_SIZE = 127; // 2^(SPX_A+1)-1
 
 // Signature lengths
 // WOTS_SIG = one SPX_N-byte signature value for each of the SPX_LEN chains

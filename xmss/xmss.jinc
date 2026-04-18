@@ -30,13 +30,13 @@ fn xmss_node(
     reg u32 z,                // target node height
     reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs       // ADRS
-) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> node, adrs
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     () = #spill(root, pkseed);
 
     // stack buffer with enough place to fit the entire (flattened) XMSS tree
     // note that only those nodes are computed that are needed to find the target node
-    stack u8[SPX_SUBTREE_SIZE * SPX_N] flat_tree;
+    stack u8[XMSS_TREE_SIZE * SPX_N] flat_tree;
 
     reg u32 node;  // equivalent to i
     reg u32 layer; // equivalent to z
