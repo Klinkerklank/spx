@@ -42,7 +42,7 @@ fn fors_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
-    () = #spill(root, pkseed);
+    () = #spill(root);
 
     // stack buffer with enough place to fit one entire (flattened) FORS tree
     // note that only those nodes are computed that are needed to find the target node,
@@ -76,23 +76,21 @@ fn fors_node(
             () = #spill(node, rightmost);
 
             if (layer == 0) {
-                () = #spill(layer);
                 // layer-0 leaf node: the node value is a WOTS+ public key
 
+                () = #spill(pkseed, skseed, layer);
                 flat_tree[node_addr : SPX_N] = fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
+                () = #unspill(pkseed, skseed, layer);
 
                 adrs = adrs_set_tree_height(adrs, layer);
                 adrs = adrs_set_key_pair_addr(adrs, node);
                 
                 node_addr = (64u) node; node_addr *= SPX_N;
 
-                () = #spill(skseed);
-                () = #unspill(pkseed);
+                () = #spill(pkseed, skseed, node_addr, layer);
                 flat_tree[node_addr : SPX_N] = F(flat_tree[node_addr : SPX_N], pkseed, adrs);
-                () = #spill(pkseed);
-                () = #unspill(skseed, layer);
+                () = #unspill(pkseed, skseed, node_addr, layer);
             } else { // layer > 0
-                () = #spill(layer);
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
                 lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
@@ -116,11 +114,9 @@ fn fors_node(
                 node_addr = (64u) label; node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
-                () = #spill(skseed);
-                () = #unspill(pkseed);
+                () = #spill(pkseed, skseed, node_addr, layer, adrs);
                 flat_tree[node_addr : SPX_N] = H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
-                () = #spill(pkseed);
-                () = #unspill(skseed, layer);
+                () = #unspill(pkseed, skseed, node_addr, layer, adrs);
             }
 
             () = #unspill(node, rightmost);
@@ -134,7 +130,7 @@ fn fors_node(
     label = tree_label(i, z);
     node_addr = (64u) label; node_addr *= SPX_N;
 
-    () = #unspill(root, pkseed);
+    () = #unspill(root);
 
     inline int j;
     for j=0 to SPX_N {
@@ -158,11 +154,13 @@ fn fors_sign(
 
     // reg variables
     reg ptr u8[SPX_N] node;
-    reg u32 i j idx div s;
-    reg u64 offset;
+    reg u32 j idx div s;
+    reg u64 i offset;
     
     // compute base-a indices
+    () = #spill(skseed, pkseed, adrs, sig_fors);
     indices = baseb_fors::base_b(indices, md);
+    () = #unspill(skseed, pkseed, adrs, sig_fors);
     
     offset = 0; i = 0; // div = 2^i
     while (i < SPX_K) {
@@ -184,10 +182,12 @@ fn fors_sign(
             s = indices[i]; // s = indices[i]
             s /= div;       // s = floor(indices[i] / 2^j)
             s ^= 1;         // s = floor(indices[i] / 2^j) xor 1
+            () = #spill(s); // idx below needs register RAX because of /= operation
 
             idx = (1 << SPX_A); // idx = 2^a
             idx /= div;         // idx = 2^(a-j)
             idx *= i;           // idx = i*2^(a-j)
+            () = #unspill(s);
             idx += s;           // idx = i*2^(a-j) + s
             
             () = #spill(offset, div, i, j);
@@ -227,11 +227,12 @@ fn fors_pkfromsig(
     stack u32[SPX_K] indices;
     stack u32[8] forspkadrs;
     stack u8[SPX_K*SPX_N] roots;
-    stack u8[SPX_N] node0 node1 buf0 buf1 sk;
+    stack u8[SPX_N] node0 node1 buf0 buf1;
     
     // register variables
-    reg u32 i j check div height index kpa;
-    reg u64 offset offset_roots;
+    reg u32 j check div height index kpa;
+    reg u64 i offset offset_roots;
+    reg ptr u8[SPX_N] sk;
 
     inline int k;
     
@@ -247,12 +248,14 @@ fn fors_pkfromsig(
 
         height = 0;
         adrs = adrs_set_tree_height(adrs, height);
-        index = (2 << SPX_A); // index = 2^a
+        index = (1 << SPX_A); // index = 2^a
         index *= i; // index = i*(2^a)
         index += indices[i]; // index = i*(2^a) + indices[i]
         adrs = adrs_set_tree_index(adrs, index);
 
+        () = #spill(offset, i, pkseed);
         node0 = F(node0, pkseed, adrs);
+        () = #unspill(offset, i, pkseed);
 
         j = 0; div = 1; // div = 2^j
         while (j < SPX_A) {
@@ -272,8 +275,8 @@ fn fors_pkfromsig(
 
                 // buf = node0 || AUTH[i]
                 for k=0 to SPX_N {
-                    buf0[i] = node0[i];
-                    buf1[i] = sig_fors[offset + i];
+                    buf0[k] = node0[k];
+                    buf1[k] = sig_fors[offset + k];
                 }
             } else { // idx/2^i is odd
                 // index = (adrs_get_tree_index(adrs) - 1) / 2
@@ -282,8 +285,8 @@ fn fors_pkfromsig(
 
                 // buf = AUTH[i] || node0
                 for k=0 to SPX_N {
-                    buf0[i] = sig_fors[offset + i];
-                    buf1[i] = node0[i];
+                    buf0[k] = sig_fors[offset + k];
+                    buf1[k] = node0[k];
                 }
             }
             
@@ -302,7 +305,7 @@ fn fors_pkfromsig(
         
         // roots[i] = node[0]
         () = #unspill(offset_roots);
-        for k=0 to SPX_N { roots[offset + k] = node0[k]; }
+        for k=0 to SPX_N { roots[offset_roots + k] = node0[k]; }
 
         offset_roots += SPX_N;
         i += 1;
