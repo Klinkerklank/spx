@@ -1,22 +1,49 @@
-// compute the position (label) of a tree node in the tree's flattened array 
+// compute the position (label) of a tree node in an XMSS tree's flattened array 
 inline
 fn tree_label(
     reg u32 i, // node's horizontal index
     reg u32 z  // node's height
-) -> reg u32 {
-    reg u32 res; // result
+) -> reg u32 { // -> pos
+    reg u32 pos; // array position
     reg u32 exp; // exponent
     reg u64 pow; // power = 2^exp
 
     exp = SPX_H_PRIME+1; // exp = h' + 1
     pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(h'+1)
-    res = (32u) pow;     // res = 2^(h'+1)
+    pos = (32u) pow;     // pos = 2^(h'+1)
 
     exp -= z;            // exp = h' + 1 - z
     pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(h'+1-z)
-    res -= pow;          // res = 2^(h'+1) - 2^(h'+1-z)
+    pos -= pow;          // pos = 2^(h'+1) - 2^(h'+1-z)
 
-    res += i;            // res = 2^(h'+1) - 2^(h'+1-z) + i
+    pos += i;            // pos = 2^(h'+1) - 2^(h'+1-z) + i
 
-    return res;
+    return pos;
+}
+
+// compute the position (label) of a tree node in a FORS tree's flattened array 
+inline
+fn forest_label(
+    reg u32 i, // node's horizontal index
+    reg u32 z  // node's height
+) -> reg u32 { // -> pos
+    reg u32 pos; // array position
+    reg u32 exp; // exponent
+    reg u32 imod;
+    reg u64 pow; // power = 2^exp
+
+    exp = SPX_A+1;   // exp = a + 1
+    pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(a+1)
+    pos = (32u) pow; // pos = 2^(a+1)
+
+    exp -= z;        // exp = a + 1 - z
+    pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(a+1-z)
+    pos -= pow;      // pos = 2^(a+1) - 2^(a+1-z)
+
+    pow >>= 1;       // pow = 2^(a-z)
+    imod = i; imod %= pow; // imod = i mod 2^(a-z)
+
+    pos += imod;     // pos = 2^(a+1) - 2^(a+1-z) + (i mod 2^(a-z))
+
+    return pos;
 }

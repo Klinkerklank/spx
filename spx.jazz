@@ -358,12 +358,14 @@ export
 fn test_fors(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {  
   () = #spill(pk_addr, pksig_addr, sig_addr);
 
+  stack u8[SPX_K*SPX_N] roots;
   stack u8[SPX_N] pk;
   stack u8[FORS_SIG] sig;
   stack u8[SPX_N] pksig;
 
   stack u8[SPX_N] skseed;
   stack u8[SPX_N] pkseed;
+  stack u32[8] forspkadrs;
   stack u32[8] adrs;
   stack u8[SPX_M] md;
 
@@ -377,8 +379,24 @@ fn test_fors(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
   for j=0 to 8 { adrs[j] = 0x00000000; }
 
   reg u32 i = 0, z = SPX_A;
+  reg u64 offset = 0;
+  while (i < SPX_K) {
+    () = #spill(i,z,offset);
+
+    roots[offset : SPX_N], adrs = fors_node(roots[offset : SPX_N], skseed, i, z, pkseed, adrs);
+
+    () = #unspill(i,z,offset);
+    offset += SPX_N;
+    i += 1;
+  }
+
+  forspkadrs = adrs_clone(forspkadrs, adrs);
+  forspkadrs = adrs_set_type_and_clear(forspkadrs, SPX_ADRS_TYPE_FORS_ROOTS);
+  reg u32 kpa; kpa = adrs_get_key_pair_addr(adrs);
+  forspkadrs = adrs_set_key_pair_addr(forspkadrs, kpa);
+
+  pk = T_k(pk, pkseed, forspkadrs, roots);
   
-  pk, adrs = fors_node(pk, skseed, i, z, pkseed, adrs);
   () = #unspill(pk_addr);
   for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
 

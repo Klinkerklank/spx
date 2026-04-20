@@ -334,7 +334,7 @@ int fors() {
     }
     printf("\n\n");
 
-    printf("XMSS signature:\n");
+    printf("FORS signature:\n");
     for (int i=0; i < sizeof(sig); i++) {
         printf("%02X", sig[i]);
         if (i%2 == 1) {

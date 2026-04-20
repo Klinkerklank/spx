@@ -71,12 +71,17 @@ fn fors_node(
         rightmost  = (32u) pow;              // rightmost = 2^(z-layer)
         node      *= i;                      // node      =  i    * 2^(z-layer)
         rightmost += node;                   // rightmost = (i+1) * 2^(z-layer)
+        
+        () = #spill(i);
 
         while (node < rightmost) {
             () = #spill(node, rightmost);
 
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
+                
+                label = forest_label(node, layer);
+                node_addr = (64u) label; node_addr *= SPX_N;
 
                 () = #spill(pkseed, skseed, layer);
                 flat_tree[node_addr : SPX_N] = fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
@@ -84,8 +89,6 @@ fn fors_node(
 
                 adrs = adrs_set_tree_height(adrs, layer);
                 adrs = adrs_set_key_pair_addr(adrs, node);
-                
-                node_addr = (64u) node; node_addr *= SPX_N;
 
                 () = #spill(pkseed, skseed, node_addr, layer);
                 flat_tree[node_addr : SPX_N] = F(flat_tree[node_addr : SPX_N], pkseed, adrs);
@@ -94,10 +97,10 @@ fn fors_node(
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
                 lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
-                label = tree_label(lnode_i, lnode_z); // lnode = tree_label(2*node,   layer-1)
+                label = forest_label(lnode_i, lnode_z); // lnode = forest_label(2*node,   layer-1)
                 lnode = (64u) label;
-                lnode *= SPX_N;                       // lnode = tree_label(2*node,   layer-1) * SPX_N
-                rnode = lnode; rnode += SPX_N;        // rnode = tree_label(2*node+1, layer-1) * SPX_N
+                lnode *= SPX_N;                         // lnode = forest_label(2*node,   layer-1) * SPX_N
+                rnode = lnode; rnode += SPX_N;          // rnode = forest_label(2*node+1, layer-1) * SPX_N
 
                 stack u8[SPX_N] buf_l buf_r;
                 inline int j;
@@ -110,7 +113,7 @@ fn fors_node(
                 adrs = adrs_set_tree_height(adrs, layer);
                 adrs = adrs_set_tree_index(adrs, node);
                 
-                label = tree_label(node, layer);
+                label = forest_label(node, layer);
                 node_addr = (64u) label; node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
@@ -122,20 +125,18 @@ fn fors_node(
             () = #unspill(node, rightmost);
             node += 1;
         }
-
-        () = #unspill(z);
+        
+        () = #unspill(i, z);
         layer += 1;
     }
 
-    label = tree_label(i, z);
+    label = forest_label(i, z);
     node_addr = (64u) label; node_addr *= SPX_N;
 
     () = #unspill(root);
 
     inline int j;
-    for j=0 to SPX_N {
-        root[j] = flat_tree[node_addr + j];
-    }
+    for j=0 to SPX_N { root[j] = flat_tree[node_addr + j]; }
     return root, adrs;
 }
 
@@ -162,7 +163,7 @@ fn fors_sign(
     indices = baseb_fors::base_b(indices, md);
     () = #unspill(skseed, pkseed, adrs, sig_fors);
     
-    offset = 0; i = 0; // div = 2^i
+    offset = 0; i = 0;
     while (i < SPX_K) {
         idx = 1; idx <<= SPX_A; idx *= i; idx += indices[i]; // idx = i*(2^a) + indices[i]
 
