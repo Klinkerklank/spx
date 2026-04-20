@@ -1,9 +1,17 @@
+// command to run this file:
+// clear; cd ~/spx; jasminc -o spx.s spx.jazz; echo '.section .note.GNU-stack,"",@progbits' >> spx.s; cc spx.s test.c jasmin_syscall.o -o test -no-pie; ./test
+
+// command to run this file with Jasmin register liveness check written to log.txt:
+// clear; cd ~/spx; jasminc -pliveness -o spx.s spx.jazz > log.txt; echo '.section .note.GNU-stack,"",@progbits' >> spx.s; cc spx.s test.c jasmin_syscall.o -o test -no-pie; ./test
+
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
 
-// command to run this file:
-// clear; cd ~/spx; jasminc -o spx.s spx.jazz; echo '.section .note.GNU-stack,"",@progbits' >> spx.s; gcc spx.s test.c -o test -no-pie; ./test
+#define N (16)
+#define SK_LEN (4*N)
+#define PK_LEN (2*N)
+#define SIG_LEN (7856)
 
 // uint8_t test_ADRS(uint64_t adrs_addr, uint64_t adrsc_addr);
 
@@ -21,6 +29,8 @@
 // uint8_t test_fors(uint64_t pk, uint64_t pksig, uint64_t sig);
 
 extern int slh_keygen(uint8_t *sk, uint8_t *pk);
+extern int slh_sign(uint8_t *sig, uint64_t m_addr, uint64_t m_len, uint8_t *sk);
+extern int slh_verify(uint64_t m_addr, uint64_t m_len, uint8_t *sig, uint8_t *pk);
 
 // int ADRS() {
 //     uint32_t adrs[8] = {0};
@@ -348,21 +358,19 @@ extern int slh_keygen(uint8_t *sk, uint8_t *pk);
 //     return 0;
 // }
 
-int keygen() {
-    uint8_t sk[4*16] = {0};
-    uint8_t pk[2*16] = {0};
+void keygen(uint8_t *sk, uint8_t *pk) {
     int r = slh_keygen(sk, pk);
     assert(r == 0);
 
     printf("SPHINCS+ secret key:");
-    for (int i=0; i < sizeof(sk); i++) {
-        if (i == 0 * sizeof(sk)/4) {
+    for (int i=0; i < SK_LEN; i++) {
+        if (i == 0 * SK_LEN/4) {
             printf("\n[SK.seed] ");
-        } else if (i == 1 * sizeof(sk)/4) {
+        } else if (i == 1 * SK_LEN/4) {
             printf("\n[SK.prf]  ");
-        } else if (i == 2 * sizeof(sk)/4) {
+        } else if (i == 2 * SK_LEN/4) {
             printf("\n[PK.seed] ");
-        } else if (i == 3 * sizeof(sk)/4) {
+        } else if (i == 3 * SK_LEN/4) {
             printf("\n[PK.root] ");
         }
 
@@ -374,10 +382,10 @@ int keygen() {
     printf("\n\n");
 
     printf("SPHINCS+ public key:");
-    for (int i=0; i < sizeof(pk); i++) {
-        if (i == 0 * sizeof(pk)/2) {
+    for (int i=0; i < PK_LEN; i++) {
+        if (i == 0 * PK_LEN/2) {
             printf("\n[PK.seed] ");
-        } else if (i == 1 * sizeof(pk)/2) {
+        } else if (i == 1 * PK_LEN/2) {
             printf("\n[PK.root] ");
         }
 
@@ -387,8 +395,22 @@ int keygen() {
         }
     }
     printf("\n\n");
+}
 
-    return 0;
+void sign(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *sk) {
+    int r = slh_sign(sig, (uint64_t)msg, (uint64_t)msg_len, sk);
+    assert(r == 0);
+}
+
+void verify(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *pk) {
+    int r = slh_verify((uint64_t)msg, (uint64_t)msg_len, sig, pk);
+    
+    printf("Verification: ");
+    if (r == 0) {
+        printf("PASSED\n\n");
+    } else {
+        printf("FAILED\n\n");
+    }
 }
 
 int main() {
@@ -407,7 +429,16 @@ int main() {
     // ht();
     // fors();
 
-    keygen();
+    uint8_t sk[SK_LEN] = {0};
+    uint8_t pk[PK_LEN] = {0};
+    uint8_t sig[SIG_LEN] = {0};
+
+    const uint8_t msg[] = "SPHINCS+";
+    size_t msg_len = sizeof(msg) - 1; // exclude null terminator
+
+    keygen(sk, pk);
+    sign((uint8_t*)msg, msg_len, sig, sk);
+    verify((uint8_t*)msg, msg_len, sig, pk);
 
     return 0;
 }

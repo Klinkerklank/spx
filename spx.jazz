@@ -423,18 +423,18 @@ require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 // algorithm 21 from SLH-DSS
 export
 fn slh_keygen(
-    reg ptr u8[SPX_SKBYTES] sk, // secret key sk
-    reg ptr u8[SPX_PKBYTES] pk  // public key pk
+    reg ptr u8[SPX_SKBYTES] sk, // secret key
+    reg ptr u8[SPX_PKBYTES] pk  // public key
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
 {
     sk = sk; pk = pk; // split live-range of the variables into two segments
-    () = #spill(sk,pk);
+    () = #spill(sk, pk);
 
     // generate random bytes for SK.seed, SK.prf, and PK.seed
     stack u8[3*SPX_N] rand;
     rand = #randombytes(rand);
     
-    () = #unspill(sk,pk);
+    () = #unspill(sk, pk);
 
     sk, pk = slh_keygen_internal(sk, pk, rand);
 
@@ -445,32 +445,42 @@ fn slh_keygen(
 }
 
 // algorithm 22 from SLH-DSS
-// export
-// fn slh_sign(
-//     reg u64 m_ptr m_len,        // message pointer and message length
-//     reg ptr u8[SPX_SKBYTES] sk, // secret key sk
-// ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig, res
-// {
-//     m_ptr=m_ptr; m_len=m_len; sk = sk; // split live-range of the variables into two segments
+export
+fn slh_sign(
+    reg ptr u8[SPX_SIG] sig,   // SPHINCS+ signature
+    reg u64 m_ptr m_len,       // message pointer and message length
+    reg ptr u8[SPX_SKBYTES] sk // secret key
+) -> reg ptr u8[SPX_SIG], reg u64 // -> sig, res
+{
+    sig = sig; m_ptr = m_ptr; m_len = m_len; sk = sk; // split live-range of the variables into two segments
 
-//     // register variables
+    // register variables
 
-//     // stack variables
+    // stack variables
 
-//     // set return value to 0
-//     reg u64 res; ?{}, res = #set0();
+    // set return value to 0
+    reg u64 res; ?{}, res = #set0();
 
-//     return sig, res;
-// }
+    return sig, res;
+}
 
 // algorithm 24 from SLH-DSS
-// export
-// fn slh_verify(
-//     ? M,
-//     stack u8[(1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N] SIG,
-//     ? ctx,
-//     stack u8[2 * SPX_N] PK
-// ) -> stack u32
-// {
-//     return bool;
-// }
+export
+fn slh_verify(
+    reg u64 m_ptr m_len,       // message pointer and message length
+    reg ptr u8[SPX_SIG] sig,   // SPHINCS+ signature
+    reg ptr u8[SPX_PKBYTES] pk // public key
+) -> reg u64 // -> res
+{
+    m_ptr = m_ptr; m_len = m_len; sig = sig; pk = pk; // split live-range of the variables into two segments
+
+    // register variables
+
+    // stack variables
+
+    // set return value to 0
+    // reg u64 res; ?{}, res = #set0();
+    reg u64 res = 1;
+
+    return res;
+}
