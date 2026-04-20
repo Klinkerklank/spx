@@ -428,13 +428,10 @@ fn slh_keygen(
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
 {
     sk = sk; pk = pk; // split live-range of the variables into two segments
-    () = #spill(sk, pk);
 
     // generate random bytes for SK.seed, SK.prf, and PK.seed
-    stack u8[3*SPX_N] rand;
+    stack u8[3*SPX_N] rand; // TODO write directly to sk and copy to pk from there?
     rand = #randombytes(rand);
-    
-    () = #unspill(sk, pk);
 
     sk, pk = slh_keygen_internal(sk, pk, rand);
 
@@ -454,9 +451,14 @@ fn slh_sign(
 {
     sig = sig; m_ptr = m_ptr; m_len = m_len; sk = sk; // split live-range of the variables into two segments
 
-    // register variables
-
     // stack variables
+    stack u8[SPX_N] addrnd;
+
+    inline int i;
+
+    for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } // deterministic variant
+
+    sig = slh_sign_internal(sig, m_ptr, m_len, sk, addrnd);
 
     // set return value to 0
     reg u64 res; ?{}, res = #set0();
@@ -474,13 +476,8 @@ fn slh_verify(
 {
     m_ptr = m_ptr; m_len = m_len; sig = sig; pk = pk; // split live-range of the variables into two segments
 
-    // register variables
-
-    // stack variables
-
-    // set return value to 0
-    // reg u64 res; ?{}, res = #set0();
-    reg u64 res = 1;
+    reg u64 res;
+    res = slh_verify_internal(m_ptr, m_len, sig, pk);
 
     return res;
 }
