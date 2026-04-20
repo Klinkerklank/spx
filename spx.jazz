@@ -1,4 +1,5 @@
 require "params/params-spx-sha2-128s.jinc" // SPHINCS+ parameters
+
 require "adrs/adrs.jinc" // ADRS data structure
 require "hash/hash.jinc" // hash function implementations
 
@@ -7,7 +8,7 @@ require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
 require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
 require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
 require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
-// require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
+require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 
 // export
 // fn test_ADRS(reg u64 adrs_addr adrsc_addr) -> reg u8
@@ -354,88 +355,112 @@ require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
 //   return r;
 // }
 
-export
-fn test_fors(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {  
-  () = #spill(pk_addr, pksig_addr, sig_addr);
+// export
+// fn test_fors(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {  
+//   () = #spill(pk_addr, pksig_addr, sig_addr);
 
-  stack u8[SPX_K*SPX_N] roots;
-  stack u8[SPX_N] pk;
-  stack u8[FORS_SIG] sig;
-  stack u8[SPX_N] pksig;
+//   stack u8[SPX_K*SPX_N] roots;
+//   stack u8[SPX_N] pk;
+//   stack u8[FORS_SIG] sig;
+//   stack u8[SPX_N] pksig;
 
-  stack u8[SPX_N] skseed;
-  stack u8[SPX_N] pkseed;
-  stack u32[8] forspkadrs;
-  stack u32[8] adrs;
-  stack u8[SPX_M] md;
+//   stack u8[SPX_N] skseed;
+//   stack u8[SPX_N] pkseed;
+//   stack u32[8] forspkadrs;
+//   stack u32[8] adrs;
+//   stack u8[SPX_M] md;
 
-  inline int j;
+//   inline int j;
 
-  for j=0 to SPX_N {
-    skseed[j] = 0x00;
-    pkseed[j] = 0x00;
-  }
-  for j=0 to SPX_M { md[j] = 0x00; }
-  adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
+//   for j=0 to SPX_N {
+//     skseed[j] = 0x00;
+//     pkseed[j] = 0x00;
+//   }
+//   for j=0 to SPX_M { md[j] = 0x00; }
+//   adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
 
-  reg u32 i = 0, z = SPX_A;
-  reg u64 offset = 0;
-  while (i < SPX_K) {
-    () = #spill(i,z,offset);
+//   reg u32 i = 0, z = SPX_A;
+//   reg u64 offset = 0;
+//   while (i < SPX_K) {
+//     () = #spill(i,z,offset);
 
-    roots[offset : SPX_N], adrs = fors_node(roots[offset : SPX_N], skseed, i, z, pkseed, adrs);
+//     roots[offset : SPX_N], adrs = fors_node(roots[offset : SPX_N], skseed, i, z, pkseed, adrs);
 
-    () = #unspill(i,z,offset);
-    offset += SPX_N;
-    i += 1;
-  }
+//     () = #unspill(i,z,offset);
+//     offset += SPX_N;
+//     i += 1;
+//   }
 
-  forspkadrs = adrs_clone(forspkadrs, adrs);
-  forspkadrs = adrs_set_type_and_clear(forspkadrs, SPX_ADRS_TYPE_FORS_ROOTS);
-  reg u32 kpa; kpa = adrs_get_key_pair_addr(adrs);
-  forspkadrs = adrs_set_key_pair_addr(forspkadrs, kpa);
+//   forspkadrs = adrs_clone(forspkadrs, adrs);
+//   forspkadrs = adrs_set_type_and_clear(forspkadrs, SPX_ADRS_TYPE_FORS_ROOTS);
+//   reg u32 kpa; kpa = adrs_get_key_pair_addr(adrs);
+//   forspkadrs = adrs_set_key_pair_addr(forspkadrs, kpa);
 
-  pk = T_k(pk, pkseed, forspkadrs, roots);
+//   pk = T_k(pk, pkseed, forspkadrs, roots);
   
-  () = #unspill(pk_addr);
-  for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
+//   () = #unspill(pk_addr);
+//   for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
   
-  adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
+//   adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
 
-  // for j=0 to SPX_M { md[j] = 0x00; }
+//   // for j=0 to SPX_M { md[j] = 0x00; }
 
-  sig, adrs = fors_sign(sig, md, skseed, pkseed, adrs);
-  () = #unspill(sig_addr);
-  for j=0 to FORS_SIG { [:u8 sig_addr + j] = sig[j]; }
+//   sig, adrs = fors_sign(sig, md, skseed, pkseed, adrs);
+//   () = #unspill(sig_addr);
+//   for j=0 to FORS_SIG { [:u8 sig_addr + j] = sig[j]; }
 
-  pksig, adrs = fors_pkfromsig(pksig, sig, md, pkseed, adrs);
-  () = #unspill(pksig_addr);
-  for j=0 to SPX_N { [:u8 pksig_addr + j] = pksig[j]; }
+//   pksig, adrs = fors_pkfromsig(pksig, sig, md, pkseed, adrs);
+//   () = #unspill(pksig_addr);
+//   for j=0 to SPX_N { [:u8 pksig_addr + j] = pksig[j]; }
 
-  reg u8 r;
-  r = 0;
-  return r;
-}
+//   reg u8 r;
+//   r = 0;
+//   return r;
+// }
 
 
 
 // algorithm 21 from SLH-DSS
-// export
-// fn slh_keygen(
-// ) -> stack u8[4 * SPX_N]
-// {
-//     return SK;
-// }
+export
+fn slh_keygen(
+    reg ptr u8[SPX_SKBYTES] sk, // secret key sk
+    reg ptr u8[SPX_PKBYTES] pk  // public key pk
+) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
+{
+    sk = sk; pk = pk; // split live-range of the variables into two segments
+    () = #spill(sk,pk);
+
+    // generate random bytes for SK.seed, SK.prf, and PK.seed
+    stack u8[3*SPX_N] rand;
+    rand = #randombytes(rand);
+    
+    () = #unspill(sk,pk);
+
+    sk, pk = slh_keygen_internal(sk, pk, rand);
+
+    // set return value to 0
+    reg u64 res; ?{}, res = #set0();
+
+    return sk, pk, res;
+}
 
 // algorithm 22 from SLH-DSS
 // export
 // fn slh_sign(
-//     ? M,
-//     ? ctx,
-//     stack u8[4 * SPX_N] SK
-// ) -> stack u8[(1 + SPX_K * (1 + SPX_A) + SPX_H + SPX_D * SPX_LEN) * SPX_N]
+//     reg u64 m_ptr m_len,        // message pointer and message length
+//     reg ptr u8[SPX_SKBYTES] sk, // secret key sk
+// ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig, res
 // {
-//     return SIG;
+//     m_ptr=m_ptr; m_len=m_len; sk = sk; // split live-range of the variables into two segments
+
+//     // register variables
+
+//     // stack variables
+
+//     // set return value to 0
+//     reg u64 res; ?{}, res = #set0();
+
+//     return sig, res;
 // }
 
 // algorithm 24 from SLH-DSS

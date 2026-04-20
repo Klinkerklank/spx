@@ -1,10 +1,40 @@
 // algorithm 18 from SLH-DSS
-// fn slh_keygen_internal(
-//     stack u8[SPX_N] SKseed SKprf PKseed
-// ) -> stack u8[4 * SPX_N]
-// {
-//     return SK;
-// }
+fn slh_keygen_internal(
+    reg ptr u8[SPX_SKBYTES] sk, // out: (SK.seed, SK.prf. PK.seed, PK.root)
+    reg ptr u8[SPX_PKBYTES] pk, // out: (PK.seed, PK.root)
+    reg ptr u8[3*SPX_N] rand    // random bytes for SK.seed, SK.prf, and PK.seed
+) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES] // -> sk, pk
+{
+    sk = sk; pk = pk; // split live-range of the variables into two segments
+
+    // stack variables
+    stack u32[8] adrs;
+    stack u8[SPX_N] pkroot;
+
+    // register variables
+    reg u32 layer i z;
+
+    inline int j;
+
+    // copy random bytes
+    for j=0 to SPX_N { sk[0*SPX_N + j] = rand[0*SPX_N + j]; } // SK -> SK.seed
+    for j=0 to SPX_N { sk[1*SPX_N + j] = rand[1*SPX_N + j]; } // SK -> SK.prf
+    for j=0 to SPX_N { sk[2*SPX_N + j] = rand[2*SPX_N + j]; } // SK -> PK.seed
+    for j=0 to SPX_N { pk[0*SPX_N + j] = rand[2*SPX_N + j]; } // PK -> PK.seed
+
+    adrs = adrs_init(adrs);
+    layer = SPX_D-1;
+    adrs = adrs_set_layer_addr(adrs, layer);
+
+    i = 0; z = SPX_H_PRIME;
+    pkroot, adrs = xmss_node(pkroot, sk[0*SPX_N : SPX_N], i, z, sk[2*SPX_N : SPX_N], adrs);
+    
+    // copy PK.root
+    for j=0 to SPX_N { sk[3*SPX_N + j] = pkroot[j]; } // SK -> PK.root
+    for j=0 to SPX_N { pk[1*SPX_N + j] = pkroot[j]; } // PK -> PK.root
+
+    return sk, pk;
+}
 
 // algorithm 19 from SLH-DSS
 // fn slh_sign_internal(

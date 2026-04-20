@@ -18,7 +18,9 @@
 // uint8_t test_wots(uint64_t pk, uint64_t pksig, uint64_t sig);
 // uint8_t test_xmss(uint64_t pk, uint64_t pksig, uint64_t sig);
 // uint8_t test_ht(uint64_t sig);
-uint8_t test_fors(uint64_t pk, uint64_t pksig, uint64_t sig);
+// uint8_t test_fors(uint64_t pk, uint64_t pksig, uint64_t sig);
+
+extern int slh_keygen(uint8_t *sk, uint8_t *pk);
 
 // int ADRS() {
 //     uint32_t adrs[8] = {0};
@@ -309,34 +311,77 @@ uint8_t test_fors(uint64_t pk, uint64_t pksig, uint64_t sig);
 //     return 0;
 // }
 
-int fors() {
-    uint8_t pk[16]    = {0};
-    uint8_t pksig[16] = {0};
-    uint8_t sig[2912]  = {0};
-    uint8_t r = test_fors((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
+// int fors() {
+//     uint8_t pk[16]    = {0};
+//     uint8_t pksig[16] = {0};
+//     uint8_t sig[2912]  = {0};
+//     uint8_t r = test_fors((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
+//     assert(r == 0);
+
+//     printf("FORS public key:\n");
+//     for (int i=0; i < sizeof(pk); i++) {
+//         printf("%02X", pk[i]);
+//         if (i%2 == 1) {
+//             printf(" ");
+//         }
+//     }
+//     printf("\n\n");
+
+//     printf("FORS public key from signature:\n");
+//     for (int i=0; i < sizeof(pksig); i++) {
+//         printf("%02X", pksig[i]);
+//         if (i%2 == 1) {
+//             printf(" ");
+//         }
+//     }
+//     printf("\n\n");
+
+//     printf("FORS signature:\n");
+//     for (int i=0; i < sizeof(sig); i++) {
+//         printf("%02X", sig[i]);
+//         if (i%2 == 1) {
+//             printf(" ");
+//         }
+//     }
+//     printf("\n\n");
+
+//     return 0;
+// }
+
+int keygen() {
+    uint8_t sk[4*16] = {0};
+    uint8_t pk[2*16] = {0};
+    int r = slh_keygen(sk, pk);
     assert(r == 0);
 
-    printf("FORS public key:\n");
+    printf("SPHINCS+ secret key:");
+    for (int i=0; i < sizeof(sk); i++) {
+        if (i == 0 * sizeof(sk)/4) {
+            printf("\n[SK.seed] ");
+        } else if (i == 1 * sizeof(sk)/4) {
+            printf("\n[SK.prf]  ");
+        } else if (i == 2 * sizeof(sk)/4) {
+            printf("\n[PK.seed] ");
+        } else if (i == 3 * sizeof(sk)/4) {
+            printf("\n[PK.root] ");
+        }
+
+        printf("%02X", sk[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+
+    printf("SPHINCS+ public key:");
     for (int i=0; i < sizeof(pk); i++) {
+        if (i == 0 * sizeof(pk)/2) {
+            printf("\n[PK.seed] ");
+        } else if (i == 1 * sizeof(pk)/2) {
+            printf("\n[PK.root] ");
+        }
+
         printf("%02X", pk[i]);
-        if (i%2 == 1) {
-            printf(" ");
-        }
-    }
-    printf("\n\n");
-
-    printf("FORS public key from signature:\n");
-    for (int i=0; i < sizeof(pksig); i++) {
-        printf("%02X", pksig[i]);
-        if (i%2 == 1) {
-            printf(" ");
-        }
-    }
-    printf("\n\n");
-
-    printf("FORS signature:\n");
-    for (int i=0; i < sizeof(sig); i++) {
-        printf("%02X", sig[i]);
         if (i%2 == 1) {
             printf(" ");
         }
@@ -360,7 +405,9 @@ int main() {
     // wots();
     // xmss();
     // ht();
-    fors();
+    // fors();
+
+    keygen();
 
     return 0;
 }
