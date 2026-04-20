@@ -376,7 +376,7 @@ fn test_fors(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
     pkseed[j] = 0x00;
   }
   for j=0 to SPX_M { md[j] = 0x00; }
-  for j=0 to 8 { adrs[j] = 0x00000000; }
+  adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
 
   reg u32 i = 0, z = SPX_A;
   reg u64 offset = 0;
@@ -399,6 +399,10 @@ fn test_fors(reg u64 pk_addr pksig_addr sig_addr) -> reg u8 {
   
   () = #unspill(pk_addr);
   for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
+  
+  adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
+
+  // for j=0 to SPX_M { md[j] = 0x00; }
 
   sig, adrs = fors_sign(sig, md, skseed, pkseed, adrs);
   () = #unspill(sig_addr);

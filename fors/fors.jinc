@@ -109,7 +109,6 @@ fn fors_node(
                     buf_r[j] = flat_tree[rnode + j];
                 }
                 
-                // adrs type is already TREE
                 adrs = adrs_set_tree_height(adrs, layer);
                 adrs = adrs_set_tree_index(adrs, node);
                 
