@@ -1,3 +1,27 @@
+namespace baseb_wots_m {
+  param int B      = SPX_W;
+  param int LG_B   = SPX_LG_W;
+  param int OUTLEN = SPX_LEN_1;
+  param int INLEN  = SPX_N;
+  require "../baseb.jinc"
+}
+
+namespace baseb_wots_c {
+  param int B      = SPX_W;
+  param int LG_B   = SPX_LG_W;
+  param int OUTLEN = SPX_LEN_2;
+  param int INLEN  = (SPX_LEN_2 * SPX_LG_W + 7) / 8;
+  require "../baseb.jinc"
+}
+
+namespace baseb_fors {
+  param int B      = SPX_T;
+  param int LG_B   = SPX_A;
+  param int OUTLEN = SPX_K;
+  param int INLEN  = SPX_MD_LEN;
+  require "../baseb.jinc"
+}
+
 // algorithm 4 from SLH-DSS
 inline
 fn base_b(

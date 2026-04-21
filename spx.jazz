@@ -3,7 +3,6 @@ require "params/params-spx-sha2-128s.jinc" // SPHINCS+ parameters
 require "adrs/adrs.jinc" // ADRS data structure
 require "hash/hash.jinc" // hash function implementations
 
-require "misc/misc.jinc" // supporting functions
 require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
 require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
 require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
@@ -427,13 +426,11 @@ fn slh_keygen(
     reg ptr u8[SPX_PKBYTES] pk  // public key
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
 {
-    sk = sk; pk = pk; // split live-range of the variables into two segments
-
     // generate random bytes for SK.seed, SK.prf, and PK.seed
     stack u8[3*SPX_N] rand; // TODO write directly to sk and copy to pk from there?
     rand = #randombytes(rand);
 
-    sk, pk = slh_keygen_internal(sk, pk, rand);
+    sk, pk = __slh_keygen_internal(sk, pk, rand);
 
     // set return value to 0
     reg u64 res; ?{}, res = #set0();
@@ -449,8 +446,6 @@ fn slh_sign(
     reg ptr u8[SPX_SKBYTES] sk // secret key
 ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig, res
 {
-    sig = sig; m_ptr = m_ptr; m_len = m_len; sk = sk; // split live-range of the variables into two segments
-
     // stack variables
     stack u8[SPX_N] addrnd;
 
@@ -458,7 +453,7 @@ fn slh_sign(
 
     for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } // deterministic variant
 
-    sig = slh_sign_internal(sig, m_ptr, m_len, sk, addrnd);
+    sig = __slh_sign_internal(sig, m_ptr, m_len, sk, addrnd);
 
     // set return value to 0
     reg u64 res; ?{}, res = #set0();
@@ -474,10 +469,8 @@ fn slh_verify(
     reg ptr u8[SPX_PKBYTES] pk // public key
 ) -> reg u64 // -> res
 {
-    m_ptr = m_ptr; m_len = m_len; sig = sig; pk = pk; // split live-range of the variables into two segments
-
     reg u64 res;
-    res = slh_verify_internal(m_ptr, m_len, sig, pk);
+    res = __slh_verify_internal(m_ptr, m_len, sig, pk);
 
     return res;
 }

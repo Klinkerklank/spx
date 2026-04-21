@@ -1,4 +1,4 @@
-// #[inline] if (SPX_HASHFAM == SPX_HASH_SHA2) {
+// if (SPX_HASHFAM == SPX_HASH_SHA2) {
     require "sha256/core_hash_sha256.jinc"
 // }
 

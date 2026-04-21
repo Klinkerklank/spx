@@ -1,3 +1,34 @@
+// +--------------------------------------------------------------+
+// |                       helper functions                       |
+// +--------------------------------------------------------------+
+
+// compute the position (label) of a tree node in an XMSS tree's flattened array
+inline
+fn __tree_label(
+    reg u32 i, // node's horizontal index
+    reg u32 z  // node's height
+) -> reg u32 { // -> pos
+    reg u32 pos; // array position
+    reg u32 exp; // exponent
+    reg u64 pow; // power = 2^exp
+
+    exp = SPX_H_PRIME+1; // exp = h' + 1
+    pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(h'+1)
+    pos = (32u) pow;     // pos = 2^(h'+1)
+
+    exp -= z;            // exp = h' + 1 - z
+    pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(h'+1-z)
+    pos -= pow;          // pos = 2^(h'+1) - 2^(h'+1-z)
+
+    pos += i;            // pos = 2^(h'+1) - 2^(h'+1-z) + i
+
+    return pos;
+}
+
+// +--------------------------------------------------------------+
+// |                       main algorithms                        |
+// +--------------------------------------------------------------+
+
 // algorithm 9 from SLH-DSS (iterative instead of recursive)
 // compute the node at (i,z) in an XMSS tree
 fn xmss_node(
@@ -9,7 +40,10 @@ fn xmss_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
-    () = #spill(root, pkseed);
+    // split live-range of the parameters into two segments
+    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs;
+
+    () = #spill(root);
 
     // stack buffer with enough place to fit the entire (flattened) XMSS tree
     // note that only those nodes are computed that are needed to find the target node,
@@ -45,22 +79,23 @@ fn xmss_node(
             if (layer == 0) {
                 () = #spill(layer);
                 // layer-0 leaf node: the node value is a WOTS+ public key
-                adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
-                adrs = adrs_set_key_pair_addr(adrs, node); // adrs type is already WOTS_HASH
+                adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
+                adrs = __adrs_set_key_pair_addr(adrs, node); // adrs type is already WOTS_HASH
                 
                 node_addr = (64u) node; node_addr *= SPX_N;
 
-                () = #spill(skseed);
-                () = #unspill(pkseed);
-                flat_tree[node_addr : SPX_N], adrs = wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs);
-                () = #spill(pkseed);
-                () = #unspill(skseed, layer);
+                () = #spill(pkseed); // resolves 'conflicting variables'
+                flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs);
+                // split live-range of the parameters into two segments
+                flat_tree[node_addr : SPX_N] = flat_tree[node_addr : SPX_N]; adrs = adrs;
+                () = #unspill(layer);
+                () = #unspill(pkseed); // resolves 'conflicting variables'
             } else { // layer > 0
                 () = #spill(layer);
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
                 lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
-                label = tree_label(lnode_i, lnode_z); // lnode = tree_label(2*node,   layer-1)
+                label = __tree_label(lnode_i, lnode_z); // lnode = tree_label(2*node,   layer-1)
                 lnode = (64u) label;
                 lnode *= SPX_N;                       // lnode = tree_label(2*node,   layer-1) * SPX_N
                 rnode = lnode; rnode += SPX_N;        // rnode = tree_label(2*node+1, layer-1) * SPX_N
@@ -73,19 +108,16 @@ fn xmss_node(
                 }
                 
                 // adrs type is already TREE
-                adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
-                adrs = adrs_set_tree_height(adrs, layer);
-                adrs = adrs_set_tree_index(adrs, node);
+                adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
+                adrs = __adrs_set_tree_height(adrs, layer);
+                adrs = __adrs_set_tree_index(adrs, node);
                 
-                label = tree_label(node, layer);
+                label = __tree_label(node, layer);
                 node_addr = (64u) label; node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
-                () = #spill(skseed);
-                () = #unspill(pkseed);
-                flat_tree[node_addr : SPX_N] = H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
-                () = #spill(pkseed);
-                () = #unspill(skseed, layer);
+                flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
+                () = #unspill(layer);
             }
 
             () = #unspill(node, rightmost);
@@ -99,7 +131,7 @@ fn xmss_node(
     label = tree_label(i, z);
     node_addr = (64u) label; node_addr *= SPX_N;
 
-    () = #unspill(root, pkseed);
+    () = #unspill(root);
 
     inline int j;
     for j=0 to SPX_N {
@@ -119,6 +151,9 @@ fn xmss_sign(
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
+    // split live-range of the parameters into two segments
+    sig_xmss = sig_xmss; m = m; skseed = skseed; idx = idx; pkseed = pkseed; adrs = adrs;
+
     reg ptr u8[SPX_N] auth_node;
 
     () = #spill(m);
@@ -137,7 +172,9 @@ fn xmss_sign(
         // AUTH therefore starts at WOTS_SIG, and every AUTH node is SPX_N btes long
         auth_node = sig_xmss[offset : SPX_N];
         () = #spill(skseed, pkseed, sig_xmss);
-        auth_node, adrs = xmss_node(auth_node, skseed, k, j, pkseed, adrs);
+        auth_node, adrs = __xmss_node(auth_node, skseed, k, j, pkseed, adrs);
+        // split live-range of the parameters into two segments
+        auth_node = auth_node; adrs = adrs;
         () = #unspill(skseed, pkseed, sig_xmss);
         sig_xmss[offset : SPX_N] = auth_node;
 
@@ -147,12 +184,14 @@ fn xmss_sign(
         j += 1;
     }
 
-    adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
-    adrs = adrs_set_key_pair_addr(adrs, idx);
+    adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
+    adrs = __adrs_set_key_pair_addr(adrs, idx);
 
     // compute sig_xmss[0 : WOTS_SIG] = wots signature on message m
     () = #unspill(m);
-    sig_xmss[0 : WOTS_SIG], adrs = wots_sign(sig_xmss[0 : WOTS_SIG], m, skseed, pkseed, adrs);
+    sig_xmss[0 : WOTS_SIG], adrs = __wots_sign(sig_xmss[0 : WOTS_SIG], m, skseed, pkseed, adrs);
+    // split live-range of the parameters into two segments
+    sig_xmss[0 : WOTS_SIG] = sig_xmss[0 : WOTS_SIG]; adrs = adrs;
 
     return sig_xmss, adrs;
 }
@@ -168,18 +207,25 @@ fn xmss_pkfromsig(
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
+    // split live-range of the parameters into two segments
+    pk = pk; idx = idx; sig_xmss = sig_xmss; m = m; pkseed = pkseed; adrs = adrs;
+
     () = #spill(pk);
 
-    adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
-    adrs = adrs_set_key_pair_addr(adrs, idx);
+    adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
+    adrs = __adrs_set_key_pair_addr(adrs, idx);
 
     stack u8[SPX_N] node0 node1;
-    () = #spill(idx, pkseed);
-    node0, adrs = wots_pkfromsig(node0, sig_xmss[0 : WOTS_SIG], m, pkseed, adrs); // wots_sig = sig_xmss[0 : WOTS_SIG]
-    () = #unspill(idx, pkseed);
+    () = #spill(pkseed); // resolves 'conflicting variables'
+    () = #spill(idx);
+    node0, adrs = __wots_pkfromsig(node0, sig_xmss[0 : WOTS_SIG], m, pkseed, adrs); // wots_sig = sig_xmss[0 : WOTS_SIG]
+    // split live-range of the parameters into two segments
+    node0 = node0; adrs = adrs;
+    () = #unspill(idx);
+    () = #unspill(pkseed); // resolves 'conflicting variables'
 
-    adrs = adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
-    adrs = adrs_set_tree_index(adrs, idx);
+    adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
+    adrs = __adrs_set_tree_index(adrs, idx);
 
     stack u8[SPX_N] buf0 buf1;
 
@@ -191,7 +237,7 @@ fn xmss_pkfromsig(
     k = 0; div = 1; // div = 2^k
     while (k < SPX_H_PRIME) {
         height = k; height += 1;
-        adrs = adrs_set_tree_height(adrs, height);
+        adrs = __adrs_set_tree_height(adrs, height);
 
         check = idx;  // check = idx
         check /= div; // check = idx / 2^k
@@ -201,10 +247,10 @@ fn xmss_pkfromsig(
 
         if (check == 0) { // idx/2^k is even
             // tree_index = adrs_get_tree_index(adrs) / 2
-            tree_index = adrs_get_tree_index(adrs);
+            tree_index = __adrs_get_tree_index(adrs);
             tree_index >>= 1;
 
-            adrs = adrs_set_tree_index(adrs, tree_index);
+            adrs = __adrs_set_tree_index(adrs, tree_index);
 
             // buf = node0 || AUTH[k]
             for i=0 to SPX_N {
@@ -213,10 +259,10 @@ fn xmss_pkfromsig(
             }
         } else { // idx/2^k is odd
             // tree_index = (adrs_get_tree_index(adrs) - 1) / 2
-            tree_index = adrs_get_tree_index(adrs);
+            tree_index = __adrs_get_tree_index(adrs);
             tree_index -= 1; tree_index >>= 1;
 
-            adrs = adrs_set_tree_index(adrs, tree_index);
+            adrs = __adrs_set_tree_index(adrs, tree_index);
 
             // buf = AUTH[k] || node0
             for i=0 to SPX_N {
@@ -225,9 +271,13 @@ fn xmss_pkfromsig(
             }
         }
         
-        () = #spill(sig_xmss, pkseed, adrs, tree_index, offset);
-        node1 = H(node1, pkseed, adrs, buf0, buf1);
-        () = #unspill(sig_xmss, pkseed, adrs, tree_index, offset);
+        () = #spill(sig_xmss, tree_index, offset);
+        () = #spill(pkseed); // resolves 'conflicting variables'
+        node1 = __H(node1, pkseed, adrs, buf0, buf1);
+        // split live-range of the parameters into two segments
+        node1 = node1;
+        () = #unspill(sig_xmss, tree_index, offset);
+        () = #unspill(pkseed); // resolves 'conflicting variables'
 
         // node0 = node1
         for i=0 to SPX_N { node0[i] = node1[i]; }

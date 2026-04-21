@@ -1,10 +1,37 @@
-namespace baseb_fors {
-  param int B      = SPX_T;
-  param int LG_B   = SPX_A;
-  param int OUTLEN = SPX_K;
-  param int INLEN  = SPX_M;
-  require "../baseb.jinc"
+// +--------------------------------------------------------------+
+// |                       helper functions                       |
+// +--------------------------------------------------------------+
+
+// compute the position (label) of a tree node in a FORS tree's flattened array 
+inline
+fn __forest_label(
+    reg u32 i, // node's horizontal index
+    reg u32 z  // node's height
+) -> reg u32 { // -> pos
+    reg u32 pos; // array position
+    reg u32 exp; // exponent
+    reg u32 imod;
+    reg u64 pow; // power = 2^exp
+
+    exp = SPX_A+1;   // exp = a + 1
+    pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(a+1)
+    pos = (32u) pow; // pos = 2^(a+1)
+
+    exp -= z;        // exp = a + 1 - z
+    pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(a+1-z)
+    pos -= pow;      // pos = 2^(a+1) - 2^(a+1-z)
+
+    pow >>= 1;       // pow = 2^(a-z)
+    imod = i; imod %= pow; // imod = i mod 2^(a-z)
+
+    pos += imod;     // pos = 2^(a+1) - 2^(a+1-z) + (i mod 2^(a-z))
+
+    return pos;
 }
+
+// +--------------------------------------------------------------+
+// |                       main algorithms                        |
+// +--------------------------------------------------------------+
 
 // algorithm 14 from SLH-DSS
 fn fors_skgen(
@@ -15,19 +42,27 @@ fn fors_skgen(
     reg u32 idx
 ) -> reg ptr u8[SPX_N]
 {
+    // split live-range of the parameters into two segments
+    sk = sk; skseed = skseed; pkseed = pkseed; adrs = adrs; idx = idx;
+
     () = #spill(sk);
 
     stack u32[8] skadrs;
     reg u32 kpa;
     
-    skadrs = adrs_clone(skadrs, adrs);
-    skadrs = adrs_set_type_and_clear(skadrs, SPX_ADRS_TYPE_FORS_PRF);
-    kpa = adrs_get_key_pair_addr(adrs);
-    skadrs = adrs_set_key_pair_addr(skadrs, kpa);
-    skadrs = adrs_set_tree_index(skadrs, idx);
+    skadrs = __adrs_clone(skadrs, adrs);
+    skadrs = __adrs_set_type_and_clear(skadrs, SPX_ADRS_TYPE_FORS_PRF);
+    kpa = __adrs_get_key_pair_addr(adrs);
+    skadrs = __adrs_set_key_pair_addr(skadrs, kpa);
+    skadrs = __adrs_set_tree_index(skadrs, idx);
     
+    () = #spill(pkseed, skseed);
     () = #unspill(sk);
-    sk = PRF(sk, pkseed, skseed, skadrs);
+    sk = __PRF(sk, pkseed, skseed, skadrs);
+    // split live-range of the parameters into two segments
+    sk = sk;
+    () = #unspill(pkseed, skseed);
+
     return sk;
 }
 
@@ -42,6 +77,9 @@ fn fors_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
+    // split live-range of the parameters into two segments
+    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs;
+
     () = #spill(root);
 
     // stack buffer with enough place to fit one entire (flattened) FORS tree
@@ -80,24 +118,30 @@ fn fors_node(
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
                 
-                label = forest_label(node, layer);
+                label = __forest_label(node, layer);
                 node_addr = (64u) label; node_addr *= SPX_N;
 
-                () = #spill(pkseed, skseed, layer);
-                flat_tree[node_addr : SPX_N] = fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
-                () = #unspill(pkseed, skseed, layer);
+                () = #spill(skseed); // resolves 'conflicting variables'
+                () = #spill(layer);
+                flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
+                // split live-range of the parameters into two segments
+                flat_tree[node_addr : SPX_N] = flat_tree[node_addr : SPX_N];
+                () = #unspill(layer);
+                () = #unspill(skseed); // resolves 'conflicting variables'
 
-                adrs = adrs_set_tree_height(adrs, layer);
-                adrs = adrs_set_key_pair_addr(adrs, node);
+                adrs = __adrs_set_tree_height(adrs, layer);
+                adrs = __adrs_set_key_pair_addr(adrs, node);
 
                 () = #spill(pkseed, skseed, node_addr, layer);
-                flat_tree[node_addr : SPX_N] = F(flat_tree[node_addr : SPX_N], pkseed, adrs);
+                flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], pkseed, adrs);
+                // split live-range of the parameters into two segments
+                flat_tree[node_addr : SPX_N] = flat_tree[node_addr : SPX_N];
                 () = #unspill(pkseed, skseed, node_addr, layer);
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
                 lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
-                label = forest_label(lnode_i, lnode_z); // lnode = forest_label(2*node,   layer-1)
+                label = __forest_label(lnode_i, lnode_z); // lnode = forest_label(2*node,   layer-1)
                 lnode = (64u) label;
                 lnode *= SPX_N;                         // lnode = forest_label(2*node,   layer-1) * SPX_N
                 rnode = lnode; rnode += SPX_N;          // rnode = forest_label(2*node+1, layer-1) * SPX_N
@@ -109,15 +153,17 @@ fn fors_node(
                     buf_r[j] = flat_tree[rnode + j];
                 }
                 
-                adrs = adrs_set_tree_height(adrs, layer);
-                adrs = adrs_set_tree_index(adrs, node);
+                adrs = __adrs_set_tree_height(adrs, layer);
+                adrs = __adrs_set_tree_index(adrs, node);
                 
-                label = forest_label(node, layer);
+                label = __forest_label(node, layer);
                 node_addr = (64u) label; node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
                 () = #spill(pkseed, skseed, node_addr, layer, adrs);
-                flat_tree[node_addr : SPX_N] = H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
+                flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
+                // split live-range of the parameters into two segments
+                flat_tree[node_addr : SPX_N] = flat_tree[node_addr : SPX_N];
                 () = #unspill(pkseed, skseed, node_addr, layer, adrs);
             }
 
@@ -129,7 +175,7 @@ fn fors_node(
         layer += 1;
     }
 
-    label = forest_label(i, z);
+    label = __forest_label(i, z);
     node_addr = (64u) label; node_addr *= SPX_N;
 
     () = #unspill(root);
@@ -143,12 +189,15 @@ fn fors_node(
 // compute a FORS signature
 fn fors_sign(
     reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
-    reg ptr u8[SPX_M] md,          // message digest
+    reg ptr u8[SPX_MD_LEN] md,     // message digest
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
 {
+    // split live-range of the parameters into two segments
+    sig_fors = sig_fors; md = md; skseed = skseed; pkseed = pkseed; adrs = adrs;
+
     // stack variables
     stack u32[SPX_K] indices;
 
@@ -159,19 +208,23 @@ fn fors_sign(
     
     // compute base-a indices
     () = #spill(skseed, pkseed, adrs, sig_fors);
-    indices = baseb_fors::base_b(indices, md);
+    indices = baseb_fors::__base_b(indices, md);
     () = #unspill(skseed, pkseed, adrs, sig_fors);
     
     offset = 0; i = 0;
     while (i < SPX_K) {
         idx = 1; idx <<= SPX_A; idx *= i; idx += indices[i]; // idx = i*(2^a) + indices[i]
 
+        () = #spill(skseed); // resolves 'conflicting variables'
         // compute the i-th secret key value
         node = sig_fors[offset : SPX_N];
-        () = #spill(skseed, pkseed, sig_fors, i);
-        node = fors_skgen(node, skseed, pkseed, adrs, idx);
-        () = #unspill(skseed, pkseed, sig_fors, i);
+        () = #spill(sig_fors, i);
+        node = __fors_skgen(node, skseed, pkseed, adrs, idx);
+        // split live-range of the parameters into two segments
+        node = node;
+        () = #unspill(sig_fors, i);
         sig_fors[offset : SPX_N] = node;
+        () = #unspill(skseed); // resolves 'conflicting variables'
 
         offset += SPX_N;
 
@@ -192,11 +245,15 @@ fn fors_sign(
             
             () = #spill(offset, div, i, j);
 
+            () = #spill(skseed, pkseed); // resolves 'conflicting variables'
             node = sig_fors[offset : SPX_N];
-            () = #spill(skseed, pkseed, sig_fors);
-            node, adrs = fors_node(node, skseed, idx, j, pkseed, adrs);
-            () = #unspill(skseed, pkseed, sig_fors);
+            () = #spill(sig_fors);
+            node, adrs = __fors_node(node, skseed, idx, j, pkseed, adrs);
+            // split live-range of the parameters into two segments
+            node = node; adrs = adrs;
+            () = #unspill(sig_fors);
             sig_fors[offset : SPX_N] = node;
+            () = #unspill(skseed, pkseed); // resolves 'conflicting variables'
 
             () = #unspill(offset, div, i, j);
 
@@ -216,11 +273,14 @@ fn fors_sign(
 fn fors_pkfromsig(
     reg ptr u8[SPX_N] pk,          // output: compressed FORS public key
     reg ptr u8[FORS_SIG] sig_fors, // FORS signature
-    reg ptr u8[SPX_M] md,          // message digest
+    reg ptr u8[SPX_MD_LEN] md,     // message digest
     reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
+    // split live-range of the parameters into two segments
+    pk = pk; sig_fors = sig_fors; md = md; pkseed = pkseed; adrs = adrs;
+
     () = #spill(pk);
     
     // stack variables
@@ -237,7 +297,7 @@ fn fors_pkfromsig(
     inline int k;
     
     // compute base-a indices
-    indices = baseb_fors::base_b(indices, md);
+    indices = baseb_fors::__base_b(indices, md);
 
     i = 0; offset = 0; offset_roots = 0;
     while (i < SPX_K) {
@@ -247,20 +307,22 @@ fn fors_pkfromsig(
         for k=0 to SPX_N { node0[k] = sk[k]; }
 
         height = 0;
-        adrs = adrs_set_tree_height(adrs, height);
+        adrs = __adrs_set_tree_height(adrs, height);
         index = (1 << SPX_A); // index = 2^a
         index *= i; // index = i*(2^a)
         index += indices[i]; // index = i*(2^a) + indices[i]
-        adrs = adrs_set_tree_index(adrs, index);
+        adrs = __adrs_set_tree_index(adrs, index);
 
         () = #spill(offset, i, pkseed);
-        node0 = F(node0, pkseed, adrs);
+        node0 = __F(node0, pkseed, adrs);
+        // split live-range of the parameters into two segments
+        node0 = node0;
         () = #unspill(offset, i, pkseed);
 
         j = 0; div = 1; // div = 2^j
         while (j < SPX_A) {
             height = j; height += 1; // height = j + 1
-            adrs = adrs_set_tree_height(adrs, height);
+            adrs = __adrs_set_tree_height(adrs, height);
 
             check = indices[i]; // check = indices[i]
             check /= div;       // check = floor(indices[i] / 2^j)
@@ -270,8 +332,8 @@ fn fors_pkfromsig(
 
             if (check == 0) { // floor(indices[i] / 2^j) is even
                 // index = adrs_get_tree_index(adrs) / 2
-                index = adrs_get_tree_index(adrs); index >>= 1;
-                adrs = adrs_set_tree_index(adrs, index);
+                index = __adrs_get_tree_index(adrs); index >>= 1;
+                adrs = __adrs_set_tree_index(adrs, index);
 
                 // buf = node0 || AUTH[i]
                 for k=0 to SPX_N {
@@ -280,8 +342,8 @@ fn fors_pkfromsig(
                 }
             } else { // idx/2^i is odd
                 // index = (adrs_get_tree_index(adrs) - 1) / 2
-                index = adrs_get_tree_index(adrs); index -= 1; index >>= 1;
-                adrs = adrs_set_tree_index(adrs, index);
+                index = __adrs_get_tree_index(adrs); index -= 1; index >>= 1;
+                adrs = __adrs_set_tree_index(adrs, index);
 
                 // buf = AUTH[i] || node0
                 for k=0 to SPX_N {
@@ -291,7 +353,9 @@ fn fors_pkfromsig(
             }
             
             () = #spill(sig_fors, pkseed, adrs, index, offset);
-            node1 = H(node1, pkseed, adrs, buf0, buf1);
+            node1 = __H(node1, pkseed, adrs, buf0, buf1);
+            // split live-range of the parameters into two segments
+            node1 = node1;
             () = #unspill(sig_fors, pkseed, adrs, index, offset);
 
             // node0 = node1
@@ -311,13 +375,15 @@ fn fors_pkfromsig(
         i += 1;
     }
 
-    forspkadrs = adrs_clone(forspkadrs, adrs);
-    forspkadrs = adrs_set_type_and_clear(forspkadrs, SPX_ADRS_TYPE_FORS_ROOTS);
-    kpa = adrs_get_key_pair_addr(adrs);
-    forspkadrs = adrs_set_key_pair_addr(forspkadrs, kpa);
+    forspkadrs = __adrs_clone(forspkadrs, adrs);
+    forspkadrs = __adrs_set_type_and_clear(forspkadrs, SPX_ADRS_TYPE_FORS_ROOTS);
+    kpa = __adrs_get_key_pair_addr(adrs);
+    forspkadrs = __adrs_set_key_pair_addr(forspkadrs, kpa);
 
     () = #unspill(pk);
-    pk = T_k(pk, pkseed, forspkadrs, roots);
+    pk = __T_k(pk, pkseed, forspkadrs, roots);
+    // split live-range of the parameters into two segments
+    pk = pk;
 
     return pk, adrs;
 }

@@ -1,8 +1,12 @@
+// +--------------------------------------------------------------+
+// |                       helper functions                       |
+// +--------------------------------------------------------------+
+
 inline
-fn ht_update_idx(
-    reg u32        idx_leaf,
-    reg ptr u32[3] idx_tree
-) -> reg u32, reg ptr u32[3] // idx_leaf, idx_tree
+fn __ht_update_idx(
+    reg u32    idx_leaf,
+    reg u32[3] idx_tree
+) -> reg u32, reg u32[3] // idx_leaf, idx_tree
 {
     // idx_leaf = idx_tree mod 2^h'
     // idx_leaf always fits in one 32-bit word, so we only need idx_tree[2]
@@ -27,6 +31,31 @@ fn ht_update_idx(
     return idx_leaf, idx_tree;
 }
 
+// +--------------------------------------------------------------+
+// |                       main algorithms                        |
+// +--------------------------------------------------------------+
+
+inline
+fn __ht_sign(
+    reg ptr u8[HT_SIG] sig_ht,
+    reg ptr u8[SPX_N] m,
+    reg ptr u8[SPX_N] skseed,
+    reg ptr u8[SPX_N] pkseed,
+    reg u32[3] tree,
+    reg u32 leaf
+) -> reg ptr u8[HT_SIG]
+{
+    // split live-range of the input parameters into two segments
+    sig_ht = sig_ht; m = m; skseed = skseed; pkseed = pkseed; tree = tree; leaf = leaf;
+
+    sig_ht = ht_sign(sig_ht, m, skseed, pkseed, tree, leaf);
+    
+    // split live-range of the output parameters into two segments
+    sig_ht = sig_ht;
+
+    return sig_ht;
+}
+
 // algorithm 12 from SLH-DSS
 // compute a HT signature
 fn ht_sign(
@@ -34,13 +63,13 @@ fn ht_sign(
     reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
     reg ptr u8[SPX_N] skseed,  // SK.seed: secret seed
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
-    reg ptr u32[3] tree,       // lowest-layer XMSS tree index
+    reg u32[3] tree,           // lowest-layer XMSS tree index
     reg u32 leaf               // XMSS tree leaf index
-) -> reg ptr u8[HT_SIG] // -> sig_ht, adrs
+) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     stack u32[8] adrs;
     stack u8[SPX_N] root root_prev;
-    stack u32[3] idx_tree;
+    reg u32[3] idx_tree;
     inline int i;
     
     reg u32 idx_leaf;
@@ -51,44 +80,52 @@ fn ht_sign(
     idx_leaf = leaf;
     for i=0 to 3 { idx_tree[i] = tree[i]; }
 
-    adrs = adrs_init(adrs);
-    adrs = adrs_set_tree_addr(adrs, idx_tree);
+    adrs = __adrs_init(adrs);
+    adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
     sig_xmss = sig_ht[0 : XMSS_SIG];
-    () = #spill(m, skseed, pkseed, idx_leaf, sig_ht);
-    sig_xmss, adrs = xmss_sign(sig_xmss, m, skseed, idx_leaf, pkseed, adrs);
-    () = #unspill(m, skseed, pkseed, idx_leaf, sig_ht);
+    () = #spill(m, idx_leaf, sig_ht);
+    sig_xmss, adrs = __xmss_sign(sig_xmss, m, skseed, idx_leaf, pkseed, adrs);
+    // split live-range of the parameters into two segments
+    sig_xmss = sig_xmss; adrs = adrs;
+    () = #unspill(m, idx_leaf, sig_ht);
     sig_ht[0 : XMSS_SIG] = sig_xmss;
 
-    () = #spill(skseed, pkseed, idx_leaf);
-    root, adrs = xmss_pkfromsig(root, idx_leaf, sig_ht[0 : XMSS_SIG], m, pkseed, adrs);
-    () = #unspill(skseed, pkseed, idx_leaf);
+    () = #spill(idx_leaf);
+    root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_ht[0 : XMSS_SIG], m, pkseed, adrs);
+    // split live-range of the parameters into two segments
+    root = root; adrs = adrs;
+    () = #unspill(idx_leaf);
 
     offset = XMSS_SIG;
     reg u32 j = 1;
     while (j < SPX_D) {
         // idx_leaf = idx_tree mod 2^h'
         // idx_tree >>= SPX_H_PRIME;
-        idx_leaf, idx_tree = ht_update_idx(idx_leaf, idx_tree);
+        idx_leaf, idx_tree = __ht_update_idx(idx_leaf, idx_tree);
 
-        adrs = adrs_set_layer_addr(adrs, j);
-        adrs = adrs_set_tree_addr(adrs, idx_tree);
+        adrs = __adrs_set_layer_addr(adrs, j);
+        adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
         () = #spill(j);
 
         sig_xmss = sig_ht[offset : XMSS_SIG];
-        () = #spill(skseed, pkseed, offset, idx_leaf, sig_ht);
-        sig_xmss, adrs = xmss_sign(sig_xmss, root, skseed, idx_leaf, pkseed, adrs);
-        () = #unspill(skseed, pkseed, offset, idx_leaf, sig_ht);
+        () = #spill(offset, idx_leaf, sig_ht);
+        sig_xmss, adrs = __xmss_sign(sig_xmss, root, skseed, idx_leaf, pkseed, adrs);
+        // split live-range of the parameters into two segments
+        sig_xmss = sig_xmss; adrs = adrs;
+        () = #unspill(offset, idx_leaf, sig_ht);
         sig_ht[offset : XMSS_SIG] = sig_xmss;
 
         for i=0 to SPX_N { root_prev[i] = root[i]; }
 
         () = #unspill(j);
         if (j < SPX_D-1) {
-            () = #spill(j, skseed, pkseed, offset);
-            root, adrs = xmss_pkfromsig(root, idx_leaf, sig_ht[offset : XMSS_SIG], root_prev, pkseed, adrs);
-            () = #unspill(j, skseed, pkseed, offset);
+            () = #spill(j, offset);
+            root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_ht[offset : XMSS_SIG], root_prev, pkseed, adrs);
+            // split live-range of the parameters into two segments
+            root = root; adrs = adrs;
+            () = #unspill(j, offset);
         }
 
         offset += XMSS_SIG;
@@ -96,6 +133,28 @@ fn ht_sign(
     }
 
     return sig_ht;
+}
+
+inline
+fn __ht_verify(
+    reg ptr u8[SPX_N] m,
+    reg ptr u8[HT_SIG] sig_ht,
+    reg ptr u8[SPX_N] pkseed,
+    reg ptr u32[3] tree,
+    reg u32 leaf,
+    reg ptr u8[SPX_N] pkroot
+) -> reg u8
+{
+    // split live-range of the input parameters into two segments
+    m = m; sig_ht = sig_ht; pkseed = pkseed; tree = tree; leaf = leaf; pkroot = pkroot;
+
+    reg u8 res;
+    res = ht_verify(sig_ht, m, skseed, pkseed, tree, leaf);
+    
+    // split live-range of the output parameters into two segments
+    res = res;
+
+    return res;
 }
 
 // algorithm 13 from SLH-DSS
@@ -109,8 +168,6 @@ fn ht_verify(
     reg ptr u8[SPX_N] pkroot   // PK.root: hypertree root
 ) -> reg u8 // -> Boolean whether the HT signature is correct w.r.t. PK.root
 {
-    () = #spill(pkroot);
-
     stack u32[8] adrs;
     stack u8[SPX_N] node node_prev;
     stack u32[3] idx_tree;
@@ -124,38 +181,39 @@ fn ht_verify(
     idx_leaf = leaf;
     for i=0 to 3 { idx_tree[i] = tree[i]; }
 
-    adrs = adrs_init(adrs);
-    adrs = adrs_set_tree_addr(adrs, idx_tree);
+    adrs = __adrs_init(adrs);
+    adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
-    () = #spill(pkseed);
-    node, adrs = xmss_pkfromsig(node, idx_leaf, sig_ht[0 : XMSS_SIG], m, pkseed, adrs);
-    () = #unspill(pkseed);
+    node, adrs = __xmss_pkfromsig(node, idx_leaf, sig_ht[0 : XMSS_SIG], m, pkseed, adrs);
+    // split live-range of the parameters into two segments
+    node = node; adrs = adrs;
 
     reg u32 j = 1;
     offset = XMSS_SIG;
     while (j < SPX_D) {
         // idx_leaf = idx_tree mod 2^h'
         // idx_tree >>= SPX_H_PRIME;
-        idx_leaf, idx_tree = ht_update_idx(idx_leaf, idx_tree);
+        idx_leaf, idx_tree = __ht_update_idx(idx_leaf, idx_tree);
 
-        adrs = adrs_set_layer_addr(adrs, j);
-        adrs = adrs_set_tree_addr(adrs, idx_tree);
+        adrs = __adrs_set_layer_addr(adrs, j);
+        adrs = __adrs_set_tree_addr(adrs, idx_tree);
         
         () = #spill(j);
 
         for i=0 to SPX_N { node_prev[i] = node[i]; }
         
         sig_xmss = sig_ht[offset : XMSS_SIG];
-        () = #spill(pkseed, offset);
-        node, adrs = xmss_pkfromsig(node, idx_leaf, sig_xmss, node_prev, pkseed, adrs);
-        () = #unspill(pkseed, offset);
+        () = #spill(offset);
+        node, adrs = __xmss_pkfromsig(node, idx_leaf, sig_xmss, node_prev, pkseed, adrs);
+        // split live-range of the parameters into two segments
+        node = node; adrs = adrs;
+        () = #unspill(offset);
 
         () = #unspill(j);
         offset += XMSS_SIG;
         j += 1;
     }
 
-    () = #unspill(pkroot);
     reg u8 res = 0;
     reg u8 comp;
     for i=0 to SPX_N {

@@ -1,6 +1,6 @@
 // translate u32[8] adrs to u8[32] bytestring
 inline
-fn adrs_to_bytes(
+fn __adrs_to_bytes(
     reg ptr u8[32] bytes,
     reg ptr u32[8] adrs
 ) -> reg ptr u8[32]
@@ -19,7 +19,7 @@ fn adrs_to_bytes(
 
 // set every word in adrs to 0
 inline
-fn adrs_init(
+fn __adrs_init(
     reg ptr u32[8] adrs
 ) -> reg ptr u32[8]
 {
@@ -30,7 +30,7 @@ fn adrs_init(
 
 // compress adrs to adrs^c, for SHA implementations
 inline
-fn adrs_compress(
+fn __adrs_compress(
     reg ptr u8[22] out,
     reg ptr u32[8] adrs
 ) -> reg ptr u8[22]
@@ -38,7 +38,7 @@ fn adrs_compress(
     inline int i;
 
     stack u8[32] adrs_b;
-    adrs_b = adrs_to_bytes(adrs_b, adrs);
+    adrs_b = __adrs_to_bytes(adrs_b, adrs);
 
     // ADRS^c = ADRS[3] ∥ ADRS[8 ∶ 16] ∥ ADRS[19] ∥ ADRS[20 ∶ 32]
     out[0] = adrs_b[3];
@@ -50,7 +50,7 @@ fn adrs_compress(
 }
 
 inline
-fn adrs_clone(
+fn __adrs_clone(
     reg ptr u32[8] adrs_new adrs
 ) -> reg ptr u32[8]
 {
@@ -62,7 +62,7 @@ fn adrs_clone(
 ////////////////////////////////
 
 inline
-fn adrs_set_layer_addr(
+fn __adrs_set_layer_addr(
     reg ptr u32[8] adrs,
     reg u32 layer
 ) -> reg ptr u32[8]
@@ -72,9 +72,9 @@ fn adrs_set_layer_addr(
 }
 
 inline
-fn adrs_set_tree_addr(
+fn __adrs_set_tree_addr(
     reg ptr u32[8] adrs,
-    reg ptr u32[3] tree
+    reg u32[3] tree
 ) -> reg ptr u32[8]
 {
     // tree consists of three words, take those words one at a time
@@ -84,7 +84,7 @@ fn adrs_set_tree_addr(
 }
 
 inline
-fn adrs_set_type_and_clear(
+fn __adrs_set_type_and_clear(
     reg ptr u32[8] adrs,
     reg u32 t
 ) -> reg ptr u32[8]
@@ -98,7 +98,7 @@ fn adrs_set_type_and_clear(
 }
 
 inline
-fn adrs_set_key_pair_addr(
+fn __adrs_set_key_pair_addr(
     reg ptr u32[8] adrs,
     reg u32 keypair
 ) -> reg ptr u32[8]
@@ -108,7 +108,7 @@ fn adrs_set_key_pair_addr(
 }
 
 inline
-fn adrs_set_chain_addr(
+fn __adrs_set_chain_addr(
     reg ptr u32[8] adrs,
     reg u32 chain
 ) -> reg ptr u32[8]
@@ -118,7 +118,7 @@ fn adrs_set_chain_addr(
 }
 
 inline
-fn adrs_set_tree_height(
+fn __adrs_set_tree_height(
     reg ptr u32[8] adrs,
     reg u32 height
 ) -> reg ptr u32[8]
@@ -128,7 +128,7 @@ fn adrs_set_tree_height(
 }
 
 inline
-fn adrs_set_hash_addr(
+fn __adrs_set_hash_addr(
     reg ptr u32[8] adrs,
     reg u32 hashaddr
 ) -> reg ptr u32[8]
@@ -138,7 +138,7 @@ fn adrs_set_hash_addr(
 }
 
 inline
-fn adrs_set_tree_index(
+fn __adrs_set_tree_index(
     reg ptr u32[8] adrs,
     reg u32 treeindex
 ) -> reg ptr u32[8]
@@ -148,7 +148,7 @@ fn adrs_set_tree_index(
 }
 
 inline
-fn adrs_get_key_pair_addr(
+fn __adrs_get_key_pair_addr(
     reg ptr u32[8] adrs
 ) -> reg u32
 {
@@ -157,7 +157,7 @@ fn adrs_get_key_pair_addr(
 }
 
 inline
-fn adrs_get_tree_index(
+fn __adrs_get_tree_index(
     reg ptr u32[8] adrs
 ) -> reg u32
 {
