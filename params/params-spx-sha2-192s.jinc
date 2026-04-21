@@ -9,9 +9,12 @@ param int SPX_SEC_CAT = 3; // from SLH-DSS Table 2
 
 // SPHINCS+ parameters
 param int SPX_N = 24;
-param int SPX_M = 39; // ceil((SPX_H - SPX_H_PRIME) / 8) + ceil((SPX_H_PRIME) / 8) + ceil((SPX_K * SPX_A) / 8)
+param int SPX_M = 39; // ceil((SPX_K * SPX_A) / 8) + ceil((SPX_H - SPX_H_PRIME) / 8) + ceil((SPX_H_PRIME) / 8)
 param int SPX_SKBYTES = 96; // 4 * SPX_N
 param int SPX_PKBYTES = 48; // 2 * SPX_N
+param int SPX_MD_LEN = 30; // ceil((SPX_K * SPX_A) / 8)
+param int SPX_IDX_TREE_LEN = 7; // ceil((SPX_H - SPX_H_PRIME) / 8)
+param int SPX_IDX_LEAF_LEN = 2; // ceil((SPX_H_PRIME) / 8)
 
 // WOTS+ parameters
 param int SPX_LG_W  = 4;
