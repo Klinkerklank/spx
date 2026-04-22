@@ -10,12 +10,13 @@
 // SHA2-128:     MGF1-SHA-256(R || PK.seed || SHA-256(R || PK.seed || PK.root || M), m)
 // SHA2-192/256: MGF1-SHA-512(R || PK.seed || SHA-512(R || PK.seed || PK.root || M), m)
 fn H_msg(
-    reg ptr u8[SPX_M] out,
-    reg ptr u8[SPX_N] r,
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u8[SPX_N] pkroot,
-    reg u64 m_addr m_len
-) -> reg ptr u8[SPX_M]
+    reg ptr u8[SPX_M] out,    // output: buffer the result gets written to
+    reg ptr u8[SPX_N] r,      // message randomiser
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u8[SPX_N] pkroot, // PK.root
+    reg u64 m_addr,           // message address
+    reg u64 m_len             // message length
+) -> reg ptr u8[SPX_M] // -> out
 {
     () = #spill(out); // make space in the registers
 
@@ -66,16 +67,38 @@ fn H_msg(
     return out;
 }
 
+inline
+fn __H_msg(
+    reg ptr u8[SPX_M] out,    // output: buffer the result gets written to
+    reg ptr u8[SPX_N] r,      // message randomiser
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u8[SPX_N] pkroot, // PK.root
+    reg u64 m_addr,           // message address
+    reg u64 m_len             // message length
+) -> reg ptr u8[SPX_M] // -> out
+{
+    // split live-range of the input parameters into two segments
+    out = out; r = r; pkseed = pkseed; pkroot = pkroot; m_addr = m_addr; m_len = m_len;
+
+    out = H_msg(out, r, pkseed, pkroot, m_addr, m_len);
+
+    // split live-range of the output parameters into two segments
+    out = out;
+
+    return out;
+}
+
 // PRF_msg(SK.prf, optrand, M) =
 // SHAKE:        SHAKE256(SK.prf || optrand || M, 8n)
 // SHA2-128:     Trunc_n(HMAC-SHA-256(SK.prf, optrand || M))
 // SHA2-192/256: Trunc_n(HMAC-SHA-512(SK.prf, optrand || M))
 fn PRF_msg(
-    reg ptr u8[SPX_N] out,
-    reg ptr u8[SPX_N] skprf,
-    reg ptr u8[SPX_N] optrand,
-    reg u64 m_addr m_len
-) -> reg ptr u8[SPX_N]
+    reg ptr u8[SPX_N] out,     // output: buffer the result gets written to
+    reg ptr u8[SPX_N] skprf,   // SK.prf
+    reg ptr u8[SPX_N] optrand, // (optional) additional randomness
+    reg u64 m_addr,            // message address
+    reg u64 m_len              // message length
+) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // only needed after both hash function calls
 
@@ -125,15 +148,35 @@ fn PRF_msg(
     return out;
 }
 
+inline
+fn __PRF_msg(
+    reg ptr u8[SPX_N] out,     // output: buffer the result gets written to
+    reg ptr u8[SPX_N] skprf,   // SK.prf
+    reg ptr u8[SPX_N] optrand, // (optional) additional randomness
+    reg u64 m_addr,            // message address
+    reg u64 m_len              // message length
+) -> reg ptr u8[SPX_N] // -> out
+{
+    // split live-range of the input parameters into two segments
+    out = out; skprf = skprf; optrand = optrand; m_addr = m_addr; m_len = m_len;
+
+    out = PRF_msg(out, skprf, optrand, m_addr, m_len);
+
+    // split live-range of the output parameters into two segments
+    out = out;
+
+    return out;
+}
+
 // PRF(PK.seed, SK.seed, ADRS) =
 // SHAKE:            SHAKE256(PK.seed || ADRS || SK.seed, 8n)
 // SHA2-128/192/256: Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || SK.seed))
 fn PRF(
-    reg ptr u8[SPX_N] out,
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u8[SPX_N] skseed,
-    reg ptr u32[8] adrs
-) -> reg ptr u8[SPX_N]
+    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N] // -> out
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || SK.seed
@@ -150,7 +193,7 @@ fn PRF(
     for i=SPX_N to SHA256_IN { buf[i] = 0; } 
 
     // buf = PK.seed || zero-padding || ADRS^c
-    buf[SHA256_IN : 22] = adrs_compress(buf[SHA256_IN : 22], adrs);
+    buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || SK.seed
     for i=0 to SPX_N { buf[SHA256_IN+22+i] = skseed[i]; }
@@ -167,14 +210,33 @@ fn PRF(
     return out;
 }
 
+inline
+fn __PRF(
+    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N] // -> out
+{
+    // split live-range of the input parameters into two segments
+    out = out; pkseed = pkseed; skseed = skseed; adrs = adrs;
+
+    out = PRF(out, pkseed, skseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    out = out;
+
+    return out;
+}
+
 // F(PK.seed, ADRS, M_1) =
 // SHAKE:            SHAKE256(PK.seed || ADRS || M_1, 8n)
 // SHA2-128/192/256: Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_1))
 fn F(
-    reg ptr u8[SPX_N] out, // also in, i.e. out = m1
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u32[8] adrs
-) -> reg ptr u8[SPX_N]
+    reg ptr u8[SPX_N] out,    // both input and output (F is in-place)
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out);
     // declare a stack buffer that will contain the concatenated inputs
@@ -192,7 +254,7 @@ fn F(
     for i=SPX_N to SHA256_IN { buf[i] = 0; } 
 
     // buf = PK.seed || zero-padding || ADRS^c
-    buf[SHA256_IN : 22] = adrs_compress(buf[SHA256_IN : 22], adrs);
+    buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_1
     for i=0 to SPX_N { buf[SHA256_IN+22+i] = out[i]; }
@@ -207,16 +269,35 @@ fn F(
     return out;
 }
 
+inline
+fn __F(
+    reg ptr u8[SPX_N] out,    // both input and output (F is in-place)
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N] // -> out
+{
+    // split live-range of the input parameters into two segments
+    out = out; pkseed = pkseed; adrs = adrs;
+
+    out = F(out, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    out = out;
+
+    return out;
+}
+
 // H(PK.seed, ADRS, M_2) =
 // SHAKE:        SHAKE256(PK.seed || ADRS || M_2, 8n)
 // SHA2-128:     Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_2))
 // SHA2-192/256: Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_2))
 fn H(
-    reg ptr u8[SPX_N] out,
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u32[8] adrs,
-    reg ptr u8[SPX_N] in1 in2 // the two inputs to hash together
-) -> reg ptr u8[SPX_N]
+    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs,      // ADRS
+    reg ptr u8[SPX_N] in1,    // first part of the concatenation
+    reg ptr u8[SPX_N] in2     // second part of the concatenation
+) -> reg ptr u8[SPX_N] // -> out
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_2     (for sha2-128)
@@ -234,7 +315,7 @@ fn H(
     for i=SPX_N to SHAX_IN { buf[i] = 0; } 
 
     // buf = PK.seed || zero-padding || ADRS^c
-    buf[SHAX_IN : 22] = adrs_compress(buf[SHAX_IN : 22], adrs);
+    buf[SHAX_IN : 22] = __adrs_compress(buf[SHAX_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_2
     for i=0 to SPX_N { buf[SHAX_IN+22+i]       = in1[i]; }
@@ -251,16 +332,36 @@ fn H(
     return out;
 }
 
+inline
+fn __H(
+    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs,      // ADRS
+    reg ptr u8[SPX_N] in1,    // first part of the concatenation
+    reg ptr u8[SPX_N] in2     // second part of the concatenation
+) -> reg ptr u8[SPX_N] // -> out
+{
+    // split live-range of the input parameters into two segments
+    out = out; pkseed = pkseed; adrs = adrs; in1 = in1; in2 = in2;
+
+    out = H(out, pkseed, adrs, in1, in2);
+
+    // split live-range of the output parameters into two segments
+    out = out;
+
+    return out;
+}
+
 // T_len(PK.seed, ADRS, M_len) =
 // SHAKE:        SHAKE256(PK.seed || ADRS || M_len, 8n)
 // SHA2-128:     Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_len))
 // SHA2-192/256: Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_len))
 fn T_len(
-    reg ptr u8[SPX_N] out,
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u32[8] adrs,
-    reg ptr u8[SPX_LEN*SPX_N] chains // M_len is the concatenation of all chain end values in a WOTS instance
-) -> reg ptr u8[SPX_N]
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u8[SPX_N] pkseed,        // PK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[SPX_LEN*SPX_N] chains // concatenation of all chain end values in a WOTS instance
+) -> reg ptr u8[SPX_N] // -> out
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_len         (for sha2-128)
@@ -278,7 +379,7 @@ fn T_len(
     for i=SPX_N to SHAX_IN { buf[i] = 0; } 
 
     // buf = PK.seed || zero-padding || ADRS^c
-    buf[SHAX_IN : 22] = adrs_compress(buf[SHAX_IN : 22], adrs);
+    buf[SHAX_IN : 22] = __adrs_compress(buf[SHAX_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_len
     for i=0 to SPX_LEN*SPX_N { buf[SHAX_IN+22+i] = chains[i]; }
@@ -294,16 +395,35 @@ fn T_len(
     return out;
 }
 
+inline
+fn __T_len(
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u8[SPX_N] pkseed,        // PK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[SPX_LEN*SPX_N] chains // concatenation of all chain end values in a WOTS instance
+) -> reg ptr u8[SPX_N] // -> out
+{
+    // split live-range of the input parameters into two segments
+    out = out; pkseed = pkseed; adrs = adrs; chains = chains;
+
+    out = T_len(out, pkseed, adrs, chains);
+
+    // split live-range of the output parameters into two segments
+    out = out;
+
+    return out;
+}
+
 // T_k(PK.seed, ADRS, M_k) =
 // SHAKE:        SHAKE256(PK.seed || ADRS || M_k, 8n)
 // SHA2-128:     Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_k))
 // SHA2-192/256: Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_k))
 fn T_k(
-    reg ptr u8[SPX_N] out,
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u32[8] adrs,
-    reg ptr u8[SPX_K*SPX_N] roots // M_k is the concatenation of all roots in a FORS forest
-) -> reg ptr u8[SPX_N]
+    reg ptr u8[SPX_N] out,        // output: buffer the result gets written to
+    reg ptr u8[SPX_N] pkseed,     // PK.seed
+    reg ptr u32[8] adrs,          // ADRS
+    reg ptr u8[SPX_K*SPX_N] roots // concatenation of all roots in a FORS forest
+) -> reg ptr u8[SPX_N] // -> out
 {
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_k         (for sha2-128)
@@ -321,7 +441,7 @@ fn T_k(
     for i=SPX_N to SHAX_IN { buf[i] = 0; } 
 
     // buf = PK.seed || zero-padding || ADRS^c
-    buf[SHAX_IN : 22] = adrs_compress(buf[SHAX_IN : 22], adrs);
+    buf[SHAX_IN : 22] = __adrs_compress(buf[SHAX_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_k
     for i=0 to SPX_K*SPX_N { buf[SHAX_IN+22+i] = roots[i]; }
@@ -334,5 +454,24 @@ fn T_k(
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
+    return out;
+}
+
+inline
+fn __T_k(
+    reg ptr u8[SPX_N] out,        // output: buffer the result gets written to
+    reg ptr u8[SPX_N] pkseed,     // PK.seed
+    reg ptr u32[8] adrs,          // ADRS
+    reg ptr u8[SPX_K*SPX_N] roots // concatenation of all roots in a FORS forest
+) -> reg ptr u8[SPX_N] // -> out
+{
+    // split live-range of the input parameters into two segments
+    out = out; pkseed = pkseed; adrs = adrs; roots = roots;
+
+    out = T_k(out, pkseed, adrs, roots);
+
+    // split live-range of the output parameters into two segments
+    out = out;
+
     return out;
 }

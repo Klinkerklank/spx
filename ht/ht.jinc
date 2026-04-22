@@ -35,27 +35,6 @@ fn __ht_update_idx(
 // |                       main algorithms                        |
 // +--------------------------------------------------------------+
 
-inline
-fn __ht_sign(
-    reg ptr u8[HT_SIG] sig_ht,
-    reg ptr u8[SPX_N] m,
-    reg ptr u8[SPX_N] skseed,
-    reg ptr u8[SPX_N] pkseed,
-    reg u32[3] tree,
-    reg u32 leaf
-) -> reg ptr u8[HT_SIG]
-{
-    // split live-range of the input parameters into two segments
-    sig_ht = sig_ht; m = m; skseed = skseed; pkseed = pkseed; tree = tree; leaf = leaf;
-
-    sig_ht = ht_sign(sig_ht, m, skseed, pkseed, tree, leaf);
-    
-    // split live-range of the output parameters into two segments
-    sig_ht = sig_ht;
-
-    return sig_ht;
-}
-
 // algorithm 12 from SLH-DSS
 // compute a HT signature
 fn ht_sign(
@@ -86,15 +65,11 @@ fn ht_sign(
     sig_xmss = sig_ht[0 : XMSS_SIG];
     () = #spill(m, idx_leaf, sig_ht);
     sig_xmss, adrs = __xmss_sign(sig_xmss, m, skseed, idx_leaf, pkseed, adrs);
-    // split live-range of the parameters into two segments
-    sig_xmss = sig_xmss; adrs = adrs;
     () = #unspill(m, idx_leaf, sig_ht);
     sig_ht[0 : XMSS_SIG] = sig_xmss;
 
     () = #spill(idx_leaf);
     root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_ht[0 : XMSS_SIG], m, pkseed, adrs);
-    // split live-range of the parameters into two segments
-    root = root; adrs = adrs;
     () = #unspill(idx_leaf);
 
     offset = XMSS_SIG;
@@ -112,9 +87,7 @@ fn ht_sign(
         sig_xmss = sig_ht[offset : XMSS_SIG];
         () = #spill(offset, idx_leaf, sig_ht);
         sig_xmss, adrs = __xmss_sign(sig_xmss, root, skseed, idx_leaf, pkseed, adrs);
-        // split live-range of the parameters into two segments
-        sig_xmss = sig_xmss; adrs = adrs;
-        () = #unspill(offset, idx_leaf, sig_ht);
+         () = #unspill(offset, idx_leaf, sig_ht);
         sig_ht[offset : XMSS_SIG] = sig_xmss;
 
         for i=0 to SPX_N { root_prev[i] = root[i]; }
@@ -123,8 +96,6 @@ fn ht_sign(
         if (j < SPX_D-1) {
             () = #spill(j, offset);
             root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_ht[offset : XMSS_SIG], root_prev, pkseed, adrs);
-            // split live-range of the parameters into two segments
-            root = root; adrs = adrs;
             () = #unspill(j, offset);
         }
 
@@ -136,25 +107,24 @@ fn ht_sign(
 }
 
 inline
-fn __ht_verify(
-    reg ptr u8[SPX_N] m,
-    reg ptr u8[HT_SIG] sig_ht,
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u32[3] tree,
-    reg u32 leaf,
-    reg ptr u8[SPX_N] pkroot
-) -> reg u8
+fn __ht_sign(
+    reg ptr u8[HT_SIG] sig_ht, // output: HT signature
+    reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
+    reg ptr u8[SPX_N] skseed,  // SK.seed: secret seed
+    reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
+    reg u32[3] tree,           // lowest-layer XMSS tree index
+    reg u32 leaf               // XMSS tree leaf index
+) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     // split live-range of the input parameters into two segments
-    m = m; sig_ht = sig_ht; pkseed = pkseed; tree = tree; leaf = leaf; pkroot = pkroot;
+    sig_ht = sig_ht; m = m; skseed = skseed; pkseed = pkseed; tree = tree; leaf = leaf;
 
-    reg u8 res;
-    res = ht_verify(sig_ht, m, skseed, pkseed, tree, leaf);
+    sig_ht = ht_sign(sig_ht, m, skseed, pkseed, tree, leaf);
     
     // split live-range of the output parameters into two segments
-    res = res;
+    sig_ht = sig_ht;
 
-    return res;
+    return sig_ht;
 }
 
 // algorithm 13 from SLH-DSS
@@ -185,8 +155,6 @@ fn ht_verify(
     adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
     node, adrs = __xmss_pkfromsig(node, idx_leaf, sig_ht[0 : XMSS_SIG], m, pkseed, adrs);
-    // split live-range of the parameters into two segments
-    node = node; adrs = adrs;
 
     reg u32 j = 1;
     offset = XMSS_SIG;
@@ -205,8 +173,6 @@ fn ht_verify(
         sig_xmss = sig_ht[offset : XMSS_SIG];
         () = #spill(offset);
         node, adrs = __xmss_pkfromsig(node, idx_leaf, sig_xmss, node_prev, pkseed, adrs);
-        // split live-range of the parameters into two segments
-        node = node; adrs = adrs;
         () = #unspill(offset);
 
         () = #unspill(j);
@@ -222,5 +188,27 @@ fn ht_verify(
             res = 1;
         }
     }
+    return res;
+}
+
+inline
+fn __ht_verify(
+    reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
+    reg ptr u8[HT_SIG] sig_ht, // HT signature
+    reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
+    reg ptr u32[3] tree,       // lowest-layer XMSS tree index
+    reg u32 leaf,              // XMSS tree leaf index
+    reg ptr u8[SPX_N] pkroot   // PK.root: hypertree root
+) -> reg u8 // -> Boolean whether the HT signature is correct w.r.t. PK.root
+{
+    // split live-range of the input parameters into two segments
+    m = m; sig_ht = sig_ht; pkseed = pkseed; tree = tree; leaf = leaf; pkroot = pkroot;
+
+    reg u8 res;
+    res = ht_verify(m, sig_ht, pkseed, tree, leaf, pkroot);
+    
+    // split live-range of the output parameters into two segments
+    res = res;
+
     return res;
 }

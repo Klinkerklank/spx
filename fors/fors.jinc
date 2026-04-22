@@ -1,3 +1,11 @@
+namespace baseb_fors {
+  param int B      = SPX_T;
+  param int LG_B   = SPX_A;
+  param int OUTLEN = SPX_K;
+  param int INLEN  = SPX_MD_LEN;
+  require "../baseb.jinc"
+}
+
 // +--------------------------------------------------------------+
 // |                       helper functions                       |
 // +--------------------------------------------------------------+

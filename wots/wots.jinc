@@ -1,3 +1,19 @@
+namespace baseb_wots_m {
+  param int B      = SPX_W;
+  param int LG_B   = SPX_LG_W;
+  param int OUTLEN = SPX_LEN_1;
+  param int INLEN  = SPX_N;
+  require "../baseb.jinc"
+}
+
+namespace baseb_wots_c {
+  param int B      = SPX_W;
+  param int LG_B   = SPX_LG_W;
+  param int OUTLEN = SPX_LEN_2;
+  param int INLEN  = (SPX_LEN_2 * SPX_LG_W + 7) / 8;
+  require "../baseb.jinc"
+}
+
 // +--------------------------------------------------------------+
 // |                       helper functions                       |
 // +--------------------------------------------------------------+
@@ -25,9 +41,6 @@ fn __chain_lengths(
     reg ptr u8[SPX_N] m
 ) -> reg ptr u32[SPX_LEN] // -> lengths
 {
-    // split live-range of the parameters into two segments
-    lengths = lengths; m = m;
-
     // compute base-w message part indices
     lengths[0 : SPX_LEN_1] = baseb_wots_m::__base_b(lengths[0 : SPX_LEN_1], m);
 
@@ -59,28 +72,45 @@ fn __chain_lengths(
 
 // algorithm 5 from SLH-DSS
 fn chain(
-    reg ptr u8[SPX_N] out,
-    reg u32 i steps,
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u32[8] adrs
-) -> reg ptr u8[SPX_N], reg ptr u32[8]
+    reg ptr u8[SPX_N] out,    // input and also output (chain is in-place)
+    reg u32 i,                // position in the chain
+    reg u32 steps,            // number of hash evaluations to do
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> out, adrs
 {
-    // split live-range of the parameters into two segments
-    out = out; i = i; steps = steps; pkseed = pkseed; adrs = adrs;
-
-    reg u32 t = i; t += steps;
+    reg u32 t = i;
+    t += steps;
 
     while (i < t) {
         adrs = __adrs_set_hash_addr(adrs, i);
 
         () = #spill(i, t, pkseed, adrs);
         out = __F(out, pkseed, adrs);
-        // split live-range of the parameters into two segments
-        out = out;
         () = #unspill(i, t, pkseed, adrs);
 
         i += 1;
     }
+
+    return out, adrs;
+}
+
+inline
+fn __chain(
+    reg ptr u8[SPX_N] out,    // input and also output (chain is in-place)
+    reg u32 i,                // position in the chain
+    reg u32 steps,            // number of hash evaluations to do
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> out, adrs
+{
+    // split live-range of the parameters into two segments
+    out = out; i = i; steps = steps; pkseed = pkseed; adrs = adrs;
+
+    out, adrs = chain(out, i, steps, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    out = out; adrs = adrs;
 
     return out, adrs;
 }
@@ -93,9 +123,6 @@ fn wots_pkgen(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
-    // split live-range of the parameters into two segments
-    pk = pk; skseed = skseed; pkseed = pkseed; adrs = adrs;
-
     () = #spill(pk);
 
     // adrs_key is skADRS
@@ -125,8 +152,6 @@ fn wots_pkgen(
         // compute sk in tmp[i : SPX_N]
         () = #spill(pkseed, skseed);
         tmp[subarray_start_index : SPX_N] = __PRF(tmp[subarray_start_index : SPX_N], pkseed, skseed, adrs_key);
-        // split live-range of the parameters into two segments
-        tmp[subarray_start_index : SPX_N] = tmp[subarray_start_index : SPX_N];
         () = #unspill(pkseed, skseed);
 
         () = #unspill(i);
@@ -152,8 +177,6 @@ fn wots_pkgen(
 
         // hash the secret key value to the public key value
         tmp[subarray_start_index : SPX_N], adrs = __chain(tmp[subarray_start_index : SPX_N], start, steps, pkseed, adrs);
-        // split live-range of the parameters into two segments
-        tmp[subarray_start_index : SPX_N] = tmp[subarray_start_index : SPX_N]; adrs = adrs;
 
         () = #unspill(i);
         i += 1;
@@ -169,29 +192,43 @@ fn wots_pkgen(
     () = #spill(pkseed, adrs);
     () = #unspill(pk);
     pk = __T_len(pk, pkseed, adrs_key, tmp);
-    // split live-range of the parameters into two segments
-    pk = pk;
     () = #unspill(pkseed, adrs);
+    return pk, adrs;
+}
+
+inline
+fn __wots_pkgen(
+    reg ptr u8[SPX_N] pk,     // output: WOTS+ public key
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
+{
+    // split live-range of the parameters into two segments
+    pk = pk; skseed = skseed; pkseed = pkseed; adrs = adrs;
+
+    pk, adrs = wots_pkgen(pk, skseed, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    pk = pk; adrs = adrs;
+
     return pk, adrs;
 }
 
 // algorithm 7 from SLH-DSS
 fn wots_sign(
-    reg ptr u8[WOTS_SIG] sig,
-    reg ptr u8[SPX_N] m skseed pkseed,
-    reg ptr u32[8] adrs
-) -> reg ptr u8[WOTS_SIG], reg ptr u32[8]
+    reg ptr u8[WOTS_SIG] sig, // output: WOTS+ signature
+    reg ptr u8[SPX_N] m,      // message to sign (XMSS tree root or FORS public key)
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig, adrs
 {
-    // split live-range of the parameters into two segments
-    sig = sig; m = m; skseed = skseed; pkseed = pkseed; adrs = adrs;
-
     // free up registers: values are only needed after the chain-lengths computation
     () = #spill(sig, skseed, pkseed);
 
     stack u32[SPX_LEN] lengths;
     lengths = __chain_lengths(lengths, m);
-    // split live-range of the parameters into two segments
-    lengths = lengths;
     
     stack u32[8] skadrs;
     skadrs = __adrs_clone(skadrs, adrs);
@@ -220,8 +257,6 @@ fn wots_sign(
         // compute sk in sig[i : SPX_N]
         () = #spill(skseed, pkseed);
         sig[subarray_start_index : SPX_N] = __PRF(sig[subarray_start_index : SPX_N], pkseed, skseed, skadrs);
-        // split live-range of the parameters into two segments
-        sig[subarray_start_index : SPX_N] = sig[subarray_start_index : SPX_N];
         () = #unspill(skseed, pkseed);
 
         () = #unspill(i);
@@ -247,8 +282,6 @@ fn wots_sign(
 
         // hash the secret key value to the public key value
         sig[subarray_start_index : SPX_N], adrs = __chain(sig[subarray_start_index : SPX_N], start, steps, pkseed, adrs);
-        // split live-range of the parameters into two segments
-        sig[subarray_start_index : SPX_N] = sig[subarray_start_index : SPX_N]; adrs = adrs;
 
         () = #unspill(i);
         i += 1;
@@ -257,17 +290,35 @@ fn wots_sign(
     return sig, adrs;
 }
 
-// algorithm 8 from SLH-DSS
-fn wots_pkfromsig(
-    reg ptr u8[SPX_N] pksig,
-    reg ptr u8[WOTS_SIG] sig,
-    reg ptr u8[SPX_N] m pkseed,
-    reg ptr u32[8] adrs
-) -> reg ptr u8[SPX_N], reg ptr u32[8]
+inline
+fn __wots_sign(
+    reg ptr u8[WOTS_SIG] sig, // output: WOTS+ signature
+    reg ptr u8[SPX_N] m,      // message to sign (XMSS tree root or FORS public key)
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig, adrs
 {
     // split live-range of the parameters into two segments
-    pksig = pksig; sig = sig; m = m; pkseed = pkseed; adrs = adrs;
-    
+    sig = sig; m = m; skseed = skseed; pkseed = pkseed; adrs = adrs;
+
+    sig, adrs = wots_sign(sig, m, skseed, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    sig = sig; adrs = adrs;
+
+    return sig, adrs;
+}
+
+// algorithm 8 from SLH-DSS
+fn wots_pkfromsig(
+    reg ptr u8[SPX_N] pksig,  // output: WOTS+ public key
+    reg ptr u8[WOTS_SIG] sig, // WOTS signature
+    reg ptr u8[SPX_N] m,      // message (XMSS tree root or FORS public key)
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pksig, adrs
+{
     () = #spill(pksig);
 
     // free up registers: values are only needed after the chain-lengths computation
@@ -275,8 +326,6 @@ fn wots_pkfromsig(
 
     stack u32[SPX_LEN] lengths;
     lengths = __chain_lengths(lengths, m);
-    // split live-range of the parameters into two segments
-    lengths = lengths;
 
     stack u8[WOTS_SIG] sigvals;
     inline int j;
@@ -303,8 +352,6 @@ fn wots_pkfromsig(
 
         // hash the signature value to the public key value
         sigvals[subarray_start_index : SPX_N], adrs = __chain(sigvals[subarray_start_index : SPX_N], start, steps, pkseed, adrs);
-        // split live-range of the parameters into two segments
-        sigvals[subarray_start_index : SPX_N] = sigvals[subarray_start_index : SPX_N]; adrs = adrs;
 
         () = #unspill(i);
         i += 1;
@@ -320,8 +367,26 @@ fn wots_pkfromsig(
     
     () = #unspill(pksig);
     pksig = __T_len(pksig, pkseed, wotspkADRS, sigvals);
-    // split live-range of the parameters into two segments
-    pksig = pksig;
     
+    return pksig, adrs;
+}
+
+inline
+fn __wots_pkfromsig(
+    reg ptr u8[SPX_N] pksig,  // output: WOTS+ public key
+    reg ptr u8[WOTS_SIG] sig, // WOTS signature
+    reg ptr u8[SPX_N] m,      // message (XMSS tree root or FORS public key)
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pksig, adrs
+{
+    // split live-range of the parameters into two segments
+    pksig = pksig; sig = sig; m = m; pkseed = pkseed; adrs = adrs;
+    
+    pksig, adrs = wots_pkfromsig(pksig, sig, m, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    pksig = pksig; adrs = adrs;
+
     return pksig, adrs;
 }

@@ -40,9 +40,6 @@ fn xmss_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
-    // split live-range of the parameters into two segments
-    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs;
-
     () = #spill(root);
 
     // stack buffer with enough place to fit the entire (flattened) XMSS tree
@@ -86,8 +83,6 @@ fn xmss_node(
 
                 () = #spill(pkseed); // resolves 'conflicting variables'
                 flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs);
-                // split live-range of the parameters into two segments
-                flat_tree[node_addr : SPX_N] = flat_tree[node_addr : SPX_N]; adrs = adrs;
                 () = #unspill(layer);
                 () = #unspill(pkseed); // resolves 'conflicting variables'
             } else { // layer > 0
@@ -128,7 +123,7 @@ fn xmss_node(
         layer += 1;
     }
 
-    label = tree_label(i, z);
+    label = __tree_label(i, z);
     node_addr = (64u) label; node_addr *= SPX_N;
 
     () = #unspill(root);
@@ -137,6 +132,27 @@ fn xmss_node(
     for j=0 to SPX_N {
         root[j] = flat_tree[node_addr + j];
     }
+    return root, adrs;
+}
+
+inline
+fn __xmss_node(
+    reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg u32 i,                // target node index (horizontal)
+    reg u32 z,                // target node height
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
+{
+    // split live-range of the parameters into two segments
+    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs;
+
+    root, adrs = xmss_node(root, skseed, i, z, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    root = root; adrs = adrs;
+
     return root, adrs;
 }
 
@@ -151,9 +167,6 @@ fn xmss_sign(
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
-    // split live-range of the parameters into two segments
-    sig_xmss = sig_xmss; m = m; skseed = skseed; idx = idx; pkseed = pkseed; adrs = adrs;
-
     reg ptr u8[SPX_N] auth_node;
 
     () = #spill(m);
@@ -173,8 +186,6 @@ fn xmss_sign(
         auth_node = sig_xmss[offset : SPX_N];
         () = #spill(skseed, pkseed, sig_xmss);
         auth_node, adrs = __xmss_node(auth_node, skseed, k, j, pkseed, adrs);
-        // split live-range of the parameters into two segments
-        auth_node = auth_node; adrs = adrs;
         () = #unspill(skseed, pkseed, sig_xmss);
         sig_xmss[offset : SPX_N] = auth_node;
 
@@ -190,8 +201,27 @@ fn xmss_sign(
     // compute sig_xmss[0 : WOTS_SIG] = wots signature on message m
     () = #unspill(m);
     sig_xmss[0 : WOTS_SIG], adrs = __wots_sign(sig_xmss[0 : WOTS_SIG], m, skseed, pkseed, adrs);
+
+    return sig_xmss, adrs;
+}
+
+inline
+fn __xmss_sign(
+    reg ptr u8[XMSS_SIG] sig_xmss, // output: XMSS signature
+    reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
+    reg ptr u8[SPX_N] skseed,      // SK.seed
+    reg u32 idx,                   // WOTS+ leaf index to sign with
+    reg ptr u8[SPX_N] pkseed,      // PK.seed
+    reg ptr u32[8] adrs            // ADRS
+) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
+{
     // split live-range of the parameters into two segments
-    sig_xmss[0 : WOTS_SIG] = sig_xmss[0 : WOTS_SIG]; adrs = adrs;
+    sig_xmss = sig_xmss; m = m; skseed = skseed; idx = idx; pkseed = pkseed; adrs = adrs;
+
+    sig_xmss, adrs = xmss_sign(sig_xmss, m, skseed, idx, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    sig_xmss = sig_xmss; adrs = adrs;
 
     return sig_xmss, adrs;
 }
@@ -207,9 +237,6 @@ fn xmss_pkfromsig(
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
-    // split live-range of the parameters into two segments
-    pk = pk; idx = idx; sig_xmss = sig_xmss; m = m; pkseed = pkseed; adrs = adrs;
-
     () = #spill(pk);
 
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
@@ -219,8 +246,6 @@ fn xmss_pkfromsig(
     () = #spill(pkseed); // resolves 'conflicting variables'
     () = #spill(idx);
     node0, adrs = __wots_pkfromsig(node0, sig_xmss[0 : WOTS_SIG], m, pkseed, adrs); // wots_sig = sig_xmss[0 : WOTS_SIG]
-    // split live-range of the parameters into two segments
-    node0 = node0; adrs = adrs;
     () = #unspill(idx);
     () = #unspill(pkseed); // resolves 'conflicting variables'
 
@@ -274,8 +299,6 @@ fn xmss_pkfromsig(
         () = #spill(sig_xmss, tree_index, offset);
         () = #spill(pkseed); // resolves 'conflicting variables'
         node1 = __H(node1, pkseed, adrs, buf0, buf1);
-        // split live-range of the parameters into two segments
-        node1 = node1;
         () = #unspill(sig_xmss, tree_index, offset);
         () = #unspill(pkseed); // resolves 'conflicting variables'
 
@@ -290,5 +313,26 @@ fn xmss_pkfromsig(
 
     () = #unspill(pk);
     for i=0 to SPX_N { pk[i] = node0[i]; }
+    return pk, adrs;
+}
+
+inline
+fn __xmss_pkfromsig(
+    reg ptr u8[SPX_N] pk,          // output: XMSS tree root (public key)
+    reg u32 idx,                   // WOTS+ leaf index to sign with
+    reg ptr u8[XMSS_SIG] sig_xmss, // XMSS signature
+    reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
+    reg ptr u8[SPX_N] pkseed,      // PK.seed
+    reg ptr u32[8] adrs            // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
+{
+    // split live-range of the parameters into two segments
+    pk = pk; idx = idx; sig_xmss = sig_xmss; m = m; pkseed = pkseed; adrs = adrs;
+
+    pk, adrs = xmss_pkfromsig(pk, idx, sig_xmss, m, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    pk = pk; adrs = adrs;
+
     return pk, adrs;
 }
