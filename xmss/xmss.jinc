@@ -168,6 +168,7 @@ fn xmss_sign(
     () = #spill(m);
 
     reg ptr u8[SPX_N] auth_node;
+    reg ptr u8[WOTS_SIG] sig_wots;
 
     // compute and store the authentication path AUTH
     reg u32 j k div;
@@ -200,7 +201,11 @@ fn xmss_sign(
     adrs = __adrs_set_key_pair_addr(adrs, idx);
 
     // compute sig_xmss[0 : WOTS_SIG] = wots signature on message m
-    sig_xmss[0 : WOTS_SIG], adrs = __wots_sign(sig_xmss[0 : WOTS_SIG], m, skseed, pkseed, adrs);
+    sig_wots = sig_xmss[0 : WOTS_SIG];
+    () = #spill(sig_xmss);
+    sig_wots, adrs = __wots_sign(sig_wots, m, skseed, pkseed, adrs);
+    () = #unspill(sig_xmss);
+    sig_xmss[0 : WOTS_SIG] = sig_wots;
 
     return sig_xmss, adrs;
 }
@@ -229,28 +234,39 @@ fn __xmss_sign(
 // algorithm 11 from SLH-DSS
 // compute an XMSS tree root (public key) from an XMSS signature
 fn xmss_pkfromsig(
-    reg ptr u8[SPX_N] pk,          // output: XMSS tree root (public key)
+    reg ptr u8[SPX_N] pk_xmss,     // output: XMSS tree root (public key)
     reg u32 idx,                   // WOTS+ leaf index to sign with
     reg ptr u8[XMSS_SIG] sig_xmss, // XMSS signature
     reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
     reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs            // ADRS
-) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_xmss, adrs
 {
+    () = #spill(pk_xmss);
+
+    // stack variables
+    stack u8[SPX_N] node0 node1;
+    stack u8[SPX_N] buf0 buf1;
+
+    // register variables
+    reg ptr u8[WOTS_SIG] sig_wots;
+    reg u32 k check div tree_index height;
+    reg u64 offset;
+    
+    inline int i;
+
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
     adrs = __adrs_set_key_pair_addr(adrs, idx);
 
-    stack u8[SPX_N] node0 node1;
-    node0, adrs = __wots_pkfromsig(node0, sig_xmss[0 : WOTS_SIG], m, pkseed, adrs); // wots_sig = sig_xmss[0 : WOTS_SIG]
+    sig_wots = sig_xmss[0 : WOTS_SIG];
+
+    () = #spill(pkseed, idx, sig_xmss);
+    node0, adrs = __wots_pkfromsig(node0, sig_wots, m, pkseed, adrs);
+    () = #unspill(pkseed, idx, sig_xmss);
 
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
     adrs = __adrs_set_tree_index(adrs, idx);
 
-    stack u8[SPX_N] buf0 buf1;
-
-    reg u32 k check div tree_index height;
-    reg u64 offset;
-    inline int i;
     offset = WOTS_SIG;
 
     k = 0; div = 1; // div = 2^k
@@ -297,28 +313,30 @@ fn xmss_pkfromsig(
         offset += SPX_N;
         k += 1;
     }
+    
+    () = #unspill(pk_xmss);
 
-    for i=0 to SPX_N { pk[i] = node0[i]; }
-    return pk, adrs;
+    for i=0 to SPX_N { pk_xmss[i] = node0[i]; }
+    return pk_xmss, adrs;
 }
 
 inline
 fn __xmss_pkfromsig(
-    reg ptr u8[SPX_N] pk,          // output: XMSS tree root (public key)
+    reg ptr u8[SPX_N] pk_xmss,     // output: XMSS tree root (public key)
     reg u32 idx,                   // WOTS+ leaf index to sign with
     reg ptr u8[XMSS_SIG] sig_xmss, // XMSS signature
     reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
     reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs            // ADRS
-) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_xmss, adrs
 {
     // split live-range of the parameters into two segments
-    pk = pk; idx = idx; sig_xmss = sig_xmss; m = m; pkseed = pkseed; adrs = adrs;
+    pk_xmss = pk_xmss; idx = idx; sig_xmss = sig_xmss; m = m; pkseed = pkseed; adrs = adrs;
 
-    pk, adrs = xmss_pkfromsig(pk, idx, sig_xmss, m, pkseed, adrs);
+    pk_xmss, adrs = xmss_pkfromsig(pk_xmss, idx, sig_xmss, m, pkseed, adrs);
 
     // split live-range of the output parameters into two segments
-    pk = pk; adrs = adrs;
+    pk_xmss = pk_xmss; adrs = adrs;
 
-    return pk, adrs;
+    return pk_xmss, adrs;
 }

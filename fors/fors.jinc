@@ -95,6 +95,8 @@ fn fors_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
+    () = #spill(root);
+
     // stack buffer with enough place to fit one entire (flattened) FORS tree
     // note that only those nodes are computed that are needed to find the target node,
     // so not necessarily the entire buffer is filled
@@ -109,8 +111,12 @@ fn fors_node(
     reg u32 lnode_i lnode_z;
     reg u32 label;
     
+    inline int j;
+    
     layer = 0;
     while (layer <= z) {
+        () = #spill(z);
+
         // node      = horizontal index   of the leftmost  node in the current layer
         // rightmost = horizontal index+1 of the rightmost node in the current layer
         exp = z; exp -= layer;               // exp       = z-layer
@@ -149,7 +155,6 @@ fn fors_node(
                 rnode = lnode; rnode += SPX_N;          // rnode = forest_label(2*node+1, layer-1) * SPX_N
 
                 stack u8[SPX_N] buf_l buf_r;
-                inline int j;
                 for j=0 to SPX_N {
                     buf_l[j] = flat_tree[lnode + j];
                     buf_r[j] = flat_tree[rnode + j];
@@ -170,13 +175,16 @@ fn fors_node(
             node += 1;
         }
         
+        () = #unspill(z);
+        
         layer += 1;
     }
 
     label = __forest_label(i, z);
     node_addr = (64u) label; node_addr *= SPX_N;
+    
+    () = #unspill(root);
 
-    inline int j;
     for j=0 to SPX_N { root[j] = flat_tree[node_addr + j]; }
     return root, adrs;
 }
@@ -229,7 +237,9 @@ fn fors_sign(
 
         // compute the i-th secret key value
         node = sig_fors[offset : SPX_N];
+        () = #spill(skseed, pkseed, adrs, sig_fors, i, offset);
         node = __fors_skgen(node, skseed, pkseed, adrs, idx);
+        () = #unspill(skseed, pkseed, adrs, sig_fors, i, offset);
         sig_fors[offset : SPX_N] = node;
 
         offset += SPX_N;
@@ -254,7 +264,7 @@ fn fors_sign(
             node = sig_fors[offset : SPX_N];
             () = #spill(sig_fors);
             node, adrs = __fors_node(node, skseed, idx, j, pkseed, adrs);
-            () = #spill(sig_fors);
+            () = #unspill(sig_fors);
             sig_fors[offset : SPX_N] = node;
 
             () = #unspill(skseed, pkseed, i, j, offset, div);

@@ -172,6 +172,8 @@ fn PRF(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N] // -> out
 {
+    () = #spill(out);
+
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || SK.seed
     //     = SPX_N    + (64-SPX_N)      + 22      + SPX_N
@@ -196,6 +198,8 @@ fn PRF(
     stack u8[SHA256_OUT] digest;
 
     digest = sha256_tl_1n::__sha256(digest, buf);
+
+    () = #unspill(out);
 
     // truncate the digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
