@@ -61,10 +61,8 @@ fn fors_skgen(
     skadrs = __adrs_set_key_pair_addr(skadrs, kpa);
     skadrs = __adrs_set_tree_index(skadrs, idx);
     
-    () = #spill(pkseed, skseed);
     () = #unspill(sk);
     sk = __PRF(sk, pkseed, skseed, skadrs);
-    () = #unspill(pkseed, skseed);
 
     return sk;
 }
@@ -141,18 +139,16 @@ fn fors_node(
                 label = __forest_label(node, layer);
                 node_addr = (64u) label; node_addr *= SPX_N;
 
-                () = #spill(skseed); // resolves 'conflicting variables'
                 () = #spill(layer);
                 flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
                 () = #unspill(layer);
-                () = #unspill(skseed); // resolves 'conflicting variables'
 
                 adrs = __adrs_set_tree_height(adrs, layer);
                 adrs = __adrs_set_key_pair_addr(adrs, node);
 
-                () = #spill(pkseed, skseed, node_addr, layer);
+                () = #spill(node_addr, layer);
                 flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], pkseed, adrs);
-                () = #unspill(pkseed, skseed, node_addr, layer);
+                () = #unspill(node_addr, layer);
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
@@ -176,9 +172,9 @@ fn fors_node(
                 node_addr = (64u) label; node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
-                () = #spill(pkseed, skseed, node_addr, layer, adrs);
+                () = #spill(node_addr, layer);
                 flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
-                () = #unspill(pkseed, skseed, node_addr, layer, adrs);
+                () = #unspill(node_addr, layer);
             }
 
             () = #unspill(node, rightmost);
@@ -275,13 +271,11 @@ fn fors_sign(
             
             () = #spill(offset, div, i, j);
 
-            () = #spill(skseed, pkseed); // resolves 'conflicting variables'
             node = sig_fors[offset : SPX_N];
             () = #spill(sig_fors);
             node, adrs = __fors_node(node, skseed, idx, j, pkseed, adrs);
             () = #unspill(sig_fors);
             sig_fors[offset : SPX_N] = node;
-            () = #unspill(skseed, pkseed); // resolves 'conflicting variables'
 
             () = #unspill(offset, div, i, j);
 
@@ -358,9 +352,9 @@ fn fors_pkfromsig(
         index += indices[i]; // index = i*(2^a) + indices[i]
         adrs = __adrs_set_tree_index(adrs, index);
 
-        () = #spill(offset, i, pkseed);
+        () = #spill(offset, i);
         node0 = __F(node0, pkseed, adrs);
-        () = #unspill(offset, i, pkseed);
+        () = #unspill(offset, i);
 
         j = 0; div = 1; // div = 2^j
         while (j < SPX_A) {
@@ -395,9 +389,9 @@ fn fors_pkfromsig(
                 }
             }
             
-            () = #spill(sig_fors, pkseed, adrs, index, offset);
+            () = #spill(sig_fors, index, offset);
             node1 = __H(node1, pkseed, adrs, buf0, buf1);
-            () = #unspill(sig_fors, pkseed, adrs, index, offset);
+            () = #unspill(sig_fors, index, offset);
 
             // node0 = node1
             for k=0 to SPX_N { node0[k] = node1[k]; }

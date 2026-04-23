@@ -85,9 +85,9 @@ fn chain(
     while (i < t) {
         adrs = __adrs_set_hash_addr(adrs, i);
 
-        () = #spill(i, t, pkseed, adrs);
+        () = #spill(i, t);
         out = __F(out, pkseed, adrs);
-        () = #unspill(i, t, pkseed, adrs);
+        () = #unspill(i, t);
 
         i += 1;
     }
@@ -189,10 +189,8 @@ fn wots_pkgen(
     () = #unspill(kpa);
     adrs_key = __adrs_set_key_pair_addr(adrs_key, kpa);
     
-    () = #spill(pkseed, adrs);
     () = #unspill(pk);
     pk = __T_len(pk, pkseed, adrs_key, tmp);
-    () = #unspill(pkseed, adrs);
     return pk, adrs;
 }
 
@@ -225,7 +223,7 @@ fn wots_sign(
 ) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig, adrs
 {
     // free up registers: values are only needed after the chain-lengths computation
-    () = #spill(sig, skseed, pkseed);
+    () = #spill(sig);
 
     stack u32[SPX_LEN] lengths;
     lengths = __chain_lengths(lengths, m);
@@ -239,7 +237,7 @@ fn wots_sign(
     skadrs = __adrs_set_key_pair_addr(skadrs, kpa);
 
     () = #spill(adrs); // only needed again after the first loop
-    () = #unspill(sig, skseed, pkseed);
+    () = #unspill(sig);
 
     // compute all secret key values
     reg u32 c;
@@ -255,9 +253,7 @@ fn wots_sign(
         () = #spill(i);
 
         // compute sk in sig[i : SPX_N]
-        () = #spill(skseed, pkseed);
         sig[subarray_start_index : SPX_N] = __PRF(sig[subarray_start_index : SPX_N], pkseed, skseed, skadrs);
-        () = #unspill(skseed, pkseed);
 
         () = #unspill(i);
         i += 1;

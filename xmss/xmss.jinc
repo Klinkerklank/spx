@@ -81,10 +81,8 @@ fn xmss_node(
                 
                 node_addr = (64u) node; node_addr *= SPX_N;
 
-                () = #spill(pkseed); // resolves 'conflicting variables'
                 flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs);
                 () = #unspill(layer);
-                () = #unspill(pkseed); // resolves 'conflicting variables'
             } else { // layer > 0
                 () = #spill(layer);
                 // internal node: the node value is the hash of its two children lnode and rnode
@@ -184,9 +182,9 @@ fn xmss_sign(
         // WOTS+ signature will be placed in sig_xmss[0 : WOTS_SIG] later
         // AUTH therefore starts at WOTS_SIG, and every AUTH node is SPX_N btes long
         auth_node = sig_xmss[offset : SPX_N];
-        () = #spill(skseed, pkseed, sig_xmss);
+        () = #spill(sig_xmss);
         auth_node, adrs = __xmss_node(auth_node, skseed, k, j, pkseed, adrs);
-        () = #unspill(skseed, pkseed, sig_xmss);
+        () = #unspill(sig_xmss);
         sig_xmss[offset : SPX_N] = auth_node;
 
         () = #unspill(j, k, idx, offset, div);
@@ -243,11 +241,9 @@ fn xmss_pkfromsig(
     adrs = __adrs_set_key_pair_addr(adrs, idx);
 
     stack u8[SPX_N] node0 node1;
-    () = #spill(pkseed); // resolves 'conflicting variables'
     () = #spill(idx);
     node0, adrs = __wots_pkfromsig(node0, sig_xmss[0 : WOTS_SIG], m, pkseed, adrs); // wots_sig = sig_xmss[0 : WOTS_SIG]
     () = #unspill(idx);
-    () = #unspill(pkseed); // resolves 'conflicting variables'
 
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
     adrs = __adrs_set_tree_index(adrs, idx);
@@ -297,10 +293,8 @@ fn xmss_pkfromsig(
         }
         
         () = #spill(sig_xmss, tree_index, offset);
-        () = #spill(pkseed); // resolves 'conflicting variables'
         node1 = __H(node1, pkseed, adrs, buf0, buf1);
         () = #unspill(sig_xmss, tree_index, offset);
-        () = #unspill(pkseed); // resolves 'conflicting variables'
 
         // node0 = node1
         for i=0 to SPX_N { node0[i] = node1[i]; }
