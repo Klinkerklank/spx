@@ -161,7 +161,40 @@ fn slh_verify_internal(
     reg ptr u8[SPX_PKBYTES] pk // public key
 ) -> reg u64 // -> res
 {
-    reg u64 res = 1;
+    // stack variables
+    stack u32[8] adrs;
+    stack u8[SPX_N] pk_fors;
+    stack u8[SPX_M] digest;
+
+    // reg variables
+    reg ptr u8[SPX_N] pkseed pkroot;
+    reg ptr u8[SPX_MD_LEN] md;                 // ceil((SPX_K * SPX_A) / 8)
+    reg ptr u8[SPX_IDX_TREE_LEN] tmp_idx_tree; // ceil((SPX_H - SPX_H_PRIME) / 8)
+    reg ptr u8[SPX_IDX_LEAF_LEN] tmp_idx_leaf; // ceil((SPX_H_PRIME) / 8)
+    reg u32[3] idx_tree;
+    reg u32    idx_leaf;
+    reg u64 res;
+
+    adrs = __adrs_init(adrs);
+
+    pkseed = pk[0*SPX_N : SPX_N];
+    pkroot = pk[1*SPX_N : SPX_N];
+    digest = __H_msg(digest, sig[0 : SPX_N], pkseed, pkroot, m_ptr, m_len);
+
+    md           = digest[0                             : SPX_MD_LEN      ];
+    tmp_idx_tree = digest[SPX_MD_LEN                    : SPX_IDX_TREE_LEN];
+    tmp_idx_leaf = digest[SPX_MD_LEN + SPX_IDX_TREE_LEN : SPX_IDX_LEAF_LEN];
+
+    idx_tree, idx_leaf = __indices_to_regs(tmp_idx_tree, tmp_idx_leaf);
+
+    adrs = __adrs_set_tree_addr(adrs, idx_tree);
+    adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
+    adrs = __adrs_set_key_pair_addr(adrs, idx_leaf);
+
+    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig[SPX_N : FORS_SIG], md, pkseed, adrs);
+
+    res = __ht_verify(pk_fors, sig[SPX_N + FORS_SIG : HT_SIG], pkseed, idx_tree, idx_leaf, pkroot);
+
     return res;
 }
 

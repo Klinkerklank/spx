@@ -43,7 +43,7 @@ fn ht_sign(
     reg ptr u8[SPX_N] skseed,  // SK.seed: secret seed
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
     reg u32[3] tree,           // lowest-layer XMSS tree index
-    reg u32 leaf               // XMSS tree leaf index
+    reg u32    leaf            // XMSS tree leaf index
 ) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     stack u32[8] adrs;
@@ -113,7 +113,7 @@ fn __ht_sign(
     reg ptr u8[SPX_N] skseed,  // SK.seed: secret seed
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
     reg u32[3] tree,           // lowest-layer XMSS tree index
-    reg u32 leaf               // XMSS tree leaf index
+    reg u32    leaf            // XMSS tree leaf index
 ) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     // split live-range of the input parameters into two segments
@@ -133,16 +133,16 @@ fn ht_verify(
     reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
     reg ptr u8[HT_SIG] sig_ht, // HT signature
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
-    reg ptr u32[3] tree,       // lowest-layer XMSS tree index
-    reg u32 leaf,              // XMSS tree leaf index
+    reg u32[3] tree,           // lowest-layer XMSS tree index
+    reg u32    leaf,           // XMSS tree leaf index
     reg ptr u8[SPX_N] pkroot   // PK.root: hypertree root
-) -> reg u8 // -> Boolean whether the HT signature is correct w.r.t. PK.root
+) -> reg u64 // -> Boolean whether the HT signature is correct w.r.t. PK.root
 {
     stack u32[8] adrs;
     stack u8[SPX_N] node node_prev;
-    stack u32[3] idx_tree;
     inline int i;
     
+    reg u32[3] idx_tree;
     reg u32 idx_leaf;
     reg u64 offset;
 
@@ -180,7 +180,7 @@ fn ht_verify(
         j += 1;
     }
 
-    reg u8 res = 0;
+    reg u64 res = 0;
     reg u8 comp;
     for i=0 to SPX_N {
         comp = node[i];
@@ -196,15 +196,15 @@ fn __ht_verify(
     reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
     reg ptr u8[HT_SIG] sig_ht, // HT signature
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
-    reg ptr u32[3] tree,       // lowest-layer XMSS tree index
-    reg u32 leaf,              // XMSS tree leaf index
+    reg u32[3] tree,           // lowest-layer XMSS tree index
+    reg u32    leaf,           // XMSS tree leaf index
     reg ptr u8[SPX_N] pkroot   // PK.root: hypertree root
-) -> reg u8 // -> Boolean whether the HT signature is correct w.r.t. PK.root
+) -> reg u64 // -> Boolean whether the HT signature is correct w.r.t. PK.root
 {
     // split live-range of the input parameters into two segments
     m = m; sig_ht = sig_ht; pkseed = pkseed; tree = tree; leaf = leaf; pkroot = pkroot;
 
-    reg u8 res;
+    reg u64 res;
     res = ht_verify(m, sig_ht, pkseed, tree, leaf, pkroot);
     
     // split live-range of the output parameters into two segments
