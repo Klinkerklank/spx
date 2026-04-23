@@ -74,7 +74,7 @@ fn __adrs_set_layer_addr(
 inline
 fn __adrs_set_tree_addr(
     reg ptr u32[8] adrs,
-    reg u32[3] tree
+    stack u32[3] tree
 ) -> reg ptr u32[8]
 {
     // tree consists of three words, take those words one at a time

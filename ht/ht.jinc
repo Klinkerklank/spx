@@ -4,9 +4,9 @@
 
 inline
 fn __ht_update_idx(
-    reg u32    idx_leaf,
-    reg u32[3] idx_tree
-) -> reg u32, reg u32[3] // idx_leaf, idx_tree
+    reg u32        idx_leaf,
+    reg ptr u32[3] idx_tree
+) -> reg u32, reg ptr u32[3] // -> idx_leaf, idx_tree
 {
     // idx_leaf = idx_tree mod 2^h'
     // idx_leaf always fits in one 32-bit word, so we only need idx_tree[2]
@@ -42,19 +42,21 @@ fn ht_sign(
     reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
     reg ptr u8[SPX_N] skseed,  // SK.seed: secret seed
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
-    reg u32[3] tree,           // lowest-layer XMSS tree index
-    reg u32    leaf            // XMSS tree leaf index
+    reg ptr u32[3] tree,       // lowest-layer XMSS tree index
+    reg u32        leaf        // XMSS tree leaf index
 ) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
-    stack u32[8] adrs;
+    // stack variables
     stack u8[SPX_N] root root_prev;
-    reg u32[3] idx_tree;
-    inline int i;
+    stack u32[8] adrs;
+    stack u32[3] idx_tree;
     
+    // register variables
+    reg ptr u8[XMSS_SIG] sig_xmss;
     reg u32 idx_leaf;
     reg u64 offset;
-
-    reg ptr u8[XMSS_SIG] sig_xmss;
+    
+    inline int i;
 
     idx_leaf = leaf;
     for i=0 to 3 { idx_tree[i] = tree[i]; }
@@ -63,7 +65,9 @@ fn ht_sign(
     adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
     sig_xmss = sig_ht[0 : XMSS_SIG];
+    () = #spill(sig_ht, skseed, pkseed, m);
     sig_xmss, adrs = __xmss_sign(sig_xmss, m, skseed, idx_leaf, pkseed, adrs);
+    () = #unspill(sig_ht, skseed, pkseed, m);
     sig_ht[0 : XMSS_SIG] = sig_xmss;
 
     root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_ht[0 : XMSS_SIG], m, pkseed, adrs);
@@ -71,6 +75,8 @@ fn ht_sign(
     offset = XMSS_SIG;
     reg u32 j = 1;
     while (j < SPX_D) {
+        () = #spill(skseed);
+
         // idx_leaf = idx_tree mod 2^h'
         // idx_tree >>= SPX_H_PRIME;
         idx_leaf, idx_tree = __ht_update_idx(idx_leaf, idx_tree);
@@ -79,7 +85,9 @@ fn ht_sign(
         adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
         sig_xmss = sig_ht[offset : XMSS_SIG];
+        () = #spill(sig_ht, pkseed, j, offset);
         sig_xmss, adrs = __xmss_sign(sig_xmss, root, skseed, idx_leaf, pkseed, adrs);
+        () = #unspill(sig_ht, pkseed, j, offset);
         sig_ht[offset : XMSS_SIG] = sig_xmss;
 
         for i=0 to SPX_N { root_prev[i] = root[i]; }
@@ -87,6 +95,8 @@ fn ht_sign(
         if (j < SPX_D-1) {
             root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_ht[offset : XMSS_SIG], root_prev, pkseed, adrs);
         }
+        
+        () = #unspill(skseed);
 
         offset += XMSS_SIG;
         j += 1;
@@ -101,8 +111,8 @@ fn __ht_sign(
     reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
     reg ptr u8[SPX_N] skseed,  // SK.seed: secret seed
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
-    reg u32[3] tree,           // lowest-layer XMSS tree index
-    reg u32    leaf            // XMSS tree leaf index
+    reg ptr u32[3] tree,       // lowest-layer XMSS tree index
+    reg u32        leaf        // XMSS tree leaf index
 ) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     // split live-range of the input parameters into two segments
@@ -122,20 +132,22 @@ fn ht_verify(
     reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
     reg ptr u8[HT_SIG] sig_ht, // HT signature
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
-    reg u32[3] tree,           // lowest-layer XMSS tree index
-    reg u32    leaf,           // XMSS tree leaf index
+    reg ptr u32[3] tree,       // lowest-layer XMSS tree index
+    reg u32        leaf,       // XMSS tree leaf index
     reg ptr u8[SPX_N] pkroot   // PK.root: hypertree root
 ) -> reg u64 // -> Boolean whether the HT signature is correct w.r.t. PK.root
 {
-    stack u32[8] adrs;
+    // stack variables
     stack u8[SPX_N] node node_prev;
-    inline int i;
+    stack u32[8] adrs;
+    stack u32[3] idx_tree;
     
-    reg u32[3] idx_tree;
+    // register variables
+    reg ptr u8[XMSS_SIG] sig_xmss;
     reg u32 idx_leaf;
     reg u64 offset;
-
-    reg ptr u8[XMSS_SIG] sig_xmss;
+    
+    inline int i;
 
     idx_leaf = leaf;
     for i=0 to 3 { idx_tree[i] = tree[i]; }
@@ -180,8 +192,8 @@ fn __ht_verify(
     reg ptr u8[SPX_N] m,       // message to sign (FORS public key)
     reg ptr u8[HT_SIG] sig_ht, // HT signature
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
-    reg u32[3] tree,           // lowest-layer XMSS tree index
-    reg u32    leaf,           // XMSS tree leaf index
+    reg ptr u32[3] tree,       // lowest-layer XMSS tree index
+    reg u32        leaf,       // XMSS tree leaf index
     reg ptr u8[SPX_N] pkroot   // PK.root: hypertree root
 ) -> reg u64 // -> Boolean whether the HT signature is correct w.r.t. PK.root
 {

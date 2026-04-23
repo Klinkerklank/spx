@@ -84,8 +84,12 @@ fn chain(
 
     while (i < t) {
         adrs = __adrs_set_hash_addr(adrs, i);
+        
+        () = #spill(pkseed, adrs, i); // free up space in the registers
 
         out = __F(out, pkseed, adrs);
+        
+        () = #unspill(pkseed, adrs, i);
 
         i += 1;
     }
@@ -121,6 +125,8 @@ fn wots_pkgen(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
+    () = #spill(pk); // free up space in the registers
+
     // adrs_key is skADRS
     stack u32[8] adrs_key;
     adrs_key = __adrs_clone(adrs_key, adrs);
@@ -129,6 +135,7 @@ fn wots_pkgen(
     reg u32 kpa;
     kpa = __adrs_get_key_pair_addr(adrs);
     adrs_key = __adrs_set_key_pair_addr(adrs_key, kpa);
+    () = #spill(kpa); // not needed until after the while loops
 
     stack u8[WOTS_SIG] tmp;
     reg u32 c;
@@ -152,6 +159,8 @@ fn wots_pkgen(
     reg u32 start steps;
     i = 0;
     while (i < SPX_LEN) {
+        () = #spill(pkseed, i); // free up space in the registers
+
         c = (32u) i;
         adrs = __adrs_set_chain_addr(adrs, c);
 
@@ -163,6 +172,8 @@ fn wots_pkgen(
 
         // hash the secret key value to the public key value
         tmp[subarray_start_index : SPX_N], adrs = __chain(tmp[subarray_start_index : SPX_N], start, steps, pkseed, adrs);
+        
+        () = #unspill(pkseed, i);
 
         i += 1;
     }
@@ -171,7 +182,10 @@ fn wots_pkgen(
     adrs_key = __adrs_set_type_and_clear(adrs_key, SPX_ADRS_TYPE_WOTS_PK);
 
     // kpa value hasn't changed since before the chain computations
+    () = #unspill(kpa);
     adrs_key = __adrs_set_key_pair_addr(adrs_key, kpa);
+    
+    () = #unspill(pk);
     
     pk = __T_len(pk, pkseed, adrs_key, tmp);
     return pk, adrs;
@@ -198,12 +212,12 @@ fn __wots_pkgen(
 
 // algorithm 7 from SLH-DSS
 fn wots_sign(
-    reg ptr u8[WOTS_SIG] sig, // output: WOTS+ signature
-    reg ptr u8[SPX_N] m,      // message to sign (XMSS tree root or FORS public key)
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u8[SPX_N] pkseed, // PK.seed
-    reg ptr u32[8] adrs       // ADRS
-) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig, adrs
+    reg ptr u8[WOTS_SIG] sig_wots, // output: WOTS+ signature
+    reg ptr u8[SPX_N] m,           // message to sign (XMSS tree root or FORS public key)
+    reg ptr u8[SPX_N] skseed,      // SK.seed
+    reg ptr u8[SPX_N] pkseed,      // PK.seed
+    reg ptr u32[8] adrs            // ADRS
+) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig_wots, adrs
 {
     stack u32[SPX_LEN] lengths;
     lengths = __chain_lengths(lengths, m);
@@ -227,8 +241,8 @@ fn wots_sign(
         subarray_start_index = i;
         subarray_start_index *= SPX_N;
 
-        // compute sk in sig[i : SPX_N]
-        sig[subarray_start_index : SPX_N] = __PRF(sig[subarray_start_index : SPX_N], pkseed, skseed, skadrs);
+        // compute sk in sig_wots[i : SPX_N]
+        sig_wots[subarray_start_index : SPX_N] = __PRF(sig_wots[subarray_start_index : SPX_N], pkseed, skseed, skadrs);
 
         i += 1;
     }
@@ -247,32 +261,32 @@ fn wots_sign(
         subarray_start_index *= SPX_N;
 
         // hash the secret key value to the public key value
-        sig[subarray_start_index : SPX_N], adrs = __chain(sig[subarray_start_index : SPX_N], start, steps, pkseed, adrs);
+        sig_wots[subarray_start_index : SPX_N], adrs = __chain(sig_wots[subarray_start_index : SPX_N], start, steps, pkseed, adrs);
 
         i += 1;
     }
     
-    return sig, adrs;
+    return sig_wots, adrs;
 }
 
 inline
 fn __wots_sign(
-    reg ptr u8[WOTS_SIG] sig, // output: WOTS+ signature
-    reg ptr u8[SPX_N] m,      // message to sign (XMSS tree root or FORS public key)
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u8[SPX_N] pkseed, // PK.seed
-    reg ptr u32[8] adrs       // ADRS
-) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig, adrs
+    reg ptr u8[WOTS_SIG] sig_wots, // output: WOTS+ signature
+    reg ptr u8[SPX_N] m,           // message to sign (XMSS tree root or FORS public key)
+    reg ptr u8[SPX_N] skseed,      // SK.seed
+    reg ptr u8[SPX_N] pkseed,      // PK.seed
+    reg ptr u32[8] adrs            // ADRS
+) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig_wots, adrs
 {
     // split live-range of the parameters into two segments
-    sig = sig; m = m; skseed = skseed; pkseed = pkseed; adrs = adrs;
+    sig_wots = sig_wots; m = m; skseed = skseed; pkseed = pkseed; adrs = adrs;
 
-    sig, adrs = wots_sign(sig, m, skseed, pkseed, adrs);
+    sig_wots, adrs = wots_sign(sig_wots, m, skseed, pkseed, adrs);
 
     // split live-range of the output parameters into two segments
-    sig = sig; adrs = adrs;
+    sig_wots = sig_wots; adrs = adrs;
 
-    return sig, adrs;
+    return sig_wots, adrs;
 }
 
 // algorithm 8 from SLH-DSS

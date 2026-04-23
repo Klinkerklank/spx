@@ -40,11 +40,16 @@ fn xmss_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
+    () = #spill(root);
+
+    // stack variables
+    stack u8[SPX_N] buf_l buf_r;
     // stack buffer with enough place to fit the entire (flattened) XMSS tree
     // note that only those nodes are computed that are needed to find the target node,
     // so not necessarily the entire buffer is filled
     stack u8[XMSS_TREE_SIZE * SPX_N] flat_tree;
 
+    // register variables
     reg u32 node;  // equivalent to i
     reg u32 layer; // equivalent to z
     reg u64 node_addr; // byte address of 'node' in the buffer
@@ -54,8 +59,12 @@ fn xmss_node(
     reg u32 lnode_i lnode_z;
     reg u32 label;
     
+    inline int j;
+    
     layer = 0;
     while (layer <= z) {
+        () = #spill(z); // free up space in the registers
+
         // node      = horizontal index   of the leftmost  node in the current layer
         // rightmost = horizontal index+1 of the rightmost node in the current layer
         exp = z; exp -= layer;               // exp       = z-layer
@@ -67,6 +76,8 @@ fn xmss_node(
         rightmost += node;                   // rightmost = (i+1) * 2^(z-layer)
 
         while (node < rightmost) {
+            () = #spill(skseed, pkseed, i, layer, node, rightmost); // free up space in the registers
+
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
                 adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
@@ -84,8 +95,6 @@ fn xmss_node(
                 lnode *= SPX_N;                       // lnode = tree_label(2*node,   layer-1) * SPX_N
                 rnode = lnode; rnode += SPX_N;        // rnode = tree_label(2*node+1, layer-1) * SPX_N
 
-                stack u8[SPX_N] buf_l buf_r;
-                inline int j;
                 for j=0 to SPX_N {
                     buf_l[j] = flat_tree[lnode + j];
                     buf_r[j] = flat_tree[rnode + j];
@@ -103,16 +112,21 @@ fn xmss_node(
                 flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
             }
 
+            () = #unspill(skseed, pkseed, i, layer, node, rightmost);
+
             node += 1;
         }
+
+        () = #unspill(z);
 
         layer += 1;
     }
 
     label = __tree_label(i, z);
     node_addr = (64u) label; node_addr *= SPX_N;
+    
+    () = #unspill(root);
 
-    inline int j;
     for j=0 to SPX_N {
         root[j] = flat_tree[node_addr + j];
     }
@@ -151,30 +165,36 @@ fn xmss_sign(
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
-    reg ptr u8[SPX_N] auth_node;
+    () = #spill(m);
 
-    idx = idx; // TODO why does this resolve 'conflicting variables' error?
+    reg ptr u8[SPX_N] auth_node;
 
     // compute and store the authentication path AUTH
     reg u32 j k div;
     reg u64 offset = WOTS_SIG;
     j = 0; div = 1; // div = 2^j
     while (j < SPX_H_PRIME) {
-        // () = #spill(skseed, pkseed);
         // (only the least-significant bit is flipped, to get the sibling node)
-        k = idx; k /= div;  k ^= 1;   // k = floor(idx / 2^j) xor 1
+        k = idx; k /= div;  k ^= 1; // k = floor(idx / 2^j) xor 1
+        
+        () = #spill(skseed, pkseed, idx, j, k, div, offset); // free up space in the registers
 
         // WOTS+ signature will be placed in sig_xmss[0 : WOTS_SIG] later
         // AUTH therefore starts at WOTS_SIG, and every AUTH node is SPX_N btes long
         auth_node = sig_xmss[offset : SPX_N];
+        () = #spill(sig_xmss);
         auth_node, adrs = __xmss_node(auth_node, skseed, k, j, pkseed, adrs);
+        () = #unspill(sig_xmss);
         sig_xmss[offset : SPX_N] = auth_node;
+
+        () = #unspill(skseed, pkseed, idx, j, k, div, offset);
 
         offset += SPX_N;
         div <<= 1;
         j += 1;
-        // () = #unspill(skseed, pkseed);
     }
+    
+    () = #unspill(m);
 
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
     adrs = __adrs_set_key_pair_addr(adrs, idx);

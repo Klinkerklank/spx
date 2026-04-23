@@ -122,13 +122,18 @@ fn fors_node(
         rightmost += node;                   // rightmost = (i+1) * 2^(z-layer)
 
         while (node < rightmost) {
+            () = #spill(skseed, rightmost);
+
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
-                
                 label = __forest_label(node, layer);
                 node_addr = (64u) label; node_addr *= SPX_N;
+                
+                () = #spill(pkseed, adrs, i, layer, node, node_addr);
 
                 flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
+
+                () = #unspill(pkseed, adrs, i, layer, node, node_addr);
 
                 adrs = __adrs_set_tree_height(adrs, layer);
                 adrs = __adrs_set_key_pair_addr(adrs, node);
@@ -159,6 +164,8 @@ fn fors_node(
                 // node = H(PK.seed, ADRS, lnode || rnode)
                 flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
             }
+            
+            () = #unspill(skseed, rightmost);
 
             node += 1;
         }
@@ -230,6 +237,8 @@ fn fors_sign(
         // compute and store the authentication path AUTH for the i-th tree in the forest
         j = 0; div = 1; // div = 2^j
         while (j < SPX_A) {
+            () = #spill(skseed, pkseed, i, j, offset, div);
+
             // (only the least-significant bit is flipped, to get the sibling node)
             s = indices[i]; // s = indices[i]
             s /= div;       // s = floor(indices[i] / 2^j)
@@ -243,8 +252,12 @@ fn fors_sign(
             idx += s;           // idx = i*2^(a-j) + s
 
             node = sig_fors[offset : SPX_N];
+            () = #spill(sig_fors);
             node, adrs = __fors_node(node, skseed, idx, j, pkseed, adrs);
+            () = #spill(sig_fors);
             sig_fors[offset : SPX_N] = node;
+
+            () = #unspill(skseed, pkseed, i, j, offset, div);
 
             offset += SPX_N;
             div <<= 1;
