@@ -34,77 +34,49 @@ fn __indices_to_regs(
 // |                       main algorithms                        |
 // +--------------------------------------------------------------+
 
-inline
-fn __slh_keygen_internal(
-    reg ptr u8[SPX_SKBYTES] sk, // out: (SK.seed, SK.prf. PK.seed, PK.root)
-    reg ptr u8[SPX_PKBYTES] pk, // out: (PK.seed, PK.root)
-    reg ptr u8[3*SPX_N] rand    // random bytes for SK.seed, SK.prf, and PK.seed
-) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES] // -> sk, pk
-{
-    // split live-range of the input parameters into two segments
-    sk = sk; pk = pk; rand = rand;
-
-    sk, pk = slh_keygen_internal(sk, pk, rand);
-
-    // split live-range of the output parameters into two segments
-    sk = sk; pk = pk;
-
-    return sk, pk;
-}
-
 // algorithm 18 from SLH-DSS
 fn slh_keygen_internal(
     reg ptr u8[SPX_SKBYTES] sk, // out: (SK.seed, SK.prf. PK.seed, PK.root)
-    reg ptr u8[SPX_PKBYTES] pk, // out: (PK.seed, PK.root)
-    reg ptr u8[3*SPX_N] rand    // random bytes for SK.seed, SK.prf, and PK.seed
+    reg ptr u8[SPX_PKBYTES] pk  // out: (PK.seed, PK.root)
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES] // -> sk, pk
 {
     // stack variables
     stack u32[8] adrs;
-    stack u8[SPX_N] pkroot;
 
     // register variables
     reg u32 layer i z;
 
     inline int j;
 
-    // copy random bytes
-    for j=0 to SPX_N { sk[0*SPX_N + j] = rand[0*SPX_N + j]; } // SK -> SK.seed
-    for j=0 to SPX_N { sk[1*SPX_N + j] = rand[1*SPX_N + j]; } // SK -> SK.prf
-    for j=0 to SPX_N { sk[2*SPX_N + j] = rand[2*SPX_N + j]; } // SK -> PK.seed
-    for j=0 to SPX_N { pk[0*SPX_N + j] = rand[2*SPX_N + j]; } // PK -> PK.seed
-
     adrs = __adrs_init(adrs);
     layer = SPX_D-1;
     adrs = __adrs_set_layer_addr(adrs, layer);
 
+    // compute PK.root (= sk[3*SPX_N : SPX_N])
     i = 0; z = SPX_H_PRIME;
-    pkroot, adrs = __xmss_node(pkroot, sk[0*SPX_N : SPX_N], i, z, sk[2*SPX_N : SPX_N], adrs);
+    sk[3*SPX_N : SPX_N], adrs = __xmss_node(sk[3*SPX_N : SPX_N], sk[0*SPX_N : SPX_N], i, z, sk[2*SPX_N : SPX_N], adrs);
     
-    // copy PK.root
-    for j=0 to SPX_N { sk[3*SPX_N + j] = pkroot[j]; } // SK -> PK.root
-    for j=0 to SPX_N { pk[1*SPX_N + j] = pkroot[j]; } // PK -> PK.root
+    for j=0 to SPX_N { pk[0*SPX_N + j] = sk[2*SPX_N + j]; } // copy PK.seed to PK
+    for j=0 to SPX_N { pk[1*SPX_N + j] = sk[3*SPX_N + j]; } // copy PK.root to PK
 
     return sk, pk;
 }
 
 inline
-fn __slh_sign_internal(
-    reg ptr u8[SPX_SIG] sig,    // out: SPHINCS+ signature
-    reg u64 m_ptr m_len,        // message pointer and message length
-    reg ptr u8[SPX_SKBYTES] sk, // secret key
-    reg ptr u8[SPX_N] addrnd    // additional randomness
-) -> reg ptr u8[SPX_SIG] // -> sig
+fn __slh_keygen_internal(
+    reg ptr u8[SPX_SKBYTES] sk, // out: (SK.seed, SK.prf. PK.seed, PK.root)
+    reg ptr u8[SPX_PKBYTES] pk  // out: (PK.seed, PK.root)
+) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES] // -> sk, pk
 {
     // split live-range of the input parameters into two segments
-    sig = sig; m_ptr = m_ptr; m_len = m_len; sk = sk; addrnd = addrnd;
+    sk = sk; pk = pk;
 
-    sig = slh_sign_internal(sig, m_ptr, m_len, sk, addrnd);
+    sk, pk = slh_keygen_internal(sk, pk);
 
     // split live-range of the output parameters into two segments
-    sig = sig;
+    sk = sk; pk = pk;
 
-    return sig;
+    return sk, pk;
 }
 
 // algorithm 19 from SLH-DSS
@@ -164,6 +136,36 @@ fn slh_sign_internal(
 }
 
 inline
+fn __slh_sign_internal(
+    reg ptr u8[SPX_SIG] sig,    // out: SPHINCS+ signature
+    reg u64 m_ptr m_len,        // message pointer and message length
+    reg ptr u8[SPX_SKBYTES] sk, // secret key
+    reg ptr u8[SPX_N] addrnd    // additional randomness
+) -> reg ptr u8[SPX_SIG] // -> sig
+{
+    // split live-range of the input parameters into two segments
+    sig = sig; m_ptr = m_ptr; m_len = m_len; sk = sk; addrnd = addrnd;
+
+    sig = slh_sign_internal(sig, m_ptr, m_len, sk, addrnd);
+
+    // split live-range of the output parameters into two segments
+    sig = sig;
+
+    return sig;
+}
+
+// algorithm 20 from SLH-DSS
+fn slh_verify_internal(
+    reg u64 m_ptr m_len,       // message pointer and message length
+    reg ptr u8[SPX_SIG] sig,   // SPHINCS+ signature
+    reg ptr u8[SPX_PKBYTES] pk // public key
+) -> reg u64 // -> res
+{
+    reg u64 res = 1;
+    return res;
+}
+
+inline
 fn __slh_verify_internal(
     reg u64 m_ptr m_len,       // message pointer and message length
     reg ptr u8[SPX_SIG] sig,   // SPHINCS+ signature
@@ -179,16 +181,5 @@ fn __slh_verify_internal(
     // split live-range of the output parameters into two segments
     res = res;
 
-    return res;
-}
-
-// algorithm 20 from SLH-DSS
-fn slh_verify_internal(
-    reg u64 m_ptr m_len,       // message pointer and message length
-    reg ptr u8[SPX_SIG] sig,   // SPHINCS+ signature
-    reg ptr u8[SPX_PKBYTES] pk // public key
-) -> reg u64 // -> res
-{
-    reg u64 res = 1;
     return res;
 }

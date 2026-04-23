@@ -427,10 +427,12 @@ fn slh_keygen(
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
 {
     // generate random bytes for SK.seed, SK.prf, and PK.seed
-    stack u8[3*SPX_N] rand; // TODO write directly to sk and copy to pk from there?
-    rand = #randombytes(rand);
+    // (and PK.root but that gets overwritten by the computed value of PK.root)
+    () = #spill(pk); // resolves error 'pk and sk need to both be allocated to reg RSI due to architectural constraints'
+    sk = #randombytes(sk);
+    () = #unspill(pk);
 
-    sk, pk = __slh_keygen_internal(sk, pk, rand);
+    sk, pk = __slh_keygen_internal(sk, pk);
 
     // set return value to 0
     reg u64 res; ?{}, res = #set0();

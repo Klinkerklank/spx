@@ -43,16 +43,13 @@ fn __forest_label(
 
 // algorithm 14 from SLH-DSS
 fn fors_skgen(
-    reg ptr u8[SPX_N] sk,
-    reg ptr u8[SPX_N] skseed,
-    reg ptr u8[SPX_N] pkseed,
-    reg ptr u32[8] adrs,
-    reg u32 idx
-) -> reg ptr u8[SPX_N]
+    reg ptr u8[SPX_N] sk,     // output: FORS secret key value
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs,      // ADRS
+    reg u32 idx               // secret key index
+) -> reg ptr u8[SPX_N] // -> sk
 {
-    // split live-range of the parameters into two segments
-    sk = sk; skseed = skseed; pkseed = pkseed; adrs = adrs; idx = idx;
-
     () = #spill(sk);
 
     stack u32[8] skadrs;
@@ -67,9 +64,27 @@ fn fors_skgen(
     () = #spill(pkseed, skseed);
     () = #unspill(sk);
     sk = __PRF(sk, pkseed, skseed, skadrs);
-    // split live-range of the parameters into two segments
-    sk = sk;
     () = #unspill(pkseed, skseed);
+
+    return sk;
+}
+
+inline
+fn __fors_skgen(
+    reg ptr u8[SPX_N] sk,     // output: FORS secret key value
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs,      // ADRS
+    reg u32 idx               // secret key index
+) -> reg ptr u8[SPX_N] // -> sk
+{
+    // split live-range of the parameters into two segments
+    sk = sk; skseed = skseed; pkseed = pkseed; adrs = adrs; idx = idx;
+
+    sk = fors_skgen(sk, skseed, pkseed, adrs, idx);
+
+    // split live-range of the output parameters into two segments
+    sk = sk;
 
     return sk;
 }
@@ -85,9 +100,6 @@ fn fors_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
-    // split live-range of the parameters into two segments
-    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs;
-
     () = #spill(root);
 
     // stack buffer with enough place to fit one entire (flattened) FORS tree
@@ -132,8 +144,6 @@ fn fors_node(
                 () = #spill(skseed); // resolves 'conflicting variables'
                 () = #spill(layer);
                 flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
-                // split live-range of the parameters into two segments
-                flat_tree[node_addr : SPX_N] = flat_tree[node_addr : SPX_N];
                 () = #unspill(layer);
                 () = #unspill(skseed); // resolves 'conflicting variables'
 
@@ -142,8 +152,6 @@ fn fors_node(
 
                 () = #spill(pkseed, skseed, node_addr, layer);
                 flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], pkseed, adrs);
-                // split live-range of the parameters into two segments
-                flat_tree[node_addr : SPX_N] = flat_tree[node_addr : SPX_N];
                 () = #unspill(pkseed, skseed, node_addr, layer);
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
@@ -170,8 +178,6 @@ fn fors_node(
                 // node = H(PK.seed, ADRS, lnode || rnode)
                 () = #spill(pkseed, skseed, node_addr, layer, adrs);
                 flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
-                // split live-range of the parameters into two segments
-                flat_tree[node_addr : SPX_N] = flat_tree[node_addr : SPX_N];
                 () = #unspill(pkseed, skseed, node_addr, layer, adrs);
             }
 
@@ -193,6 +199,27 @@ fn fors_node(
     return root, adrs;
 }
 
+inline
+fn __fors_node(
+    reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
+    reg ptr u8[SPX_N] skseed, // SK.seed
+    reg u32 i,                // target node index (horizontal)
+    reg u32 z,                // target node height
+    reg ptr u8[SPX_N] pkseed, // PK.seed
+    reg ptr u32[8] adrs       // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
+{
+    // split live-range of the parameters into two segments
+    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs;
+
+    root, adrs = fors_node(root, skseed, i, z, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    root = root; adrs = adrs;
+
+    return root, adrs;
+}
+
 // algorithm 16 from SLH-DSS
 // compute a FORS signature
 fn fors_sign(
@@ -203,9 +230,6 @@ fn fors_sign(
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
 {
-    // split live-range of the parameters into two segments
-    sig_fors = sig_fors; md = md; skseed = skseed; pkseed = pkseed; adrs = adrs;
-
     // stack variables
     stack u32[SPX_K] indices;
 
@@ -228,8 +252,6 @@ fn fors_sign(
         node = sig_fors[offset : SPX_N];
         () = #spill(sig_fors, i);
         node = __fors_skgen(node, skseed, pkseed, adrs, idx);
-        // split live-range of the parameters into two segments
-        node = node;
         () = #unspill(sig_fors, i);
         sig_fors[offset : SPX_N] = node;
         () = #unspill(skseed); // resolves 'conflicting variables'
@@ -257,8 +279,6 @@ fn fors_sign(
             node = sig_fors[offset : SPX_N];
             () = #spill(sig_fors);
             node, adrs = __fors_node(node, skseed, idx, j, pkseed, adrs);
-            // split live-range of the parameters into two segments
-            node = node; adrs = adrs;
             () = #unspill(sig_fors);
             sig_fors[offset : SPX_N] = node;
             () = #unspill(skseed, pkseed); // resolves 'conflicting variables'
@@ -276,6 +296,26 @@ fn fors_sign(
     return sig_fors, adrs;
 }
 
+inline
+fn __fors_sign(
+    reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
+    reg ptr u8[SPX_MD_LEN] md,     // message digest
+    reg ptr u8[SPX_N] skseed,      // SK.seed
+    reg ptr u8[SPX_N] pkseed,      // PK.seed
+    reg ptr u32[8] adrs            // ADRS
+) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
+{
+    // split live-range of the parameters into two segments
+    sig_fors = sig_fors; md = md; skseed = skseed; pkseed = pkseed; adrs = adrs;
+
+    sig_fors, adrs = fors_sign(sig_fors, md, skseed, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    sig_fors = sig_fors; adrs = adrs;
+
+    return sig_fors, adrs;
+}
+
 // algorithm 17 from SLH-DSS
 // compute a compressed FORS public key from a FORS signature
 fn fors_pkfromsig(
@@ -286,9 +326,6 @@ fn fors_pkfromsig(
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
-    // split live-range of the parameters into two segments
-    pk = pk; sig_fors = sig_fors; md = md; pkseed = pkseed; adrs = adrs;
-
     () = #spill(pk);
     
     // stack variables
@@ -323,8 +360,6 @@ fn fors_pkfromsig(
 
         () = #spill(offset, i, pkseed);
         node0 = __F(node0, pkseed, adrs);
-        // split live-range of the parameters into two segments
-        node0 = node0;
         () = #unspill(offset, i, pkseed);
 
         j = 0; div = 1; // div = 2^j
@@ -362,8 +397,6 @@ fn fors_pkfromsig(
             
             () = #spill(sig_fors, pkseed, adrs, index, offset);
             node1 = __H(node1, pkseed, adrs, buf0, buf1);
-            // split live-range of the parameters into two segments
-            node1 = node1;
             () = #unspill(sig_fors, pkseed, adrs, index, offset);
 
             // node0 = node1
@@ -390,8 +423,26 @@ fn fors_pkfromsig(
 
     () = #unspill(pk);
     pk = __T_k(pk, pkseed, forspkadrs, roots);
+
+    return pk, adrs;
+}
+
+inline
+fn __fors_pkfromsig(
+    reg ptr u8[SPX_N] pk,          // output: compressed FORS public key
+    reg ptr u8[FORS_SIG] sig_fors, // FORS signature
+    reg ptr u8[SPX_MD_LEN] md,     // message digest
+    reg ptr u8[SPX_N] pkseed,      // PK.seed
+    reg ptr u32[8] adrs            // ADRS
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
+{
     // split live-range of the parameters into two segments
-    pk = pk;
+    pk = pk; sig_fors = sig_fors; md = md; pkseed = pkseed; adrs = adrs;
+
+    pk, adrs = fors_pkfromsig(pk, sig_fors, md, pkseed, adrs);
+
+    // split live-range of the output parameters into two segments
+    pk = pk; adrs = adrs;
 
     return pk, adrs;
 }
