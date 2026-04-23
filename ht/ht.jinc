@@ -63,14 +63,10 @@ fn ht_sign(
     adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
     sig_xmss = sig_ht[0 : XMSS_SIG];
-    () = #spill(m, idx_leaf, sig_ht);
     sig_xmss, adrs = __xmss_sign(sig_xmss, m, skseed, idx_leaf, pkseed, adrs);
-    () = #unspill(m, idx_leaf, sig_ht);
     sig_ht[0 : XMSS_SIG] = sig_xmss;
 
-    () = #spill(idx_leaf);
     root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_ht[0 : XMSS_SIG], m, pkseed, adrs);
-    () = #unspill(idx_leaf);
 
     offset = XMSS_SIG;
     reg u32 j = 1;
@@ -82,21 +78,14 @@ fn ht_sign(
         adrs = __adrs_set_layer_addr(adrs, j);
         adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
-        () = #spill(j);
-
         sig_xmss = sig_ht[offset : XMSS_SIG];
-        () = #spill(offset, idx_leaf, sig_ht);
         sig_xmss, adrs = __xmss_sign(sig_xmss, root, skseed, idx_leaf, pkseed, adrs);
-         () = #unspill(offset, idx_leaf, sig_ht);
         sig_ht[offset : XMSS_SIG] = sig_xmss;
 
         for i=0 to SPX_N { root_prev[i] = root[i]; }
 
-        () = #unspill(j);
         if (j < SPX_D-1) {
-            () = #spill(j, offset);
             root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_ht[offset : XMSS_SIG], root_prev, pkseed, adrs);
-            () = #unspill(j, offset);
         }
 
         offset += XMSS_SIG;
@@ -165,17 +154,12 @@ fn ht_verify(
 
         adrs = __adrs_set_layer_addr(adrs, j);
         adrs = __adrs_set_tree_addr(adrs, idx_tree);
-        
-        () = #spill(j);
 
         for i=0 to SPX_N { node_prev[i] = node[i]; }
         
         sig_xmss = sig_ht[offset : XMSS_SIG];
-        () = #spill(offset);
         node, adrs = __xmss_pkfromsig(node, idx_leaf, sig_xmss, node_prev, pkseed, adrs);
-        () = #unspill(offset);
 
-        () = #unspill(j);
         offset += XMSS_SIG;
         j += 1;
     }

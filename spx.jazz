@@ -430,7 +430,7 @@ fn slh_keygen(
     // (and PK.root but that gets overwritten by the computed value of PK.root)
     () = #spill(pk); // resolves error 'pk and sk need to both be allocated to reg RSI due to architectural constraints'
     sk = #randombytes(sk);
-    () = #unspill(pk);
+    () = #unspill(pk); // resolves error 'pk and sk need to both be allocated to reg RSI due to architectural constraints'
 
     sk, pk = __slh_keygen_internal(sk, pk);
 

@@ -40,8 +40,6 @@ fn xmss_node(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
-    () = #spill(root);
-
     // stack buffer with enough place to fit the entire (flattened) XMSS tree
     // note that only those nodes are computed that are needed to find the target node,
     // so not necessarily the entire buffer is filled
@@ -58,8 +56,6 @@ fn xmss_node(
     
     layer = 0;
     while (layer <= z) {
-        () = #spill(z);
-
         // node      = horizontal index   of the leftmost  node in the current layer
         // rightmost = horizontal index+1 of the rightmost node in the current layer
         exp = z; exp -= layer;               // exp       = z-layer
@@ -71,10 +67,7 @@ fn xmss_node(
         rightmost += node;                   // rightmost = (i+1) * 2^(z-layer)
 
         while (node < rightmost) {
-            () = #spill(node, rightmost);
-
             if (layer == 0) {
-                () = #spill(layer);
                 // layer-0 leaf node: the node value is a WOTS+ public key
                 adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
                 adrs = __adrs_set_key_pair_addr(adrs, node); // adrs type is already WOTS_HASH
@@ -82,9 +75,7 @@ fn xmss_node(
                 node_addr = (64u) node; node_addr *= SPX_N;
 
                 flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs);
-                () = #unspill(layer);
             } else { // layer > 0
-                () = #spill(layer);
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
                 lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
@@ -110,21 +101,16 @@ fn xmss_node(
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
                 flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
-                () = #unspill(layer);
             }
 
-            () = #unspill(node, rightmost);
             node += 1;
         }
 
-        () = #unspill(z);
         layer += 1;
     }
 
     label = __tree_label(i, z);
     node_addr = (64u) label; node_addr *= SPX_N;
-
-    () = #unspill(root);
 
     inline int j;
     for j=0 to SPX_N {
@@ -167,7 +153,6 @@ fn xmss_sign(
 {
     reg ptr u8[SPX_N] auth_node;
 
-    () = #spill(m);
     idx = idx; // TODO why does this resolve 'conflicting variables' error?
 
     // compute and store the authentication path AUTH
@@ -175,29 +160,26 @@ fn xmss_sign(
     reg u64 offset = WOTS_SIG;
     j = 0; div = 1; // div = 2^j
     while (j < SPX_H_PRIME) {
+        // () = #spill(skseed, pkseed);
         // (only the least-significant bit is flipped, to get the sibling node)
         k = idx; k /= div;  k ^= 1;   // k = floor(idx / 2^j) xor 1
-        () = #spill(j, k, idx, offset, div);
 
         // WOTS+ signature will be placed in sig_xmss[0 : WOTS_SIG] later
         // AUTH therefore starts at WOTS_SIG, and every AUTH node is SPX_N btes long
         auth_node = sig_xmss[offset : SPX_N];
-        () = #spill(sig_xmss);
         auth_node, adrs = __xmss_node(auth_node, skseed, k, j, pkseed, adrs);
-        () = #unspill(sig_xmss);
         sig_xmss[offset : SPX_N] = auth_node;
 
-        () = #unspill(j, k, idx, offset, div);
         offset += SPX_N;
         div <<= 1;
         j += 1;
+        // () = #unspill(skseed, pkseed);
     }
 
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
     adrs = __adrs_set_key_pair_addr(adrs, idx);
 
     // compute sig_xmss[0 : WOTS_SIG] = wots signature on message m
-    () = #unspill(m);
     sig_xmss[0 : WOTS_SIG], adrs = __wots_sign(sig_xmss[0 : WOTS_SIG], m, skseed, pkseed, adrs);
 
     return sig_xmss, adrs;
@@ -235,15 +217,11 @@ fn xmss_pkfromsig(
     reg ptr u32[8] adrs            // ADRS
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
-    () = #spill(pk);
-
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
     adrs = __adrs_set_key_pair_addr(adrs, idx);
 
     stack u8[SPX_N] node0 node1;
-    () = #spill(idx);
     node0, adrs = __wots_pkfromsig(node0, sig_xmss[0 : WOTS_SIG], m, pkseed, adrs); // wots_sig = sig_xmss[0 : WOTS_SIG]
-    () = #unspill(idx);
 
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
     adrs = __adrs_set_tree_index(adrs, idx);
@@ -263,8 +241,6 @@ fn xmss_pkfromsig(
         check = idx;  // check = idx
         check /= div; // check = idx / 2^k
         check &= 1;   // check = (idx / 2^k) mod 2
-        
-        () = #spill(k, div);
 
         if (check == 0) { // idx/2^k is even
             // tree_index = adrs_get_tree_index(adrs) / 2
@@ -292,20 +268,16 @@ fn xmss_pkfromsig(
             }
         }
         
-        () = #spill(sig_xmss, tree_index, offset);
         node1 = __H(node1, pkseed, adrs, buf0, buf1);
-        () = #unspill(sig_xmss, tree_index, offset);
 
         // node0 = node1
         for i=0 to SPX_N { node0[i] = node1[i]; }
 
-        () = #unspill(k, div);
         div <<= 1;
         offset += SPX_N;
         k += 1;
     }
 
-    () = #unspill(pk);
     for i=0 to SPX_N { pk[i] = node0[i]; }
     return pk, adrs;
 }
