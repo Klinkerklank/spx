@@ -132,7 +132,7 @@ fn xmss_node(
     
     () = #unspill(root);
 
-    for j=0 to 1 {
+    for j=0 to SPX_N {
         root[j] = flat_tree[node_addr + j];
     }
     return root, adrs;
