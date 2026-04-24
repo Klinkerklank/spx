@@ -8,350 +8,9 @@
 #include <stdint.h>
 #include <assert.h>
 
-// uint8_t test_ADRS(uint64_t adrs_addr, uint64_t adrsc_addr);
-
-// uint8_t test_H_msg(uint64_t digest, uint64_t m_addr, uint64_t m_len);
-// uint8_t test_PRF_msg(uint64_t digest, uint64_t m_addr, uint64_t m_len);
-// uint8_t test_PRF(uint64_t digest);
-// uint8_t test_F(uint64_t digest);
-// uint8_t test_H(uint64_t digest);
-// uint8_t test_T_len(uint64_t digest);
-// uint8_t test_T_k(uint64_t digest);
-
-// uint8_t test_wots(uint64_t pk, uint64_t pksig, uint64_t sig);
-// uint8_t test_xmss(uint64_t pk, uint64_t pksig, uint64_t sig);
-// uint8_t test_ht(uint64_t sig);
-// uint8_t test_fors(uint64_t pk, uint64_t pksig, uint64_t sig);
-
-// int ADRS() {
-//     uint32_t adrs[8] = {0};
-//     uint8_t adrsc[22] = {0};
-
-//     uint8_t r = test_ADRS((uint64_t)adrs, (uint64_t)adrsc);
-//     assert(r == 0);
-
-//     printf("ADRS:\n");
-//     for (int i = 0; i < sizeof(adrs)/4; i++) {
-//         printf("%08X", adrs[i]);
-//         if (i == 0) {
-//             printf(" (layer addr)\n");
-//         } else if (i == 1 || i == 2 || i == 3) {
-//             printf(" (tree addr)\n");
-//         } else if (i == 4) {
-//             printf(" (type)\n");
-//         } else if (i == 5) {
-//             printf(" (key pair addr)\n");
-//         } else if (i == 6) {
-//             printf(" (chain addr / tree height)\n");
-//         } else if (i == 7) {
-//             printf(" (hash addr / tree idx)\n");
-//         }
-//     }
-
-//     printf("\n");
-//     printf("ADRS^c:\n");
-//     for (int i = 0; i < sizeof(adrsc); i++) {
-//         if (i == 0) {
-//             printf("      %01X", adrsc[i]);
-//             printf(" (layer addr)\n");
-//         } else if (i == 1 || i == 5) {
-//             printf("%01X%01X%01X%01X", adrsc[i],adrsc[i+1],adrsc[i+2],adrsc[i+3]);
-//             printf(" (tree addr)\n");
-//         } else if (i == 9) {
-//             printf("      %01X", adrsc[i]);
-//             printf(" (type)\n");
-//         } else if (i == 10 || i == 14 || i == 18) {
-//             printf("%01X%01X%01X%01X", adrsc[i],adrsc[i+1],adrsc[i+2],adrsc[i+3]);
-//             printf(" (remainder)\n");
-//         }
-//     }
-//     printf("\n");
-
-//     return 0;
-// }
-
-// int H_msg() {
-//     uint8_t digest[34] = {0};
-
-//     uint8_t input[] = {
-//         0x61, 0x62, 0x63
-//     };
-    
-//     uint8_t r = test_H_msg((uint64_t)digest,(uint64_t)input,(uint64_t)sizeof(input));
-//     assert(r == 0);
-
-
-//     printf("H_msg(");
-//     for (int i = 0; i < sizeof(input); i++) {
-//         printf("%02X", input[i]);
-//         if (i < sizeof(input)-1) {
-//             printf(",");
-//         }
-//     }
-//     printf("):\n");
-//     for (int i = 0; i < sizeof(digest); i++) {
-//         printf("%02X", digest[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int PRF_msg() {
-//     uint8_t digest[16] = {0};
-
-//     uint8_t input[] = {
-//         0x61, 0x62, 0x63
-//     };
-    
-//     uint8_t r = test_PRF_msg((uint64_t)digest,(uint64_t)input,(uint64_t)sizeof(input));
-//     assert(r == 0);
-
-//     printf("PRF_msg(");
-//     for (int i = 0; i < sizeof(input); i++) {
-//         printf("%02X", input[i]);
-//         if (i < sizeof(input)-1) {
-//             printf(",");
-//         }
-//     }
-//     printf("):\n");
-//     for (int i = 0; i < sizeof(digest); i++) {
-//         printf("%02X", digest[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int PRF() {
-//     uint8_t digest[16] = {0};
-//     uint8_t r = test_PRF((uint64_t)digest);
-//     assert(r == 0);
-
-//     printf("PRF:\n");
-//     for (int i = 0; i < sizeof(digest); i++) {
-//         printf("%02X", digest[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int F() {
-//     uint8_t digest[16] = {0};
-//     uint8_t r = test_F((uint64_t)digest);
-//     assert(r == 0);
-
-//     printf("F:\n");
-//     for (int i = 0; i < sizeof(digest); i++) {
-//         printf("%02X", digest[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int H() {
-//     uint8_t digest[16] = {0};
-//     uint8_t r = test_H((uint64_t)digest);
-//     assert(r == 0);
-
-//     printf("H:\n");
-//     for (int i = 0; i < sizeof(digest); i++) {
-//         printf("%02X", digest[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int T_len() {
-//     uint8_t digest[16] = {0};
-//     uint8_t r = test_T_len((uint64_t)digest);
-//     assert(r == 0);
-
-//     printf("T_len:\n");
-//     for (int i = 0; i < sizeof(digest); i++) {
-//         printf("%02X", digest[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int T_k() {
-//     uint8_t digest[16] = {0};
-//     uint8_t r = test_T_k((uint64_t)digest);
-//     assert(r == 0);
-
-//     printf("T_k:\n");
-//     for (int i = 0; i < sizeof(digest); i++) {
-//         printf("%02X", digest[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int wots() {
-//     uint8_t pk[16]    = {0};
-//     uint8_t pksig[16] = {0};
-//     uint8_t sig[560]  = {0};
-//     uint8_t r = test_wots((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
-//     assert(r == 0);
-
-//     printf("WOTS+ public key:\n");
-//     for (int i=0; i < sizeof(pk); i++) {
-//         printf("%02X", pk[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     printf("WOTS+ public key from signature:\n");
-//     for (int i=0; i < sizeof(pksig); i++) {
-//         printf("%02X", pksig[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     printf("WOTS+ signature:\n");
-//     for (int i=0; i < sizeof(sig); i++) {
-//         printf("%02X", sig[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int xmss() {
-//     uint8_t pk[16]    = {0};
-//     uint8_t pksig[16] = {0};
-//     uint8_t sig[704]  = {0};
-//     uint8_t r = test_xmss((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
-//     assert(r == 0);
-
-//     printf("XMSS public key:\n");
-//     for (int i=0; i < sizeof(pk); i++) {
-//         printf("%02X", pk[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     printf("XMSS public key from signature:\n");
-//     for (int i=0; i < sizeof(pksig); i++) {
-//         printf("%02X", pksig[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     printf("XMSS signature:\n");
-//     for (int i=0; i < sizeof(sig); i++) {
-//         printf("%02X", sig[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int ht() {
-//     uint8_t sig[4928]  = {0};
-//     uint8_t r = test_ht((uint64_t)sig);
-
-//     printf("HT signature:\n");
-//     for (int i=0; i < sizeof(sig); i++) {
-//         printf("%02X", sig[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     printf("HT verify result:\n");
-//     if (r == 0) {
-//         printf("PASSED");
-//     } else {
-//         printf("FAILED");
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
-// int fors() {
-//     uint8_t pk[16]    = {0};
-//     uint8_t pksig[16] = {0};
-//     uint8_t sig[2912]  = {0};
-//     uint8_t r = test_fors((uint64_t)pk, (uint64_t)pksig, (uint64_t)sig);
-//     assert(r == 0);
-
-//     printf("FORS public key:\n");
-//     for (int i=0; i < sizeof(pk); i++) {
-//         printf("%02X", pk[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     printf("FORS public key from signature:\n");
-//     for (int i=0; i < sizeof(pksig); i++) {
-//         printf("%02X", pksig[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     printf("FORS signature:\n");
-//     for (int i=0; i < sizeof(sig); i++) {
-//         printf("%02X", sig[i]);
-//         if (i%2 == 1) {
-//             printf(" ");
-//         }
-//     }
-//     printf("\n\n");
-
-//     return 0;
-// }
-
 #define N (16)
-#define SK_LEN (64)
-#define PK_LEN (32)
+#define SK_LEN (4*N)
+#define PK_LEN (2*N)
 #define SIG_LEN (7856)
 
 extern int slh_keygen(uint8_t *sk, uint8_t *pk);
@@ -423,29 +82,32 @@ void verify(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *pk) {
 }
 
 int main() {
-    // ADRS();
+    // uint8_t sk[SK_LEN] = {0};
+    // uint8_t pk[PK_LEN] = {0};
+    // keygen(sk, pk);
 
-    // H_msg();
-    // PRF_msg();
-    // PRF();
-    // F();
-    // H();
-    // T_len();
-    // T_k();
-
-    // wots();
-    // xmss();
-    // ht();
-    // fors();
-
-    uint8_t sk[SK_LEN] = {0};
-    uint8_t pk[PK_LEN] = {0};
-    uint8_t sig[SIG_LEN] = {0};
+    uint8_t sk[SK_LEN] = {
+        0x60, 0x60, 0xDD, 0xFA, 0x90, 0x99, 0xC2, 0xE4, 
+        0x3C, 0x79, 0xB5, 0xF1, 0xF2, 0xA9, 0xCA, 0x5D, 
+        0x50, 0x8E, 0xB2, 0x21, 0x58, 0x95, 0x3E, 0xD8, 
+        0x3F, 0x5F, 0x85, 0x28, 0xE4, 0x53, 0xD3, 0x11, 
+        0x1B, 0xE7, 0xBA, 0x6E, 0x28, 0x46, 0x09, 0x27, 
+        0x3F, 0x7E, 0xFE, 0x3A, 0x4D, 0x32, 0x1E, 0x56, 
+        0x63, 0x7E, 0x2D, 0x50, 0x06, 0xC4, 0x0F, 0x3F, 
+        0xDB, 0x68, 0x24, 0xF8, 0xA6, 0x0C, 0x61, 0xB9
+    };
+    
+    uint8_t pk[PK_LEN] = {
+        0x1B, 0xE7, 0xBA, 0x6E, 0x28, 0x46, 0x09, 0x27, 
+        0x3F, 0x7E, 0xFE, 0x3A, 0x4D, 0x32, 0x1E, 0x56, 
+        0x63, 0x7E, 0x2D, 0x50, 0x06, 0xC4, 0x0F, 0x3F, 
+        0xDB, 0x68, 0x24, 0xF8, 0xA6, 0x0C, 0x61, 0xB9
+    };
 
     const uint8_t msg[] = "SPHINCS+";
     size_t msg_len = sizeof(msg) - 1; // exclude null terminator
 
-    keygen(sk, pk);
+    uint8_t sig[SIG_LEN] = {0};
     sign((uint8_t*)msg, msg_len, sig, sk);
     verify((uint8_t*)msg, msg_len, sig, pk);
 
