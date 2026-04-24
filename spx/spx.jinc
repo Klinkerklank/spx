@@ -179,11 +179,17 @@ fn slh_sign_internal(
     pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, pkseed, adrs);
     () = #unspill(skseed, pkseed, sig_slh, idx_leaf);
 
-    sig_ht = sig_slh[SPX_N + FORS_SIG : HT_SIG];
-    () = #spill(skseed, pkseed, sig_slh);
-    sig_ht = __ht_sign(sig_ht, pk_fors, skseed, pkseed, idx_tree, idx_leaf);
-    () = #unspill(skseed, pkseed, sig_slh);
-    sig_slh[SPX_N + FORS_SIG : HT_SIG] = sig_ht;
+    // TODO TESTING: set sig_slh[SPX_N + FORS_SIG : SPX_N] equal to pk_fors
+    inline int i;
+    for i=0 to SPX_N {
+        sig_slh[SPX_N + FORS_SIG + i] = pk_fors[i];
+    }
+
+    // sig_ht = sig_slh[SPX_N + FORS_SIG : HT_SIG];
+    // () = #spill(skseed, pkseed, sig_slh);
+    // sig_ht = __ht_sign(sig_ht, pk_fors, skseed, pkseed, idx_tree, idx_leaf);
+    // () = #unspill(skseed, pkseed, sig_slh);
+    // sig_slh[SPX_N + FORS_SIG : HT_SIG] = sig_ht;
 
     return sig_slh;
 }
@@ -256,7 +262,18 @@ fn slh_verify_internal(
     pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, pkseed, adrs);
     () = #unspill(pkseed, pkroot, sig_slh, idx_leaf);
 
-    res = __ht_verify(pk_fors, sig_slh[SPX_N + FORS_SIG : HT_SIG], pkseed, idx_tree, idx_leaf, pkroot);
+    // TODO TESTING: check whether sig_slh[SPX_N + FORS_SIG : SPX_N] is equal to pk_fors
+    inline int i;
+    reg u8 comp;
+    res = 0;
+    for i=0 to SPX_N {
+        comp = sig_slh[SPX_N + FORS_SIG + i];
+        if (comp != pk_fors[i]) {
+            res = 1;
+        }
+    }
+
+    // res = __ht_verify(pk_fors, sig_slh[SPX_N + FORS_SIG : HT_SIG], pkseed, idx_tree, idx_leaf, pkroot);
 
     return res;
 }
