@@ -143,8 +143,12 @@ fn fors_node(
 
                 adrs = __adrs_set_tree_height(adrs, layer);
                 adrs = __adrs_set_key_pair_addr(adrs, node);
+                
+                () = #spill(pkseed, adrs, i, layer, node, node_addr);
 
                 flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], pkseed, adrs);
+
+                () = #unspill(pkseed, adrs, i, layer, node, node_addr);
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
@@ -303,13 +307,15 @@ fn __fors_sign(
 // algorithm 17 from SLH-DSS
 // compute a compressed FORS public key from a FORS signature
 fn fors_pkfromsig(
-    reg ptr u8[SPX_N] pk,          // output: compressed FORS public key
+    reg ptr u8[SPX_N] pk_fors,     // output: compressed FORS public key
     reg ptr u8[FORS_SIG] sig_fors, // FORS signature
     reg ptr u8[SPX_MD_LEN] md,     // message digest
     reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs            // ADRS
-) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_fors, adrs
 {
+    () = #spill(pk_fors);
+
     // stack variables
     stack u32[SPX_K] indices;
     stack u32[8] forspkadrs;
@@ -328,6 +334,8 @@ fn fors_pkfromsig(
 
     i = 0; offset = 0; offset_roots = 0;
     while (i < SPX_K) {
+        () = #spill(offset_roots);
+
         sk = sig_fors[offset : SPX_N];
         for k=0 to SPX_N { node0[k] = sk[k]; }
 
@@ -338,7 +346,9 @@ fn fors_pkfromsig(
         index += indices[i]; // index = i*(2^a) + indices[i]
         adrs = __adrs_set_tree_index(adrs, index);
 
+        () = #spill(pkseed, adrs, sig_fors, i, offset);
         node0 = __F(node0, pkseed, adrs);
+        () = #unspill(pkseed, adrs, sig_fors, i, offset);
 
         j = 0; div = 1; // div = 2^j
         while (j < SPX_A) {
@@ -380,6 +390,8 @@ fn fors_pkfromsig(
             offset += SPX_N;
             j += 1;
         }
+
+        () = #unspill(offset_roots);
         
         // roots[i] = node[0]
         for k=0 to SPX_N { roots[offset_roots + k] = node0[k]; }
@@ -393,27 +405,29 @@ fn fors_pkfromsig(
     kpa = __adrs_get_key_pair_addr(adrs);
     forspkadrs = __adrs_set_key_pair_addr(forspkadrs, kpa);
 
-    pk = __T_k(pk, pkseed, forspkadrs, roots);
+    () = #unspill(pk_fors);
 
-    return pk, adrs;
+    pk_fors = __T_k(pk_fors, pkseed, forspkadrs, roots);
+
+    return pk_fors, adrs;
 }
 
 inline
 fn __fors_pkfromsig(
-    reg ptr u8[SPX_N] pk,          // output: compressed FORS public key
+    reg ptr u8[SPX_N] pk_fors,     // output: compressed FORS public key
     reg ptr u8[FORS_SIG] sig_fors, // FORS signature
     reg ptr u8[SPX_MD_LEN] md,     // message digest
     reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs            // ADRS
-) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
+) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_fors, adrs
 {
     // split live-range of the parameters into two segments
-    pk = pk; sig_fors = sig_fors; md = md; pkseed = pkseed; adrs = adrs;
+    pk_fors = pk_fors; sig_fors = sig_fors; md = md; pkseed = pkseed; adrs = adrs;
 
-    pk, adrs = fors_pkfromsig(pk, sig_fors, md, pkseed, adrs);
+    pk_fors, adrs = fors_pkfromsig(pk_fors, sig_fors, md, pkseed, adrs);
 
     // split live-range of the output parameters into two segments
-    pk = pk; adrs = adrs;
+    pk_fors = pk_fors; adrs = adrs;
 
-    return pk, adrs;
+    return pk_fors, adrs;
 }

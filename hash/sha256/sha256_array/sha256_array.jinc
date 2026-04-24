@@ -57,25 +57,19 @@ fn _blocks_0_ref_array(
       for t=16 to 64 { W = __Wt_ref(W, t); }
 
       a, b, c, d, e, f, g, h, H = __load_H_ref(H);
-      () = #spill(a,b,c,d,e,f,g,h);
       Hp = H;
 
       tr = 0;
       while(tr < 64)
       {
-        () = #spill(tr);
-
         //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
-        r   = __BSIG1_ref(e);
         T1  = h;
+        r   = __BSIG1_ref(e);
         T1 += r;
         r   = __CH_ref(e,f,g);
         T1 += r;
-        () = #unspill(tr, Kp);
         T1 += Kp[tr];
-        () = #spill(Kp);
         T1 += W[tr];
-        () = #spill(tr);
         
 
         //T2 = BSIG0(a) + MAJ(a,b,c)
@@ -83,7 +77,6 @@ fn _blocks_0_ref_array(
         r   = __MAJ_ref(a,b,c);
         T2 += r;
 
-        () = #unspill(a,b,c,d,e,f,g,h);
         h  = g;
         g  = f;
         f  = e;
@@ -94,13 +87,10 @@ fn _blocks_0_ref_array(
         b  = a;
         a  = T1;
         a += T2;
-        () = #spill(a,b,c,d,e,f,g,h);
         
-        () = #unspill(tr);
         tr += 1;
       }
 
-      () = #unspill(a,b,c,d,e,f,g,h);
       H = Hp;
       a += H[0];
       b += H[1];
@@ -110,17 +100,14 @@ fn _blocks_0_ref_array(
       f += H[5];
       g += H[6];
       h += H[7];
-      () = #spill(a,b,c,d,e,f,g,h);
 
       H = __store_H_ref(H,a,b,c,d,e,f,g,h);
 
-      () = #unspill(offset, inlen, in);
+      () = #unspill(in, offset, inlen);
       offset += 64;
       inlen -= 64;
     }
   }
-  
-  () = #unspill(Kp);
 
   _H = H;
   

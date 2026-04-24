@@ -88,11 +88,11 @@ fn __slh_keygen_internal(
 
 // algorithm 19 from SLH-DSS
 fn slh_sign_internal(
-    reg ptr u8[SPX_SIG] slh_sig, // out: SPHINCS+ signature
+    reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
     reg u64 m_ptr m_len,         // message pointer and message length
     reg ptr u8[SPX_SKBYTES] sk,  // secret key
     reg ptr u8[SPX_N] addrnd     // additional randomness
-) -> reg ptr u8[SPX_SIG] // -> slh_sig
+) -> reg ptr u8[SPX_SIG] // -> sig_slh
 {
     // stack variables
     stack u32[8] adrs;
@@ -120,11 +120,11 @@ fn slh_sign_internal(
 
     adrs = __adrs_init(adrs);
 
-    // r = slh_sig[0 : SPX_N]
-    slh_sig[0 : SPX_N] = __PRF_msg(slh_sig[0 : SPX_N], skprf, addrnd, m_ptr, m_len);
+    // r = sig_slh[0 : SPX_N]
+    sig_slh[0 : SPX_N] = __PRF_msg(sig_slh[0 : SPX_N], skprf, addrnd, m_ptr, m_len);
 
     m_ptr = m_ptr_copy; m_len = m_len_copy;
-    digest = __H_msg(digest, slh_sig[0 : SPX_N], pkseed, pkroot, m_ptr, m_len);
+    digest = __H_msg(digest, sig_slh[0 : SPX_N], pkseed, pkroot, m_ptr, m_len);
 
     md           = digest[0                             : SPX_MD_LEN      ];
     tmp_idx_tree = digest[SPX_MD_LEN                    : SPX_IDX_TREE_LEN];
@@ -136,46 +136,48 @@ fn slh_sign_internal(
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
     adrs = __adrs_set_key_pair_addr(adrs, idx_leaf);
 
-    sig_fors = slh_sig[SPX_N : FORS_SIG];
-    () = #spill(skseed, pkseed, slh_sig, md, idx_leaf);
+    sig_fors = sig_slh[SPX_N : FORS_SIG];
+    () = #spill(skseed, pkseed, sig_slh, md, idx_leaf);
     sig_fors, adrs = __fors_sign(sig_fors, md, skseed, pkseed, adrs);
-    () = #unspill(skseed, pkseed, slh_sig, md, idx_leaf);
-    slh_sig[SPX_N : FORS_SIG] = sig_fors;
+    () = #unspill(skseed, pkseed, sig_slh, md, idx_leaf);
+    sig_slh[SPX_N : FORS_SIG] = sig_fors;
 
+    () = #spill(skseed, pkseed, sig_slh, idx_leaf);
     pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, pkseed, adrs);
+    () = #unspill(skseed, pkseed, sig_slh, idx_leaf);
 
-    sig_ht = slh_sig[SPX_N + FORS_SIG : HT_SIG];
-    () = #spill(skseed, pkseed, slh_sig);
+    sig_ht = sig_slh[SPX_N + FORS_SIG : HT_SIG];
+    () = #spill(skseed, pkseed, sig_slh);
     sig_ht = __ht_sign(sig_ht, pk_fors, skseed, pkseed, idx_tree, idx_leaf);
-    () = #unspill(skseed, pkseed, slh_sig);
-    slh_sig[SPX_N + FORS_SIG : HT_SIG] = sig_ht;
+    () = #unspill(skseed, pkseed, sig_slh);
+    sig_slh[SPX_N + FORS_SIG : HT_SIG] = sig_ht;
 
-    return slh_sig;
+    return sig_slh;
 }
 
 inline
 fn __slh_sign_internal(
-    reg ptr u8[SPX_SIG] slh_sig, // out: SPHINCS+ signature
+    reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
     reg u64 m_ptr m_len,         // message pointer and message length
     reg ptr u8[SPX_SKBYTES] sk,  // secret key
     reg ptr u8[SPX_N] addrnd     // additional randomness
-) -> reg ptr u8[SPX_SIG] // -> slh_sig
+) -> reg ptr u8[SPX_SIG] // -> sig_slh
 {
     // split live-range of the input parameters into two segments
-    slh_sig = slh_sig; m_ptr = m_ptr; m_len = m_len; sk = sk; addrnd = addrnd;
+    sig_slh = sig_slh; m_ptr = m_ptr; m_len = m_len; sk = sk; addrnd = addrnd;
 
-    slh_sig = slh_sign_internal(slh_sig, m_ptr, m_len, sk, addrnd);
+    sig_slh = slh_sign_internal(sig_slh, m_ptr, m_len, sk, addrnd);
 
     // split live-range of the output parameters into two segments
-    slh_sig = slh_sig;
+    sig_slh = sig_slh;
 
-    return slh_sig;
+    return sig_slh;
 }
 
 // algorithm 20 from SLH-DSS
 fn slh_verify_internal(
     reg u64 m_ptr m_len,         // message pointer and message length
-    reg ptr u8[SPX_SIG] slh_sig, // SPHINCS+ signature
+    reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
     reg ptr u8[SPX_PKBYTES] pk   // public key
 ) -> reg u64 // -> res
 {
@@ -187,6 +189,7 @@ fn slh_verify_internal(
 
     // reg variables
     reg ptr u8[SPX_N] pkseed pkroot;
+    reg ptr u8[FORS_SIG] sig_fors;
     reg ptr u8[SPX_MD_LEN] md;                 // ceil((SPX_K * SPX_A) / 8)
     reg ptr u8[SPX_IDX_TREE_LEN] tmp_idx_tree; // ceil((SPX_H - SPX_H_PRIME) / 8)
     reg ptr u8[SPX_IDX_LEAF_LEN] tmp_idx_leaf; // ceil((SPX_H_PRIME) / 8)
@@ -199,7 +202,7 @@ fn slh_verify_internal(
 
     adrs = __adrs_init(adrs);
 
-    digest = __H_msg(digest, slh_sig[0 : SPX_N], pkseed, pkroot, m_ptr, m_len);
+    digest = __H_msg(digest, sig_slh[0 : SPX_N], pkseed, pkroot, m_ptr, m_len);
 
     md           = digest[0                             : SPX_MD_LEN      ];
     tmp_idx_tree = digest[SPX_MD_LEN                    : SPX_IDX_TREE_LEN];
@@ -211,9 +214,12 @@ fn slh_verify_internal(
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
     adrs = __adrs_set_key_pair_addr(adrs, idx_leaf);
 
-    pk_fors, adrs = __fors_pkfromsig(pk_fors, slh_sig[SPX_N : FORS_SIG], md, pkseed, adrs);
+    sig_fors = sig_slh[SPX_N : FORS_SIG];
+    () = #spill(pkseed, pkroot, sig_slh, idx_leaf);
+    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, pkseed, adrs);
+    () = #unspill(pkseed, pkroot, sig_slh, idx_leaf);
 
-    res = __ht_verify(pk_fors, slh_sig[SPX_N + FORS_SIG : HT_SIG], pkseed, idx_tree, idx_leaf, pkroot);
+    res = __ht_verify(pk_fors, sig_slh[SPX_N + FORS_SIG : HT_SIG], pkseed, idx_tree, idx_leaf, pkroot);
 
     return res;
 }
@@ -221,15 +227,15 @@ fn slh_verify_internal(
 inline
 fn __slh_verify_internal(
     reg u64 m_ptr m_len,         // message pointer and message length
-    reg ptr u8[SPX_SIG] slh_sig, // SPHINCS+ signature
+    reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
     reg ptr u8[SPX_PKBYTES] pk   // public key
 ) -> reg u64 // -> res
 {
     // split live-range of the input parameters into two segments
-    m_ptr = m_ptr; m_len = m_len; slh_sig = slh_sig; pk = pk;
+    m_ptr = m_ptr; m_len = m_len; sig_slh = sig_slh; pk = pk;
 
     reg u64 res;
-    res = slh_verify_internal(m_ptr, m_len, slh_sig, pk);
+    res = slh_verify_internal(m_ptr, m_len, sig_slh, pk);
 
     // split live-range of the output parameters into two segments
     res = res;
