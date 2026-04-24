@@ -16,6 +16,7 @@ fn __ht_update_idx(
 
     // idx_leaf = idx_tree mod 2^h':
     // just taking idx_leaf = idx_tree[2] % 2^SPX_H_PRIME is fine only if SPX_H_PRIME <= 32
+    // (which is the case in all approved parameter sets in the SLH-DSS)
     idx_leaf = idx_tree[2];
     idx_leaf &= (1 << SPX_H_PRIME) - 1;
 
@@ -104,9 +105,7 @@ fn ht_sign(
 
         if (j < SPX_D-1) {
             () = #spill(pkseed, sig_ht, j, offset);
-
             root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, root_prev, pkseed, adrs);
-
             () = #unspill(pkseed, sig_ht, j, offset);
         }
         

@@ -57,17 +57,19 @@ void keygen(uint8_t *sk, uint8_t *pk) {
 }
 
 void sign(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *sk) {
+    printf("Message to sign:\n%s\n\n", msg);
+    
     int r = slh_sign(sig, (uint64_t)msg, (uint64_t)msg_len, sk);
     assert(r == 0);
 
-    printf("SPHINCS+ signature:\n");
-    for (int i=0; i < SIG_LEN; i++) {
-        printf("%02X", sig[i]);
-        if (i%2 == 1) {
-            printf(" ");
-        }
-    }
-    printf("\n\n");
+    // printf("SPHINCS+ signature:\n");
+    // for (int i=0; i < SIG_LEN; i++) {
+    //     printf("%02X", sig[i]);
+    //     if (i%2 == 1) {
+    //         printf(" ");
+    //     }
+    // }
+    // printf("\n\n");
 }
 
 void verify(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *pk) {
@@ -103,12 +105,14 @@ int main() {
         0x63, 0x7E, 0x2D, 0x50, 0x06, 0xC4, 0x0F, 0x3F, 
         0xDB, 0x68, 0x24, 0xF8, 0xA6, 0x0C, 0x61, 0xB9
     };
+    
+    uint8_t sig[SIG_LEN] = {0};
 
-    const uint8_t msg[] = "SPHINCS+";
+    uint8_t msg[] = "SPHINCS+";
     size_t msg_len = sizeof(msg) - 1; // exclude null terminator
 
-    uint8_t sig[SIG_LEN] = {0};
     sign((uint8_t*)msg, msg_len, sig, sk);
+
     verify((uint8_t*)msg, msg_len, sig, pk);
 
     return 0;
