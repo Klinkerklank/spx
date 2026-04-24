@@ -2,29 +2,36 @@
 // |                       helper functions                       |
 // +--------------------------------------------------------------+
 
+// update indices:
+// -> idx_leaf = idx_tree mod 2^h'
+// -> idx_tree >>= SPX_H_PRIME;
 inline
 fn __ht_update_idx(
     reg u32        idx_leaf,
     reg ptr u32[3] idx_tree
 ) -> reg u32, reg ptr u32[3] // -> idx_leaf, idx_tree
 {
-    // idx_leaf = idx_tree mod 2^h'
-    // idx_leaf always fits in one 32-bit word, so we only need idx_tree[2]
+    // register variables
+    reg u32 high;
+
+    // idx_leaf = idx_tree mod 2^h':
+    // just taking idx_leaf = idx_tree[2] % 2^SPX_H_PRIME is fine only if SPX_H_PRIME <= 32
     idx_leaf = idx_tree[2];
     idx_leaf &= (1 << SPX_H_PRIME) - 1;
 
-    // idx_tree >>= SPX_H_PRIME;
-    reg u32 high;
+    // idx_tree >>= SPX_H_PRIME, one byte at a time:
     // compute idx_tree[2]
     idx_tree[2] >>= SPX_H_PRIME;
     high = idx_tree[1];
     high <<= 32-SPX_H_PRIME;
     idx_tree[2] |= high;
+
     // compute idx_tree[1]
     idx_tree[1] >>= SPX_H_PRIME;
     high = idx_tree[0];
     high <<= 32-SPX_H_PRIME;
     idx_tree[1] |= high;
+
     // compute idx_tree[0]
     idx_tree[0] >>= SPX_H_PRIME;
     
@@ -79,8 +86,9 @@ fn ht_sign(
     while (j < SPX_D) {
         () = #spill(skseed);
 
-        // idx_leaf = idx_tree mod 2^h'
-        // idx_tree >>= SPX_H_PRIME; // TODO why was this here uncommented?
+        // update indices:
+        // -> idx_leaf = idx_tree mod 2^h'
+        // -> idx_tree >>= SPX_H_PRIME;
         idx_leaf, idx_tree = __ht_update_idx(idx_leaf, idx_tree);
 
         adrs = __adrs_set_layer_addr(adrs, j);

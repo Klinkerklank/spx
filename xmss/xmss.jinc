@@ -7,20 +7,22 @@ inline
 fn __tree_label(
     reg u32 i, // node's horizontal index
     reg u32 z  // node's height
-) -> reg u32 { // -> pos
-    reg u32 pos; // array position
+) -> reg u64 { // -> pos
     reg u32 exp; // exponent
     reg u64 pow; // power = 2^exp
+    reg u64 pos; // array position
+    reg u64 i_64;
 
     exp = SPX_H_PRIME+1; // exp = h' + 1
     pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(h'+1)
-    pos = (32u) pow;     // pos = 2^(h'+1)
+    pos = pow;           // pos = 2^(h'+1)
 
     exp -= z;            // exp = h' + 1 - z
     pow = 1; _, _, _, _, _, pow = #SHL(pow, exp); // pow = 2^(h'+1-z)
     pos -= pow;          // pos = 2^(h'+1) - 2^(h'+1-z)
 
-    pos += i;            // pos = 2^(h'+1) - 2^(h'+1-z) + i
+    i_64 = (64u) i;
+    pos += i_64;         // pos = 2^(h'+1) - 2^(h'+1-z) + i
 
     return pos;
 }
@@ -58,7 +60,7 @@ fn xmss_node(
     reg u32 exp;
     reg u64 lnode rnode;
     reg u32 lnode_i lnode_z;
-    reg u32 label;
+    reg u64 label;
     
     inline int j;
     
@@ -130,7 +132,7 @@ fn xmss_node(
     
     () = #unspill(root);
 
-    for j=0 to SPX_N {
+    for j=0 to 1 {
         root[j] = flat_tree[node_addr + j];
     }
     return root, adrs;
@@ -180,7 +182,7 @@ fn xmss_sign(
     j = 0; div = 1; // div = 2^j
     while (j < SPX_H_PRIME) {
         // (only the least-significant bit is flipped, to get the sibling node)
-        k = idx; k /= div;  k ^= 1; // k = floor(idx / 2^j) xor 1
+        k = idx; k /= div; k ^= 1; // k = floor(idx / 2^j) xor 1
         
         () = #spill(skseed, pkseed, idx, j, k, div, offset); // free up space in the registers
 
@@ -204,7 +206,6 @@ fn xmss_sign(
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
     adrs = __adrs_set_key_pair_addr(adrs, idx);
 
-    // compute sig_xmss[0 : WOTS_SIG] = wots signature on message m
     sig_wots = sig_xmss[0 : WOTS_SIG];
     () = #spill(sig_xmss);
     sig_wots, adrs = __wots_sign(sig_wots, m, skseed, pkseed, adrs);
@@ -278,7 +279,7 @@ fn xmss_pkfromsig(
         height = k; height += 1;
         adrs = __adrs_set_tree_height(adrs, height);
 
-        check = idx;  // check = idx
+        check  = idx; // check = idx
         check /= div; // check = idx / 2^k
         check &= 1;   // check = (idx / 2^k) mod 2
 

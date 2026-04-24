@@ -8,9 +8,11 @@ fn __indices_to_regs(
     reg ptr u8[SPX_IDX_LEAF_LEN] tmp_idx_leaf
 ) -> stack u32[3], reg u32 // -> idx_tree, idx_leaf
 {
-    // register variables
+    // stack variables
     stack u32[3] idx_tree;
-    reg u32      idx_leaf;
+
+    // register variables
+    reg u32 idx_leaf;
     reg u32 byte;
 
     inline int i j;
@@ -23,12 +25,27 @@ fn __indices_to_regs(
         idx_tree[j] += byte;
     }
 
+    // mod 2^(h-h')
+    if (SPX_H-SPX_H_PRIME <= 32) {
+        idx_tree[0] = 0;
+        idx_tree[1] = 0;
+        idx_tree[2] &= (1 << (SPX_H-SPX_H_PRIME)) - 1;
+    } else if (SPX_H-SPX_H_PRIME <= 64) {
+        idx_tree[0] = 0;
+        idx_tree[1] &= (1 << (SPX_H-SPX_H_PRIME-32)) - 1;
+    } else { // SPX_H-SPX_H_PRIME <= 96
+        idx_tree[0] &= (1 << (SPX_H-SPX_H_PRIME-64)) - 1;
+    }
+
     idx_leaf = 0;
     for i=0 to SPX_IDX_LEAF_LEN {
         idx_leaf <<= 8;
         byte = (32u) tmp_idx_leaf[i];
         idx_leaf += byte;
     }
+
+    // mod 2^(h')
+    idx_leaf &= (1 << SPX_H_PRIME) - 1;
 
     return idx_tree, idx_leaf;
 }
@@ -149,7 +166,7 @@ fn slh_sign_internal(
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
     adrs = __adrs_set_key_pair_addr(adrs, idx_leaf);
     
-    // // separate SK.seed from the overall secret key
+    // separate SK.seed from the overall secret key
     skseed = sk[0*SPX_N : SPX_N];
 
     sig_fors = sig_slh[SPX_N : FORS_SIG];
