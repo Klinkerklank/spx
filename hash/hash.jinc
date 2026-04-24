@@ -18,6 +18,8 @@ fn H_msg(
     reg u64 m_len             // message length
 ) -> reg ptr u8[SPX_M] // -> out
 {
+    () = #spill(out);
+
     inline int i;
     stack u8[SHA_MGF1_PREFIX] buf;         // buffer for inner hash call
     stack u8[2*SPX_N + SHAX_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
@@ -59,6 +61,8 @@ fn H_msg(
         concat[count*SHAX_OUT : SHAX_OUT] = sha256_mgf1_seed::__sha256(concat[count*SHAX_OUT : SHAX_OUT], seed);
     }
     
+    () = #unspill(out);
+    
     // truncate the concatenated hash outputs to the correct length by copying only the first SPX_M bytes
     for i=0 to SPX_M { out[i] = concat[i]; }
     return out;
@@ -97,6 +101,8 @@ fn PRF_msg(
     reg u64 m_len              // message length
 ) -> reg ptr u8[SPX_N] // -> out
 {
+    () = #spill(out);
+
     stack u8[SHAX_IN] key;             // buffer for the key
     stack u8[SHA_HMAC_PREFIX] ibuf;    // buffer for inner hash call
     stack u8[SHAX_IN + SHAX_OUT] obuf; // buffer for outer hash call
@@ -136,6 +142,8 @@ fn PRF_msg(
     // compute hmac = shaX((key xor opad) || inner)
     stack u8[SHAX_OUT] hmac;
     hmac = sha256_hmac_outer::__sha256(hmac, obuf);
+
+    () = #unspill(out);
 
     // truncate hmac to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = hmac[i]; }
@@ -297,6 +305,8 @@ fn H(
     reg ptr u8[SPX_N] in2     // second part of the concatenation
 ) -> reg ptr u8[SPX_N] // -> out
 {
+    () = #spill(out);
+
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_2     (for sha2-128)
     //     = SPX_N    + (64-SPX_N)      + 22      + 2*SPX_N (for sha2-128)
@@ -322,6 +332,8 @@ fn H(
     // compute digest = shaX(PK.seed || zero-padding || ADRS^c || M_2)
     stack u8[SHAX_OUT] digest;
     digest = sha256_tl_2n::__sha256(digest, buf);
+
+    () = #unspill(out);
 
     // truncate the digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
@@ -359,6 +371,8 @@ fn T_len(
     reg ptr u8[SPX_LEN*SPX_N] chains // concatenation of all chain end values in a WOTS instance
 ) -> reg ptr u8[SPX_N] // -> out
 {
+    () = #spill(out);
+
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_len         (for sha2-128)
     //     = SPX_N    + (64-SPX_N)      + 22      + SPX_LEN*SPX_N (for sha2-128)
@@ -383,6 +397,8 @@ fn T_len(
     // compute digest = shaX(PK.seed || zero-padding || ADRS^c || M_len)
     stack u8[SHAX_OUT] digest;
     digest = sha256_compress_wots::__sha256(digest, buf);
+
+    () = #unspill(out);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }
@@ -419,6 +435,8 @@ fn T_k(
     reg ptr u8[SPX_K*SPX_N] roots // concatenation of all roots in a FORS forest
 ) -> reg ptr u8[SPX_N] // -> out
 {
+    () = #spill(out);
+
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_k         (for sha2-128)
     //     = SPX_N    + (64-SPX_N)      + 22      + SPX_K*SPX_N (for sha2-128)
@@ -443,6 +461,8 @@ fn T_k(
     // compute digest = shaX(PK.seed || zero-padding || ADRS^c || M_k)
     stack u8[SHAX_OUT] digest;
     digest = sha256_compress_fors::__sha256(digest, buf);
+
+    () = #unspill(out);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
     for i=0 to SPX_N { out[i] = digest[i]; }

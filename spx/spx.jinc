@@ -102,6 +102,7 @@ fn slh_sign_internal(
 
     // reg variables
     reg ptr u8[SPX_N] skseed skprf pkseed pkroot;
+    reg ptr u8[SPX_N] r;
     reg ptr u8[HT_SIG] sig_ht;
     reg ptr u8[FORS_SIG] sig_fors;
     reg ptr u8[SPX_MD_LEN] md;                 // ceil((SPX_K * SPX_A) / 8)
@@ -110,21 +111,30 @@ fn slh_sign_internal(
     reg u32 idx_leaf;
     reg u64 m_ptr_copy m_len_copy;
     
-    // separate the secret key parts from the overall secret key
-    skseed = sk[0*SPX_N : SPX_N];
-    skprf  = sk[1*SPX_N : SPX_N];
-    pkseed = sk[2*SPX_N : SPX_N];
-    pkroot = sk[3*SPX_N : SPX_N];
-
-    m_ptr_copy = m_ptr; m_len_copy = m_len;
+    // separate SK.prf from the overall secret key
+    skprf = sk[1*SPX_N : SPX_N];
 
     adrs = __adrs_init(adrs);
 
-    // r = sig_slh[0 : SPX_N]
-    sig_slh[0 : SPX_N] = __PRF_msg(sig_slh[0 : SPX_N], skprf, addrnd, m_ptr, m_len);
+    m_ptr_copy = m_ptr; m_len_copy = m_len;
+    () = #spill(m_ptr_copy, m_len_copy);
 
+    r = sig_slh[0 : SPX_N];
+    () = #spill(sig_slh, sk);
+    r = __PRF_msg(r, skprf, addrnd, m_ptr, m_len);
+    () = #unspill(sig_slh, sk);
+    sig_slh[0 : SPX_N] = r;
+
+    () = #unspill(m_ptr_copy, m_len_copy);
     m_ptr = m_ptr_copy; m_len = m_len_copy;
-    digest = __H_msg(digest, sig_slh[0 : SPX_N], pkseed, pkroot, m_ptr, m_len);
+    
+    // separate PK.seed and PK.root from the overall secret key
+    pkseed = sk[2*SPX_N : SPX_N];
+    pkroot = sk[3*SPX_N : SPX_N];
+
+    () = #spill(pkseed, sig_slh, sk);
+    digest = __H_msg(digest, r, pkseed, pkroot, m_ptr, m_len);
+    () = #unspill(pkseed, sig_slh, sk);
 
     md           = digest[0                             : SPX_MD_LEN      ];
     tmp_idx_tree = digest[SPX_MD_LEN                    : SPX_IDX_TREE_LEN];
@@ -135,6 +145,9 @@ fn slh_sign_internal(
     adrs = __adrs_set_tree_addr(adrs, idx_tree);
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
     adrs = __adrs_set_key_pair_addr(adrs, idx_leaf);
+    
+    // separate SK.seed from the overall secret key
+    skseed = sk[0*SPX_N : SPX_N];
 
     sig_fors = sig_slh[SPX_N : FORS_SIG];
     () = #spill(skseed, pkseed, sig_slh, md, idx_leaf);
@@ -189,6 +202,7 @@ fn slh_verify_internal(
 
     // reg variables
     reg ptr u8[SPX_N] pkseed pkroot;
+    reg ptr u8[SPX_N] r;
     reg ptr u8[FORS_SIG] sig_fors;
     reg ptr u8[SPX_MD_LEN] md;                 // ceil((SPX_K * SPX_A) / 8)
     reg ptr u8[SPX_IDX_TREE_LEN] tmp_idx_tree; // ceil((SPX_H - SPX_H_PRIME) / 8)
@@ -202,7 +216,10 @@ fn slh_verify_internal(
 
     adrs = __adrs_init(adrs);
 
+    r = sig_slh[0 : SPX_N];
+    () = #spill(pkseed, pkroot, sig_slh);
     digest = __H_msg(digest, sig_slh[0 : SPX_N], pkseed, pkroot, m_ptr, m_len);
+    () = #unspill(pkseed, pkroot, sig_slh);
 
     md           = digest[0                             : SPX_MD_LEN      ];
     tmp_idx_tree = digest[SPX_MD_LEN                    : SPX_IDX_TREE_LEN];

@@ -109,7 +109,9 @@ fn xmss_node(
                 node_addr = (64u) label; node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
+                () = #spill(adrs);
                 flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
+                () = #unspill(adrs);
             }
 
             () = #unspill(skseed, pkseed, i, layer, node, rightmost);
@@ -278,6 +280,8 @@ fn xmss_pkfromsig(
         check /= div; // check = idx / 2^k
         check &= 1;   // check = (idx / 2^k) mod 2
 
+        () = #spill(k, div);
+
         if (check == 0) { // idx/2^k is even
             // tree_index = adrs_get_tree_index(adrs) / 2
             tree_index = __adrs_get_tree_index(adrs);
@@ -304,10 +308,14 @@ fn xmss_pkfromsig(
             }
         }
         
+        () = #spill(pkseed, adrs, idx, sig_xmss, offset);
         node1 = __H(node1, pkseed, adrs, buf0, buf1);
+        () = #unspill(pkseed, adrs, idx, sig_xmss, offset);
 
         // node0 = node1
         for i=0 to SPX_N { node0[i] = node1[i]; }
+        
+        () = #unspill(k, div);
 
         div <<= 1;
         offset += SPX_N;

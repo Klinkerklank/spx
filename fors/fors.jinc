@@ -136,18 +136,14 @@ fn fors_node(
                 node_addr = (64u) label; node_addr *= SPX_N;
                 
                 () = #spill(pkseed, adrs, i, layer, node, node_addr);
-
                 flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node);
-
                 () = #unspill(pkseed, adrs, i, layer, node, node_addr);
 
                 adrs = __adrs_set_tree_height(adrs, layer);
                 adrs = __adrs_set_key_pair_addr(adrs, node);
                 
                 () = #spill(pkseed, adrs, i, layer, node, node_addr);
-
                 flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], pkseed, adrs);
-
                 () = #unspill(pkseed, adrs, i, layer, node, node_addr);
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
@@ -171,7 +167,9 @@ fn fors_node(
                 node_addr = (64u) label; node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
+                () = #spill(pkseed, adrs, i, layer, node);
                 flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
+                () = #unspill(pkseed, adrs, i, layer, node);
             }
             
             () = #unspill(skseed, rightmost);
@@ -358,6 +356,8 @@ fn fors_pkfromsig(
             check = indices[i]; // check = indices[i]
             check /= div;       // check = floor(indices[i] / 2^j)
             check &= 1;         // check = floor(indices[i] / 2^j) mod 2
+            
+            () = #spill(j, div);
 
             if (check == 0) { // floor(indices[i] / 2^j) is even
                 // index = adrs_get_tree_index(adrs) / 2
@@ -381,10 +381,14 @@ fn fors_pkfromsig(
                 }
             }
             
+            () = #spill(pkseed, adrs, sig_fors, i, offset);
             node1 = __H(node1, pkseed, adrs, buf0, buf1);
+            () = #unspill(pkseed, adrs, sig_fors, i, offset);
 
             // node0 = node1
             for k=0 to SPX_N { node0[k] = node1[k]; }
+
+            () = #unspill(j, div);
 
             div <<= 1;
             offset += SPX_N;

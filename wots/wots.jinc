@@ -199,7 +199,10 @@ fn wots_pkgen(
     
     () = #unspill(pk);
     
+    () = #spill(adrs);
     pk = __T_len(pk, pkseed, adrs_key, tmp);
+    () = #unspill(adrs);
+
     return pk, adrs;
 }
 
@@ -381,7 +384,9 @@ fn wots_pkfromsig(
 
     () = #unspill(pk_wots);
     
+    () = #spill(adrs);
     pk_wots = __T_len(pk_wots, pkseed, wotspkADRS, sigvals);
+    () = #unspill(adrs);
     
     return pk_wots, adrs;
 }
