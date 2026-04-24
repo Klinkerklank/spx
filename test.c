@@ -8,11 +8,6 @@
 #include <stdint.h>
 #include <assert.h>
 
-#define N (16)
-#define SK_LEN (4*N)
-#define PK_LEN (2*N)
-#define SIG_LEN (7856)
-
 // uint8_t test_ADRS(uint64_t adrs_addr, uint64_t adrsc_addr);
 
 // uint8_t test_H_msg(uint64_t digest, uint64_t m_addr, uint64_t m_len);
@@ -27,10 +22,6 @@
 // uint8_t test_xmss(uint64_t pk, uint64_t pksig, uint64_t sig);
 // uint8_t test_ht(uint64_t sig);
 // uint8_t test_fors(uint64_t pk, uint64_t pksig, uint64_t sig);
-
-extern int slh_keygen(uint8_t *sk, uint8_t *pk);
-extern int slh_sign(uint8_t *sig, uint64_t m_addr, uint64_t m_len, uint8_t *sk);
-extern int slh_verify(uint64_t m_addr, uint64_t m_len, uint8_t *sig, uint8_t *pk);
 
 // int ADRS() {
 //     uint32_t adrs[8] = {0};
@@ -358,6 +349,15 @@ extern int slh_verify(uint64_t m_addr, uint64_t m_len, uint8_t *sig, uint8_t *pk
 //     return 0;
 // }
 
+#define N (16)
+#define SK_LEN (64)
+#define PK_LEN (32)
+#define SIG_LEN (7856)
+
+extern int slh_keygen(uint8_t *sk, uint8_t *pk);
+extern int slh_sign(uint8_t *sig, uint64_t m_addr, uint64_t m_len, uint8_t *sk);
+extern int slh_verify(uint64_t m_addr, uint64_t m_len, uint8_t *sig, uint8_t *pk);
+
 void keygen(uint8_t *sk, uint8_t *pk) {
     int r = slh_keygen(sk, pk);
     assert(r == 0);
@@ -400,6 +400,15 @@ void keygen(uint8_t *sk, uint8_t *pk) {
 void sign(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *sk) {
     int r = slh_sign(sig, (uint64_t)msg, (uint64_t)msg_len, sk);
     assert(r == 0);
+
+    printf("SPHINCS+ signature:\n");
+    for (int i=0; i < SIG_LEN; i++) {
+        printf("%02X", sig[i]);
+        if (i%2 == 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
 }
 
 void verify(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *pk) {

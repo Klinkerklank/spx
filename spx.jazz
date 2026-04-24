@@ -291,20 +291,20 @@ require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 
 //   reg u32 i = 0, z = SPX_H_PRIME;
   
-//   pk, adrs = xmss_node(pk, skseed, i, z, pkseed, adrs);
+//   pk, adrs = __xmss_node(pk, skseed, i, z, pkseed, adrs);
 //   () = #unspill(pk_addr);
 //   for j=0 to SPX_N { [:u8 pk_addr + j] = pk[j]; }
 
 //   reg u32 idx = 0;
 //   () = #spill(idx);
 
-//   sig, adrs = xmss_sign(sig, m, skseed, idx, pkseed, adrs);
+//   sig, adrs = __xmss_sign(sig, m, skseed, idx, pkseed, adrs);
 //   () = #unspill(sig_addr);
 //   for j=0 to XMSS_SIG { [:u8 sig_addr + j] = sig[j]; }
 
 //   () = #unspill(idx);
 
-//   pksig, adrs = xmss_pkfromsig(pksig, idx, sig, m, pkseed, adrs);
+//   pksig, adrs = __xmss_pkfromsig(pksig, idx, sig, m, pkseed, adrs);
 //   () = #unspill(pksig_addr);
 //   for j=0 to SPX_N { [:u8 pksig_addr + j] = pksig[j]; }
 
@@ -314,7 +314,7 @@ require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 // }
 
 // export
-// fn test_ht(reg u64 sig_addr) -> reg u8 {
+// fn test_ht(reg u64 sig_addr) -> reg u64 {
 //   () = #spill(sig_addr);
 
 //   stack u8[HT_SIG] sig;
@@ -333,24 +333,24 @@ require "spx/spx.jinc"   // algorithms 18-23 of SLH-DSS
 //     m[j] = 0x00;
 //   }
 //   for j=0 to 8 { adrs[j] = 0x00000000; }
-//   adrs = adrs_set_layer_addr(adrs, SPX_D - 1);
+//   adrs = __adrs_set_layer_addr(adrs, SPX_D - 1);
 
 //   reg u32 i = 0, z = SPX_H_PRIME;
-//   pkroot, adrs = xmss_node(pkroot, skseed, i, z, pkseed, adrs);
+//   pkroot, adrs = __xmss_node(pkroot, skseed, i, z, pkseed, adrs);
 
 //   stack u32[3] idx_tree; reg u32 idx_leaf;
 //   idx_tree[0] = 0; idx_tree[1] = 0; idx_tree[2] = 0; idx_leaf = 0;
 
 //   () = #spill(idx_leaf);
-//   sig = ht_sign(sig, m, skseed, pkseed, idx_tree, idx_leaf);
+//   sig = __ht_sign(sig, m, skseed, pkseed, idx_tree, idx_leaf);
 //   () = #unspill(idx_leaf);
 
 //   () = #unspill(sig_addr);
 //   for j=0 to HT_SIG { [:u8 sig_addr + j] = sig[j]; }
   
 //   for j=0 to SPX_N { m[j] = 0x00; }
-//   reg u8 r;
-//   r = ht_verify(m, sig, pkseed, idx_tree, idx_leaf, pkroot);
+//   reg u64 r;
+// //   r = __ht_verify(m, sig, pkseed, idx_tree, idx_leaf, pkroot);
 //   return r;
 // }
 
@@ -443,10 +443,10 @@ fn slh_keygen(
 // algorithm 22 from SLH-DSS
 export
 fn slh_sign(
-    reg ptr u8[SPX_SIG] sig,   // SPHINCS+ signature
-    reg u64 m_ptr m_len,       // message pointer and message length
-    reg ptr u8[SPX_SKBYTES] sk // secret key
-) -> reg ptr u8[SPX_SIG], reg u64 // -> sig, res
+    reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
+    reg u64 m_ptr m_len,         // message pointer and message length
+    reg ptr u8[SPX_SKBYTES] sk   // secret key
+) -> reg ptr u8[SPX_SIG], reg u64 // -> sig_slh, res
 {
     // stack variables
     stack u8[SPX_N] addrnd;
@@ -455,12 +455,12 @@ fn slh_sign(
 
     for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } // deterministic variant
 
-    sig = __slh_sign_internal(sig, m_ptr, m_len, sk, addrnd);
+    sig_slh = __slh_sign_internal(sig_slh, m_ptr, m_len, sk, addrnd);
 
     // set return value to 0
     reg u64 res; ?{}, res = #set0();
 
-    return sig, res;
+    return sig_slh, res;
 }
 
 // algorithm 24 from SLH-DSS

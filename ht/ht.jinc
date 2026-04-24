@@ -80,7 +80,7 @@ fn ht_sign(
         () = #spill(skseed);
 
         // idx_leaf = idx_tree mod 2^h'
-        // idx_tree >>= SPX_H_PRIME;
+        // idx_tree >>= SPX_H_PRIME; // TODO why was this here uncommented?
         idx_leaf, idx_tree = __ht_update_idx(idx_leaf, idx_tree);
 
         adrs = __adrs_set_layer_addr(adrs, j);
@@ -97,7 +97,6 @@ fn ht_sign(
         if (j < SPX_D-1) {
             () = #spill(pkseed, sig_ht, j, offset);
 
-            sig_xmss = sig_ht[offset : XMSS_SIG];
             root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, root_prev, pkseed, adrs);
 
             () = #unspill(pkseed, sig_ht, j, offset);

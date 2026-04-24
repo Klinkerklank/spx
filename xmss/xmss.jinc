@@ -54,7 +54,8 @@ fn xmss_node(
     reg u32 layer; // equivalent to z
     reg u64 node_addr; // byte address of 'node' in the buffer
     reg u32 rightmost;
-    reg u64 pow; reg u32 exp;
+    reg u64 pow;
+    reg u32 exp;
     reg u64 lnode rnode;
     reg u32 lnode_i lnode_z;
     reg u32 label;
@@ -169,12 +170,13 @@ fn xmss_sign(
 {
     () = #spill(m);
 
+    // register variables
     reg ptr u8[SPX_N] auth_node;
     reg ptr u8[WOTS_SIG] sig_wots;
-
-    // compute and store the authentication path AUTH
     reg u32 j k div;
     reg u64 offset = WOTS_SIG;
+
+    // compute and store the authentication path AUTH
     j = 0; div = 1; // div = 2^j
     while (j < SPX_H_PRIME) {
         // (only the least-significant bit is flipped, to get the sibling node)
