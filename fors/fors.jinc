@@ -140,7 +140,7 @@ fn fors_node(
                 () = #unspill(pkseed, adrs, i, layer, node, node_addr);
 
                 adrs = __adrs_set_tree_height(adrs, layer);
-                adrs = __adrs_set_key_pair_addr(adrs, node);
+                adrs = __adrs_set_tree_index(adrs, node);
                 
                 () = #spill(pkseed, adrs, i, layer, node, node_addr);
                 flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], pkseed, adrs);
