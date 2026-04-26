@@ -16,8 +16,8 @@ $(ASM): $(JASMIN_SRC)
 	grep -q GNU-stack $(ASM) || echo '.section .note.GNU-stack,"",@progbits' >> $(ASM)
 
 # Step 2: compile everything into executable
-$(TARGET): $(ASM) test.c jasmin_syscall.o
-	$(CC) $(ASM) test.c jasmin_syscall.o -o $(TARGET) -no-pie
+$(TARGET): $(ASM) test.c misc/jasmin_syscall.o
+	$(CC) $(ASM) test.c misc/jasmin_syscall.o -o $(TARGET) -no-pie
 
 # Run the program
 run: $(TARGET)

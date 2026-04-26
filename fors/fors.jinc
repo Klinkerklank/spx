@@ -3,7 +3,7 @@ namespace baseb_fors {
   param int LG_B   = SPX_A;
   param int OUTLEN = SPX_K;
   param int INLEN  = SPX_MD_LEN;
-  require "../baseb.jinc"
+  require "../misc/baseb.jinc"
 }
 
 // +--------------------------------------------------------------+

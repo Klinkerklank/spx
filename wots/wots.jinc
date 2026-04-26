@@ -3,7 +3,7 @@ namespace baseb_wots_m {
   param int LG_B   = SPX_LG_W;
   param int OUTLEN = SPX_LEN_1;
   param int INLEN  = SPX_N;
-  require "../baseb.jinc"
+  require "../misc/baseb.jinc"
 }
 
 namespace baseb_wots_c {
@@ -11,7 +11,7 @@ namespace baseb_wots_c {
   param int LG_B   = SPX_LG_W;
   param int OUTLEN = SPX_LEN_2;
   param int INLEN  = (SPX_LEN_2 * SPX_LG_W + 7) / 8;
-  require "../baseb.jinc"
+  require "../misc/baseb.jinc"
 }
 
 // +--------------------------------------------------------------+
