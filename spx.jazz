@@ -1,13 +1,14 @@
-require "params/params-spx-sha2-128s.jinc" // SPHINCS+ parameters
+require "params/active_params.jinc" // SPHINCS+ parameters
+// active_params.jinc in turn requires the chosen parameter file with the concrete parameter values  
 
 require "adrs/adrs.jinc" // ADRS data structure
 require "hash/hash.jinc" // hash function implementations
 
-require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS
-require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS
-require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS
-require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS
-require "spx/spx.jinc"   // algorithms 18-20 of SLH-DSS
+require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS: Winternitz One-Time Signature Plus
+require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS: eXtended Merkle Signature Scheme
+require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS: HyperTree
+require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS: Forest Of Random Subsets
+require "spx/spx.jinc"   // algorithms 18-20 of SLH-DSS: Statless Practical Hash-based Incredibly Nice Cryptographic Signature Plus
 
 // algorithm 21 from SLH-DSS
 export
