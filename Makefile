@@ -68,7 +68,7 @@ $(TARGET): $(ASM) test.c misc/jasmin_syscall.o
 
 # Run the program
 run: $(TARGET)
-	./$(TARGET)
+	./$(TARGET) $(ARGS)
 
 # Clean build files
 clean:

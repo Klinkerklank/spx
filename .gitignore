@@ -1,4 +1,5 @@
 spx.s
 test
 log.txt
-params.h
+params/params.h
+outputs
