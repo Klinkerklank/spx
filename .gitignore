@@ -1,5 +1,6 @@
 spx.s
-test
+spx_cli
 log.txt
 params/params.h
+params/active_params
 outputs

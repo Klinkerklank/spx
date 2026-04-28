@@ -1,4 +1,4 @@
-.PHONY: params run
+.PHONY: params
 
 # Compiler settings
 JASMINC = jasminc
@@ -7,7 +7,7 @@ CC = /usr/bin/gcc
 # Files
 JASMIN_SRC = spx.jazz
 ASM = spx.s
-TARGET = test
+TARGET = spx_cli
 
 # Default parameter set (can be overridden)
 PARAMSET ?= sha2-128s
@@ -57,19 +57,15 @@ params_h:
 	echo "#define SPX_N $(SPX_N)" >> $(PARAM_HEADER)
 	echo "#define SPX_SIG_BYTES $(SPX_SIG_BYTES)" >> $(PARAM_HEADER)
 
-# Step 1: compile Jasmin -> assembly
+# step 1: compile Jasmin -> assembly
 $(ASM): $(JASMIN_SRC) params params_h
 	$(JASMINC) -o $(ASM) $(JASMIN_SRC)
 	grep -q GNU-stack $(ASM) || echo '.section .note.GNU-stack,"",@progbits' >> $(ASM)
 
-# Step 2: compile everything into executable
-$(TARGET): $(ASM) test.c misc/jasmin_syscall.o
-	$(CC) $(ASM) test.c misc/jasmin_syscall.o -o $(TARGET) -no-pie
+# step 2: compile everything into an executable
+$(TARGET): $(ASM) spx_cli.c misc/jasmin_syscall.o
+	$(CC) $(ASM) spx_cli.c misc/jasmin_syscall.o -o $(TARGET) -no-pie
 
-# Run the program
-run: $(TARGET)
-	./$(TARGET) $(ARGS)
-
-# Clean build files
+# clean build artifacts
 clean:
-	rm -f $(ASM) $(TARGET) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
+	rm -rf $(ASM) $(TARGET) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) outputs
