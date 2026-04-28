@@ -1,17 +1,8 @@
-// command to run this file:
-// clear; cd ~/spx; jasminc -o spx.s spx.jazz; echo '.section .note.GNU-stack,"",@progbits' >> spx.s; cc spx.s test.c jasmin_syscall.o -o test -no-pie; ./test
-
-// command to run this file with Jasmin register liveness check written to log.txt:
-// clear; cd ~/spx; jasminc -pliveness -o spx.s spx.jazz > log.txt; echo '.section .note.GNU-stack,"",@progbits' >> spx.s; cc spx.s test.c jasmin_syscall.o -o test -no-pie; ./test
-
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
 
-#define N (16)
-#define SK_LEN (4*N)
-#define PK_LEN (2*N)
-#define SIG_LEN (7856)
+#include "params/params.h" // contains SPX_N and SPX_SIG_BYTES, which Makefile defines based on PARAMSET
 
 extern int slh_keygen(uint8_t *sk, uint8_t *pk);
 extern int slh_sign(uint8_t *sig, uint64_t m_addr, uint64_t m_len, uint8_t *sk);
@@ -22,14 +13,14 @@ void keygen(uint8_t *sk, uint8_t *pk) {
     assert(r == 0);
 
     printf("SPHINCS+ secret key:");
-    for (int i=0; i < SK_LEN; i++) {
-        if (i == 0 * SK_LEN/4) {
+    for (int i=0; i < 4*SPX_N; i++) {
+        if (i == 0 * 4*SPX_N/4) {
             printf("\n[SK.seed] ");
-        } else if (i == 1 * SK_LEN/4) {
+        } else if (i == 1 * 4*SPX_N/4) {
             printf("\n[SK.prf]  ");
-        } else if (i == 2 * SK_LEN/4) {
+        } else if (i == 2 * 4*SPX_N/4) {
             printf("\n[PK.seed] ");
-        } else if (i == 3 * SK_LEN/4) {
+        } else if (i == 3 * 4*SPX_N/4) {
             printf("\n[PK.root] ");
         }
 
@@ -41,10 +32,10 @@ void keygen(uint8_t *sk, uint8_t *pk) {
     printf("\n\n");
 
     printf("SPHINCS+ public key:");
-    for (int i=0; i < PK_LEN; i++) {
-        if (i == 0 * PK_LEN/2) {
+    for (int i=0; i < 2*SPX_N; i++) {
+        if (i == 0 * 2*SPX_N/2) {
             printf("\n[PK.seed] ");
-        } else if (i == 1 * PK_LEN/2) {
+        } else if (i == 1 * 2*SPX_N/2) {
             printf("\n[PK.root] ");
         }
 
@@ -63,7 +54,7 @@ void sign(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *sk) {
     assert(r == 0);
 
     // printf("SPHINCS+ signature:\n");
-    // for (int i=0; i < SIG_LEN; i++) {
+    // for (int i=0; i < SPX_SIG_BYTES; i++) {
     //     printf("%02X", sig[i]);
     //     if (i%2 == 1) {
     //         printf(" ");
@@ -84,11 +75,11 @@ void verify(uint8_t *msg, size_t msg_len, uint8_t *sig, uint8_t *pk) {
 }
 
 int main() {
-    uint8_t sk[SK_LEN] = {0};
-    uint8_t pk[PK_LEN] = {0};
+    uint8_t sk[4*SPX_N] = {0};
+    uint8_t pk[2*SPX_N] = {0};
     keygen(sk, pk);
     
-    uint8_t sig[SIG_LEN] = {0};
+    uint8_t sig[SPX_SIG_BYTES] = {0};
 
     uint8_t msg[] = "SPHINCS+";
     size_t msg_len = sizeof(msg) - 1; // exclude null terminator
