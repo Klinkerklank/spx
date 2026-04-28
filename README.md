@@ -18,12 +18,12 @@ SHAKE Jasmin implementation to allow for ```shake-128s```, ```shake-128f```, ```
 
 Key generation writes the secret key and public key to outputs/sk.bin and outputs/pk.bin respectively
 
-./spx_cli -mode keygen
+```./spx_cli -mode keygen```
 
 Signing takes a file path (through the -msg option) and the secret key in outputs/sk.bin, and produces the signature in outputs/sig.bin
 
-./spx_cli -mode sign -msg \<file path\>
+```./spx_cli -mode sign -msg <file path>```
 
 Verification takes a file path (through the -msg option) and the public key in outputs/pk.bin, and verifies whether the signature in outputs/sig.bin checks out
 
-./spx_cli -mode verify -msg \<file path\>
+```./spx_cli -mode verify -msg <file path>```
