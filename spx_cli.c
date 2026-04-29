@@ -141,7 +141,7 @@ int keygen() {
     write_file("outputs/sk.bin", sk, sizeof(sk)); // write sk to sk.bin
     write_file("outputs/pk.bin", pk, sizeof(pk)); // write pk to pk.bin
 
-    printf("Keys written to outputs/sk.bin and outputs/pk.bin\n\n");
+    printf("Keys written to outputs/sk.bin and outputs/pk.bin\n");
 
     return 0;
 }
@@ -160,7 +160,7 @@ int sign(uint8_t *msg, size_t msg_len) {
     mkdir("outputs", 0700); // ensure output directory exists
     write_file("outputs/sig.bin", sig, sizeof(sig)); // write sig to sig.bin
 
-    printf("Signature written to outputs/sig.bin\n\n");
+    printf("Signature written to outputs/sig.bin\n");
     
     return 0;
 }
@@ -178,9 +178,9 @@ int verify(uint8_t *msg, size_t msg_len) {
     
     printf("Verification: ");
     if (r == 0) {
-        printf(ANSI_COLOR_GREEN "PASSED" ANSI_COLOR_RESET "\n\n");
+        printf(ANSI_COLOR_GREEN "PASSED" ANSI_COLOR_RESET "\n");
     } else {
-        printf(ANSI_COLOR_RED "FAILED" ANSI_COLOR_RESET "\n\n");
+        printf(ANSI_COLOR_RED "FAILED" ANSI_COLOR_RESET "\n");
     }
     
     return r;
