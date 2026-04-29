@@ -1,0 +1,365 @@
+fn _SHA512_blocks_0_ref(
+  reg ptr u64[8] _H,
+  reg u64 m mlen
+) -> reg ptr u64[8], reg u64, reg u64
+{
+  inline int t;
+  reg u64 T1 T2 a b c d e f g h r v;
+  stack u64[80] W;
+  reg ptr u64[80] Kp;
+  stack ptr u64[8] Hp;
+  reg ptr u64[8] H;
+  reg u64 tr;
+
+  Kp = SHA512_K;
+
+  Hp = _H;
+  H = Hp;
+
+  while(mlen >= 128) {
+    () = #spill(m, mlen);
+
+    for t=0 to 16 {
+      v = [:u64 m + t*8];
+      v = #BSWAP_64(v);
+      W[t] = v;
+    }
+
+    for t=16 to 80 { W = __SHA512_Wt_ref(W, t); }
+
+    a, b, c, d, e, f, g, h, H = __SHA512_load_H_ref(H);
+    Hp = H;
+
+    tr = 0;
+    while(tr < 80) {
+      //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
+      T1  = h;
+      r   = __SHA512_BSIG1_ref(e);
+      T1 += r;
+      r   = __SHA512_CH_ref(e,f,g);
+      T1 += r;
+      T1 += Kp[tr];
+      T1 += W[tr];
+
+      //T2 = BSIG0(a) + MAJ(a,b,c)
+      T2  = __SHA512_BSIG0_ref(a);
+      r   = __SHA512_MAJ_ref(a,b,c);
+      T2 += r;
+
+      h  = g; g  = f; f  = e; e  = d;  e += T1;
+      d  = c; c  = b; b  = a; a  = T1; a += T2;
+
+      tr+= 1;
+    }
+
+    H = Hp;
+    a += H[0]; b += H[1]; c += H[2]; d += H[3];
+    e += H[4]; f += H[5]; g += H[6]; h += H[7];
+
+    H = __SHA512_store_H_ref(H,a,b,c,d,e,f,g,h);
+
+    () = #unspill(m, mlen);
+    
+    m += 128;
+    mlen -= 128;
+  }
+
+  _H = H;
+  return _H, m, mlen;
+}
+
+inline
+fn _SHA512_blocks_0_prefix(
+  reg ptr u64[8] _H,
+  reg ptr u8[PREFIXLEN] prefix
+) -> reg ptr u64[8]
+{
+
+  inline int i t;
+  reg u64 T1 T2 a b c d e f g h r;
+  stack u64[80] W;
+  reg ptr u64[80] Kp;
+  stack ptr u64[8] Hp;
+  reg ptr u64[8] H;
+  inline int tr;
+
+  Kp = SHA512_K;
+
+  Hp = _H;
+  H = Hp;
+
+  // there are PREFIXLEN/128 full blocks of prefix available
+  for i=0 to PREFIXLEN/128 {
+    for t=0 to 128 { W[:u8 i*128 + t] = prefix[i*128 + t]; }
+
+    for t=16 to 80 { W = __SHA512_Wt_ref(W, t); }
+
+    a, b, c, d, e, f, g, h, H = __SHA512_load_H_ref(H);
+    Hp = H;
+
+    for tr=0 to 80 {
+      //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
+      T1  = h;
+      r   = __SHA512_BSIG1_ref(e);
+      T1 += r;
+      r   = __SHA512_CH_ref(e,f,g);
+      T1 += r;
+      T1 += Kp[tr];
+      T1 += W[tr];
+
+      //T2 = BSIG0(a) + MAJ(a,b,c)
+      T2  = __SHA512_BSIG0_ref(a);
+      r   = __SHA512_MAJ_ref(a,b,c);
+      T2 += r;
+
+      h  = g; g  = f; f  = e; e  = d;  e += T1;
+      d  = c; c  = b; b  = a; a  = T1; a += T2;
+    }
+
+    H = Hp;
+    a += H[0]; b += H[1]; c += H[2]; d += H[3];
+    e += H[4]; f += H[5]; g += H[6]; h += H[7];
+
+    H = __SHA512_store_H_ref(H,a,b,c,d,e,f,g,h);
+  }
+  
+  _H = H;
+  return _H;
+}
+
+inline
+fn _SHA512_blocks_0_prefix_msg(
+  reg ptr u64[8] _H,
+  reg ptr u8[PREFIXLEN] prefix,
+  reg u64 m mlen
+) -> reg ptr u64[8], reg u64, reg u64
+{
+  () = #spill(m, mlen);
+
+  inline int i t;
+  reg u64 T1 T2 a b c d e f g h r;
+  stack u64[80] W;
+  reg ptr u64[80] Kp;
+  stack ptr u64[8] Hp;
+  reg ptr u64[8] H;
+  reg u64 tr;
+
+  Kp = SHA512_K;
+
+  Hp = _H;
+  H = Hp;
+
+  // first copy the remaining prefix bytes
+  for i=0 to PREFIXLEN%128 {
+    W[:u8 i] = prefix[(PREFIXLEN/128)*128 + i]; // PREFIXLEN/64 is integer division
+  }
+  // then copy the first message bytes
+  for i=PREFIXLEN%128 to 128 {
+    W[:u8 i] = [:u8 m + i-(PREFIXLEN%128)];
+  }
+
+  for t=16 to 80 { W = __SHA512_Wt_ref(W, t); }
+
+  a, b, c, d, e, f, g, h, H = __SHA512_load_H_ref(H);
+  Hp = H;
+
+  tr = 0;
+  while(tr < 80) {
+    //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
+    T1  = h;
+    r   = __SHA512_BSIG1_ref(e);
+    T1 += r;
+    r   = __SHA512_CH_ref(e,f,g);
+    T1 += r;
+    T1 += Kp[tr];
+    T1 += W[tr];
+
+    //T2 = BSIG0(a) + MAJ(a,b,c)
+    T2  = __SHA512_BSIG0_ref(a);
+    r   = __SHA512_MAJ_ref(a,b,c);
+    T2 += r;
+
+    h  = g; g  = f; f  = e; e  = d;  e += T1;
+    d  = c; c  = b; b  = a; a  = T1; a += T2;
+
+    tr+= 1;
+  }
+
+  H = Hp;
+  a += H[0]; b += H[1]; c += H[2]; d += H[3];
+  e += H[4]; f += H[5]; g += H[6]; h += H[7];
+
+  H = __SHA512_store_H_ref(H,a,b,c,d,e,f,g,h);
+
+  // processed exactly 128-PREFIXLEN%128 message bytes,
+  // with the other PREFIXLEN%128 bytes having been prefix bytes
+  () = #unspill(m, mlen);
+  m += 128-(PREFIXLEN%128);
+  mlen -= 128-(PREFIXLEN%128);
+
+  _H = H;
+  return _H, m, mlen;
+}
+
+inline
+fn __SHA512_lastblocks_ref(
+  reg u64 m mlen bits
+) -> stack u64[32], reg u64
+{
+  stack u64[32] sblocks;
+  inline int k;
+  reg u64 i j nblocks;
+  reg u8 v;
+
+  i = 0;
+
+  // zero-fill the sblocks array
+  for k=0 to 32 { sblocks[k] = i; }
+
+  // copy in to sblocks
+  while(i < mlen) {
+    v = [:u8 m + i];
+    sblocks[:u8 i] = v;
+    i += 1;
+  }
+
+  // set first byte after input to 0x80 
+  sblocks[:u8 i] = 0x80;
+
+  // check if one or two blocks are needed
+  if(mlen < 112) // 896 / 8 = 112
+  { j = (128-16); nblocks = 1; i = 127; }
+  else
+  { j = (256-16); nblocks = 2; i = 255; }
+
+  while(i >= j) {
+    sblocks[:u8 i] = (8u) bits;
+    bits >>= 8;
+    i -= 1;
+  }
+
+  return sblocks, nblocks;
+}
+
+inline
+fn __SHA512_lastblocks_prefix(
+  reg ptr u8[PREFIXLEN] prefix,
+  reg u64 m mlen bits
+) -> stack u64[32], reg u64
+{
+  () = #spill(bits);
+
+  stack u64[32] sblocks;
+  inline int k;
+  reg u64 i j nblocks;
+  reg u8 v;
+
+  // zero-fill the sblocks array
+  for k=0 to 32 { sblocks[k] = 0; }
+
+  // copy prefix remainder to sblocks
+  for k=0 to PREFIXLEN%128 {
+    v = prefix[(PREFIXLEN/128)*128 + k];
+    sblocks[:u8 k] = v;
+  }
+
+  // copy message to sblocks
+  i = 0;
+  while(i < mlen) {
+    v = [:u8 m + i];
+    sblocks[:u8 PREFIXLEN%128 + i] = v;
+    i += 1;
+  }
+
+  i += PREFIXLEN%128; // now equal to PREFIXLEN%128 + mlen 
+
+  // set first byte after input to 0x80 
+  sblocks[:u8 i] = 0x80;
+
+  // check if one or two blocks are needed
+  if(mlen < 112) // 896 / 8 = 112
+  { j = (128-16); nblocks = 1; i = 127; }
+  else
+  { j = (256-16); nblocks = 2; i = 255; }
+
+  () = #unspill(bits);
+  while(i >= j) {
+    sblocks[:u8 i] = (8u) bits;
+    bits >>= 8;
+    i -= 1;
+  }
+
+  return sblocks, nblocks;
+}
+
+fn __SHA512_sha512_prefix_ptr(
+  reg ptr u8[64] out,
+  reg ptr u8[PREFIXLEN] prefix,
+  reg u64 m mlen
+) -> reg ptr u8[64]
+{
+  () = #spill(out); // make space in the registers
+
+  reg u64 bits;
+  stack u64[8] H;
+  reg ptr u64[8] Hp;
+  stack u64[32] sblocks;
+
+  // compute number of message bits for the length encoding later
+  // computation needs to be done now as 
+  bits = PREFIXLEN; // bytelength of the prefix
+  bits += mlen;     // bytelength of the message
+  bits <<= 3;       // convert number of bytes to number of bits
+  () = #spill(bits); // make space in the registers
+
+  H = __SHA512_initH_ref();
+  Hp = H;
+
+  // logic handling how to process the prefix and then the message
+  if PREFIXLEN >= 128 {
+    // absorb PREFIXLEN/128 full blocks of prefix
+    Hp = _SHA512_blocks_0_prefix(Hp, prefix);
+  }
+  () = #spill(prefix);
+
+  // remaining prefix length < 128
+  if PREFIXLEN % 128 == 0 {
+    // prefix is processed fully, proceed with processing full message blocks
+    Hp, m, mlen = _SHA512_blocks_0_ref(Hp, m, mlen);
+  } else { // PREFIXLEN % 128 > 0
+    reg u64 comb_len;
+    comb_len = PREFIXLEN % 128;
+    comb_len += mlen;
+    if (comb_len >= 128) {
+      // absorb PREFIXLEN%128 prefix bytes and fill the rest of the block with message bytes
+      () = #unspill(prefix);
+      Hp, m, mlen = _SHA512_blocks_0_prefix_msg(Hp, prefix, m, mlen);
+      () = #spill(prefix);
+      // prefix is now processed fully, and message partly 
+      // process the rest of the message in full message blocks
+      Hp, m, mlen = _SHA512_blocks_0_ref(Hp, m, mlen);
+    }
+  }
+
+  // handle the last block of prefix and message content,
+  // and add the padding and length encoding (which may then require an additional block)
+  reg u64 rest_len nblocks;
+  rest_len = PREFIXLEN % 128;
+  rest_len += mlen;
+  if (rest_len < 128) { // can't fill a full block with the prefix remainder and the entire message
+    () = #unspill(prefix, bits);
+    sblocks, nblocks = __SHA512_lastblocks_prefix(prefix, m, mlen, bits);
+    () = #spill(prefix); // make space in the registers
+  } else { // only message bytes remain to be processed
+    () = #unspill(bits);
+    sblocks, nblocks = __SHA512_lastblocks_ref(m, mlen, bits);
+  }
+  reg ptr u64[32] sblocksp;
+  sblocksp = sblocks;
+  Hp, _ = _SHA512_blocks_1_ref(Hp, sblocksp, nblocks);
+
+  H = Hp;
+  () = #unspill(out);
+  out = __SHA512_store_ref_array(out, H);
+  return out;
+}

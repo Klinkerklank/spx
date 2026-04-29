@@ -300,6 +300,6 @@ inline fn __store_ref(
   for i=0 to 8 {
     v = H[i];
     v = #BSWAP_32(v);
-    [:u32 out + i*4] = v;
+    [:u32 out + 4*i] = v;
   }
 }

@@ -2,5 +2,5 @@ spx.s
 spx_cli
 log.txt
 params/params.h
-params/active_params
+params/active_params.jinc
 outputs

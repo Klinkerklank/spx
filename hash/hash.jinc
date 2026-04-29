@@ -1,6 +1,5 @@
-// if (SPX_HASHFAM == SPX_HASH_SHA2) {
-    require "sha256/core_hash_sha256.jinc"
-// }
+require "sha256/core_hash_sha256.jinc"
+require "sha512/core_hash_sha512.jinc"
 
 // TODO look into hardware-accelerated SHA256 instructions
 // TODO look into SHA256 AVX implementation at https://github.com/strub/sha256
@@ -37,9 +36,14 @@ fn H_msg(
     // copy PK.root into the inner buffer
     for i=0 to SPX_N { buf[2*SPX_N + i] = pkroot[i]; }
 
-    // compute seedhash = sha256(R || PK.seed || PK.root || M)
+    // compute seedhash = sha512(R || PK.seed || PK.root || M)
     stack u8[SHAX_OUT] seedhash;
-    seedhash = sha256_mgf1_msg::__sha256_prefix_ptr(seedhash, buf, m_addr, m_len);
+    if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
+        seedhash = sha256_mgf1_msg::__sha256_prefix_ptr(seedhash, buf, m_addr, m_len);
+    }
+    // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
+    //     seedhash = sha512_mgf1_msg::__sha512_prefix_ptr(seedhash, buf, m_addr, m_len);
+    // }
 
     for i=0 to SHAX_OUT { seed[2*SPX_N + i] = seedhash[i]; } // copy the inner message digest
     
@@ -58,7 +62,12 @@ fn H_msg(
         }
         
         // compute shaX(seed), where seed includes counter
-        concat[count*SHAX_OUT : SHAX_OUT] = sha256_mgf1_seed::__sha256(concat[count*SHAX_OUT : SHAX_OUT], seed);
+        if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
+            concat[count*SHAX_OUT : SHAX_OUT] = sha256_mgf1_seed::__sha256(concat[count*SHAX_OUT : SHAX_OUT], seed);
+        }
+        // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
+        //     concat[count*SHA512_OUT : SHA512_OUT] = sha512_mgf1_seed::__sha512(concat[count*SHA512_OUT : SHA512_OUT], seed);
+        // }
     }
     
     () = #unspill(out);
@@ -133,7 +142,12 @@ fn PRF_msg(
 
     // compute inner = shaX((key xor ipad) || optrand || M)
     stack u8[SHAX_OUT] inner; // buffer for inner hash value
-    inner = sha256_hmac_inner::__sha256_prefix_ptr(inner, ibuf, m_addr, m_len);
+    if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
+        inner = sha256_hmac_inner::__sha256_prefix_ptr(inner, ibuf, m_addr, m_len);
+    }
+    // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
+    //     inner = sha512_hmac_inner::__sha512_prefix_ptr(inner, ibuf, m_addr, m_len);
+    // }
 
     // append the inner hash value to obuf
     // i.e. obuf = (key xor opad) || inner
@@ -141,7 +155,12 @@ fn PRF_msg(
 
     // compute hmac = shaX((key xor opad) || inner)
     stack u8[SHAX_OUT] hmac;
-    hmac = sha256_hmac_outer::__sha256(hmac, obuf);
+    if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
+        hmac = sha256_hmac_outer::__sha256(hmac, obuf);
+    }
+    // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
+    //     hmac = sha512_hmac_outer::__sha512(hmac, obuf);
+    // }
 
     () = #unspill(out);
 
@@ -205,7 +224,9 @@ fn PRF(
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
     stack u8[SHA256_OUT] digest;
 
-    digest = sha256_tl_1n::__sha256(digest, buf);
+    if (SPX_HASHFAM == SPX_HASH_SHA2) {
+        digest = sha256_tl_1n::__sha256(digest, buf);
+    }
 
     () = #unspill(out);
 
@@ -266,7 +287,10 @@ fn F(
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_1)
     stack u8[SHA256_OUT] digest;
-    digest = sha256_tl_1n::__sha256(digest, buf);
+    
+    if (SPX_HASHFAM == SPX_HASH_SHA2) {
+        digest = sha256_tl_1n::__sha256(digest, buf);
+    }
 
     () = #unspill(out);
 
@@ -331,7 +355,13 @@ fn H(
 
     // compute digest = shaX(PK.seed || zero-padding || ADRS^c || M_2)
     stack u8[SHAX_OUT] digest;
-    digest = sha256_tl_2n::__sha256(digest, buf);
+    
+    if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
+        digest = sha256_tl_2n::__sha256(digest, buf);
+    }
+    // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
+    //     digest = sha512_tl_2n::__sha512(digest, buf);
+    // }
 
     () = #unspill(out);
 
@@ -396,7 +426,13 @@ fn T_len(
 
     // compute digest = shaX(PK.seed || zero-padding || ADRS^c || M_len)
     stack u8[SHAX_OUT] digest;
-    digest = sha256_compress_wots::__sha256(digest, buf);
+    
+    if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
+        digest = sha256_compress_wots::__sha256(digest, buf);
+    }
+    // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
+    //     digest = sha512_compress_wots::__sha512(digest, buf);
+    // }
 
     () = #unspill(out);
 
@@ -460,7 +496,13 @@ fn T_k(
 
     // compute digest = shaX(PK.seed || zero-padding || ADRS^c || M_k)
     stack u8[SHAX_OUT] digest;
-    digest = sha256_compress_fors::__sha256(digest, buf);
+    
+    if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
+        digest = sha256_compress_fors::__sha256(digest, buf);
+    }
+    // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
+    //     digest = sha512_compress_fors::__sha512(digest, buf);
+    // }
 
     () = #unspill(out);
 
