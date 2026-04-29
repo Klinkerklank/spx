@@ -9,6 +9,12 @@
 
 #include "params/params.h" // contains SPX_N and SPX_SIG_BYTES, which Makefile defines based on PARAMSET
 
+#define ANSI_COLOR_RESET   "\x1b[0m"
+#define ANSI_COLOR_RED     "\x1b[31m"
+#define ANSI_COLOR_GREEN   "\x1b[32m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
+#define ANSI_COLOR_BLUE    "\x1b[34m"
+
 // declare the Jasmin export functions in spx.jazz
 extern int slh_keygen(uint8_t *sk, uint8_t *pk);
 extern int slh_sign(uint8_t *sig, uint64_t m_addr, uint64_t m_len, uint8_t *sk);
@@ -172,9 +178,9 @@ int verify(uint8_t *msg, size_t msg_len) {
     
     printf("Verification: ");
     if (r == 0) {
-        printf("PASSED\n\n");
+        printf(ANSI_COLOR_GREEN "PASSED" ANSI_COLOR_RESET "\n\n");
     } else {
-        printf("FAILED\n\n");
+        printf(ANSI_COLOR_RED "FAILED" ANSI_COLOR_RESET "\n\n");
     }
     
     return r;
