@@ -1,6 +1,8 @@
 require "sha256/core_hash_sha256.jinc"
 require "sha512/core_hash_sha512.jinc"
 
+require "../stdlib/memcpy/memcpy.jinc"
+
 // TODO look into hardware-accelerated SHA256 instructions
 // TODO look into SHA256 AVX implementation at https://github.com/strub/sha256
 
@@ -17,24 +19,26 @@ fn H_msg(
     reg u64 m_len             // message length
 ) -> reg ptr u8[SPX_M] // -> out
 {
-    () = #spill(out);
+    () = #spill(out); // only needed at the end of the function
+    
+    () = #spill(pkseed, pkroot); // resolves 'conflicting variables r and pkseed and pkroot'
 
     inline int i;
     stack u8[SHA_MGF1_PREFIX] buf;         // buffer for inner hash call
     stack u8[2*SPX_N + SHAX_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
 
     // copy R into both buffers
-    for i=0 to SPX_N {
-        buf[i] = r[i];
-        seed[i] = r[i];
-    }
+    buf[0 : SPX_N]  = copy_nbytes(buf[0 : SPX_N],  r);
+    seed[0 : SPX_N] = copy_nbytes(seed[0 : SPX_N], r);
+
     // copy PK.seed into both buffers
-    for i=0 to SPX_N {
-        buf[SPX_N + i]   = pkseed[i];
-        seed[SPX_N + i]  = pkseed[i];
-    }
+    () = #unspill(pkseed);
+    buf[SPX_N : SPX_N]  = copy_nbytes(buf[SPX_N : SPX_N],  pkseed);
+    seed[SPX_N : SPX_N] = copy_nbytes(seed[SPX_N : SPX_N], pkseed);
+
     // copy PK.root into the inner buffer
-    for i=0 to SPX_N { buf[2*SPX_N + i] = pkroot[i]; }
+    () = #unspill(pkroot);
+    buf[2*SPX_N : SPX_N] = copy_nbytes(buf[2*SPX_N : SPX_N], pkroot);
 
     // compute seedhash = sha512(R || PK.seed || PK.root || M)
     stack u8[SHAX_OUT] seedhash;
@@ -111,14 +115,17 @@ fn PRF_msg(
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out);
+    
+    () = #spill(optrand); // resolves 'conflicting variables skprf and optrand'
 
     stack u8[SHAX_IN] key;             // buffer for the key
     stack u8[SHA_HMAC_PREFIX] ibuf;    // buffer for inner hash call
     stack u8[SHAX_IN + SHAX_OUT] obuf; // buffer for outer hash call
+    
+    inline int i;
 
     // set key = SK.prf || 00..0
-    inline int i;
-    for i=0 to SPX_N { key[i] = skprf[i]; } // first part of the key is SK.prf
+    key[0 : SPX_N] = copy_nbytes(key[0 : SPX_N], skprf); // first part of the key is SK.prf
     for i=SPX_N to SHAX_IN { key[i] = 0; }  // pad the rest of the key with zeroes
 
     // compute ibuf = (key xor ipad)
@@ -138,7 +145,8 @@ fn PRF_msg(
 
     // append optrand to ibuf
     // i.e. ibuf = (key xor ipad) || optrand
-    for i=0 to SPX_N { ibuf[SHAX_IN + i] = optrand[i]; }
+    () = #unspill(optrand);
+    ibuf[SHAX_IN : SPX_N] = copy_nbytes(ibuf[SHAX_IN : SPX_N], optrand);
 
     // compute inner = shaX((key xor ipad) || optrand || M)
     stack u8[SHAX_OUT] inner; // buffer for inner hash value
@@ -165,7 +173,7 @@ fn PRF_msg(
     () = #unspill(out);
 
     // truncate hmac to the correct length by copying only the first SPX_N bytes
-    for i=0 to SPX_N { out[i] = hmac[i]; }
+    out = copy_nbytes(out, hmac[0 : SPX_N]);
     return out;
 }
 
@@ -200,6 +208,8 @@ fn PRF(
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out);
+    
+    () = #spill(skseed); // resolves 'conflicting variables pkseed and skseed'
 
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || SK.seed
@@ -210,7 +220,7 @@ fn PRF(
     inline int i;
 
     // buf = PK.seed
-    for i=0 to SPX_N { buf[i] = pkseed[i]; } 
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHA256_IN { buf[i] = 0; } 
@@ -219,7 +229,8 @@ fn PRF(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || SK.seed
-    for i=0 to SPX_N { buf[SHA256_IN+22+i] = skseed[i]; }
+    () = #unspill(skseed);
+    buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], skseed);
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
     stack u8[SHA256_OUT] digest;
@@ -231,7 +242,7 @@ fn PRF(
     () = #unspill(out);
 
     // truncate the digest to the correct length by copying only the first SPX_N bytes
-    for i=0 to SPX_N { out[i] = digest[i]; }
+    out = copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
@@ -263,7 +274,7 @@ fn F(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N] // -> out
 {
-    () = #spill(out); // free up space in the registers
+    () = #spill(out); // resolves 'conflicting variables out and pkseed'
     
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_1
@@ -274,16 +285,18 @@ fn F(
     inline int i;
 
     // buf = PK.seed
-    for i=0 to SPX_N { buf[i] = pkseed[i]; } 
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
-    for i=SPX_N to SHA256_IN { buf[i] = 0; } 
+    for i=SPX_N to SHA256_IN { buf[i] = 0; }
 
     // buf = PK.seed || zero-padding || ADRS^c
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_1
-    for i=0 to SPX_N { buf[SHA256_IN+22+i] = out[i]; }
+    () = #unspill(out);
+    buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], out);
+    () = #spill(out); // only needed again at the end of the function
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_1)
     stack u8[SHA256_OUT] digest;
@@ -295,7 +308,7 @@ fn F(
     () = #unspill(out);
 
     // truncate the digest to the correct length by copying only the first SPX_N bytes
-    for i=0 to SPX_N { out[i] = digest[i]; }
+    out = copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
@@ -331,6 +344,8 @@ fn H(
 {
     () = #spill(out);
 
+    () = #spill(in1, in2); // resolves 'conflicting variables pkseed and in1 and in2'
+
     // declare a stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_2     (for sha2-128)
     //     = SPX_N    + (64-SPX_N)      + 22      + 2*SPX_N (for sha2-128)
@@ -341,7 +356,7 @@ fn H(
     inline int i;
 
     // buf = PK.seed
-    for i=0 to SPX_N { buf[i] = pkseed[i]; } 
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHAX_IN { buf[i] = 0; } 
@@ -350,8 +365,10 @@ fn H(
     buf[SHAX_IN : 22] = __adrs_compress(buf[SHAX_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_2
-    for i=0 to SPX_N { buf[SHAX_IN+22+i]       = in1[i]; }
-    for i=0 to SPX_N { buf[SHAX_IN+22+SPX_N+i] = in2[i]; }
+    () = #unspill(in1);
+    buf[SHAX_IN+22 : SPX_N] = copy_nbytes(buf[SHAX_IN+22 : SPX_N], in1);
+    () = #unspill(in2);
+    buf[SHAX_IN+22+SPX_N : SPX_N] = copy_nbytes(buf[SHAX_IN+22+SPX_N : SPX_N], in2);
 
     // compute digest = shaX(PK.seed || zero-padding || ADRS^c || M_2)
     stack u8[SHAX_OUT] digest;
@@ -366,7 +383,7 @@ fn H(
     () = #unspill(out);
 
     // truncate the digest to the correct length by copying only the first SPX_N bytes
-    for i=0 to SPX_N { out[i] = digest[i]; }
+    out = copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
@@ -413,7 +430,7 @@ fn T_len(
     inline int i;
 
     // buf = PK.seed
-    for i=0 to SPX_N { buf[i] = pkseed[i]; } 
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHAX_IN { buf[i] = 0; } 
@@ -437,7 +454,7 @@ fn T_len(
     () = #unspill(out);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
-    for i=0 to SPX_N { out[i] = digest[i]; }
+    out = copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
@@ -483,7 +500,7 @@ fn T_k(
     inline int i;
 
     // buf = PK.seed
-    for i=0 to SPX_N { buf[i] = pkseed[i]; } 
+    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHAX_IN { buf[i] = 0; } 
@@ -507,7 +524,7 @@ fn T_k(
     () = #unspill(out);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
-    for i=0 to SPX_N { out[i] = digest[i]; }
+    out = copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
