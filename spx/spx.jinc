@@ -130,29 +130,24 @@ fn slh_sign_internal(
     reg ptr u8[SPX_IDX_TREE_LEN] tmp_idx_tree; // ceil((SPX_H - SPX_H_PRIME) / 8)
     reg ptr u8[SPX_IDX_LEAF_LEN] tmp_idx_leaf; // ceil((SPX_H_PRIME) / 8)
     reg u32 idx_leaf;
-    reg u64 ctx_ptr_copy ctx_len_copy;
-    reg u64 msg_ptr_copy msg_len_copy;
     
     // separate SK.prf from the overall secret key
     skprf = sk[1*SPX_N : SPX_N];
 
     adrs = __adrs_init(adrs);
-
-    ctx_ptr_copy = ctx_ptr; ctx_len_copy = ctx_len;
-    msg_ptr_copy = msg_ptr; msg_len_copy = msg_len;
-    () = #spill(ctx_ptr_copy, ctx_len_copy, msg_ptr_copy, msg_len_copy);
+    
+    // set aside the register values for the H_msg call below
+    () = #spill(ctx_ptr, ctx_len, msg_ptr, msg_len);
 
     r = sig_slh[0 : SPX_N];
     () = #spill(sig_slh, sk);
     r = __PRF_msg(r, skprf, addrnd, ctx_ptr, ctx_len, msg_ptr, msg_len);
     () = #unspill(sig_slh, sk);
     sig_slh[0 : SPX_N] = r;
-
-    () = #unspill(ctx_ptr_copy, ctx_len_copy, msg_ptr_copy, msg_len_copy);
-    ctx_ptr = ctx_ptr_copy; ctx_len = ctx_len_copy;
-    msg_ptr = msg_ptr_copy; msg_len = msg_len_copy;
     
-    // // separate PK.seed and PK.root from the overall secret key
+    () = #unspill(ctx_ptr, ctx_len, msg_ptr, msg_len);
+    
+    // separate PK.seed and PK.root from the overall secret key
     pkseed = sk[2*SPX_N : SPX_N];
     pkroot = sk[3*SPX_N : SPX_N];
 
