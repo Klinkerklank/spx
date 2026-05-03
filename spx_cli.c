@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         
-        size_t ctx_len = sizeof(ctx_ptr);
+        size_t ctx_len = strlen(ctx_ptr);
 
         sign(ctx_ptr, ctx_len, msg_ptr, msg_len);
 
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         
-        size_t ctx_len = sizeof(ctx_ptr);
+        size_t ctx_len = strlen(ctx_ptr);
 
         verify(ctx_ptr, ctx_len, msg_ptr, msg_len);
 
