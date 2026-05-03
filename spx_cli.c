@@ -7,7 +7,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "params/params.h" // contains SPX_N and SPX_SIG_BYTES, which Makefile defines based on PARAMSET
+// contains SPX_N and SPX_SIG_BYTES, which Makefile defines based on PARAMSET
+#include "params/params.h"
 
 #define ANSI_COLOR_RESET   "\x1b[0m"
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -17,8 +18,10 @@
 
 // declare the Jasmin export functions in spx.jazz
 extern int slh_keygen(uint8_t *sk, uint8_t *pk);
-extern int slh_sign(uint8_t *sig, uint64_t m_addr, uint64_t m_len, uint8_t *sk);
-extern int slh_verify(uint64_t m_addr, uint64_t m_len, uint8_t *sig, uint8_t *pk);
+extern int slh_sign(uint8_t *sig, uint64_t ctx_ptr, uint64_t ctx_len, uint64_t msg_ptr, uint64_t msg_len, uint8_t *sk);
+extern int slh_verify(uint64_t msg_ptr, uint64_t ctx_ptr, uint64_t ctx_len, uint64_t msg_len, uint8_t *sig, uint8_t *pk);
+
+// helper functions //
 
 void write_file(const char *path, uint8_t *data, size_t len) {
     FILE *f = fopen(path, "wb");
@@ -96,46 +99,14 @@ uint8_t *read_file(const char *path, size_t *len_out) {
     return buf;
 }
 
+// main functions //
+
 int keygen() {
     uint8_t sk[4 * SPX_N];
     uint8_t pk[2 * SPX_N];
 
     int r = slh_keygen(sk, pk);
     assert(r == 0);
-
-    // printf("SPHINCS+ secret key:");
-    // for (int i=0; i < 4*SPX_N; i++) {
-    //     if (i == 0 * 4*SPX_N/4) {
-    //         printf("\n[SK.seed] ");
-    //     } else if (i == 1 * 4*SPX_N/4) {
-    //         printf("\n[SK.prf]  ");
-    //     } else if (i == 2 * 4*SPX_N/4) {
-    //         printf("\n[PK.seed] ");
-    //     } else if (i == 3 * 4*SPX_N/4) {
-    //         printf("\n[PK.root] ");
-    //     }
-
-    //     printf("%02X", sk[i]);
-    //     if (i%2 == 1) {
-    //         printf(" ");
-    //     }
-    // }
-    // printf("\n\n");
-
-    // printf("SPHINCS+ public key:");
-    // for (int i=0; i < 2*SPX_N; i++) {
-    //     if (i == 0 * 2*SPX_N/2) {
-    //         printf("\n[PK.seed] ");
-    //     } else if (i == 1 * 2*SPX_N/2) {
-    //         printf("\n[PK.root] ");
-    //     }
-
-    //     printf("%02X", pk[i]);
-    //     if (i%2 == 1) {
-    //         printf(" ");
-    //     }
-    // }
-    // printf("\n\n");
     
     mkdir("outputs", 0700); // ensure output directory exists
     write_file("outputs/sk.bin", sk, sizeof(sk)); // write sk to sk.bin
@@ -146,7 +117,7 @@ int keygen() {
     return 0;
 }
 
-int sign(uint8_t *msg, size_t msg_len) {
+int sign(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
     // read secret key from file
     uint8_t sk[4 * SPX_N];
     read_file_fixed("outputs/sk.bin", sk, sizeof(sk));
@@ -154,7 +125,7 @@ int sign(uint8_t *msg, size_t msg_len) {
     // declare buffer that will hold the signature
     uint8_t sig[SPX_SIG_BYTES];
     
-    int r = slh_sign(sig, (uint64_t)msg, (uint64_t)msg_len, sk);
+    int r = slh_sign(sig, (uint64_t)ctx_ptr, (uint64_t)ctx_len, (uint64_t)msg_ptr, (uint64_t)msg_len, sk);
     assert(r == 0);
     
     mkdir("outputs", 0700); // ensure output directory exists
@@ -165,7 +136,7 @@ int sign(uint8_t *msg, size_t msg_len) {
     return 0;
 }
 
-int verify(uint8_t *msg, size_t msg_len) {
+int verify(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
     // read public key from file
     uint8_t pk[2 * SPX_N];
     read_file_fixed("outputs/pk.bin", pk, sizeof(pk));
@@ -174,13 +145,13 @@ int verify(uint8_t *msg, size_t msg_len) {
     uint8_t sig[SPX_SIG_BYTES];
     read_file_fixed("outputs/sig.bin", sig, sizeof(sig));
 
-    int r = slh_verify((uint64_t)msg, (uint64_t)msg_len, sig, pk);
+    int r = slh_verify((uint64_t)ctx_ptr, (uint64_t)ctx_len, (uint64_t)msg_ptr, (uint64_t)msg_len, sig, pk);
     
     printf("Verification: ");
     if (r == 0) {
-        printf(ANSI_COLOR_GREEN "PASSED" ANSI_COLOR_RESET "\n");
+        printf(ANSI_COLOR_GREEN "PASSED" ANSI_COLOR_RESET "\n\n");
     } else {
-        printf(ANSI_COLOR_RED "FAILED" ANSI_COLOR_RESET "\n");
+        printf(ANSI_COLOR_RED "FAILED" ANSI_COLOR_RESET "\n\n");
     }
     
     return r;
@@ -188,13 +159,16 @@ int verify(uint8_t *msg, size_t msg_len) {
 
 int main(int argc, char **argv) {
     char *mode = NULL;
-    char *msgfile = NULL;
+    char *msg_file = NULL;
+    char *ctx_ptr = "";
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-mode") == 0) {
             mode = argv[++i];
         } else if (strcmp(argv[i], "-msg") == 0) {
-            msgfile = argv[++i];
+            msg_file = argv[++i];
+        } else if (strcmp(argv[i], "-ctx") == 0) {
+            ctx_ptr = argv[++i];
         }
     }
 
@@ -209,47 +183,51 @@ int main(int argc, char **argv) {
     printf("\n");
 
     if (strcmp(mode, "keygen") == 0) {
-        printf("Generating SPHINCS+ keys ...\n");
+        printf(ANSI_COLOR_YELLOW "Generating SPHINCS+ keys" ANSI_COLOR_RESET "...\n");
 
         keygen();
     }
     else if (strcmp(mode, "sign") == 0) {
-        if (!msgfile) {
+        if (!msg_file) {
             printf("sign requires -msg\n");
             return 1;
         }
-        printf("Computing signature on %s ...\n", msgfile);
+        printf(ANSI_COLOR_YELLOW "Computing signature on %s" ANSI_COLOR_RESET "...\n", msg_file);
         
         size_t msg_len;
-        uint8_t *msg = read_file(msgfile, &msg_len);
+        uint8_t *msg_ptr = read_file(msg_file, &msg_len);
 
-        if (!msg) {
+        if (!msg_ptr) {
             printf("Failed to read file\n");
             return 1;
         }
+        
+        size_t ctx_len = sizeof(ctx_ptr);
 
-        sign(msg, msg_len);
+        sign(ctx_ptr, ctx_len, msg_ptr, msg_len);
 
-        free(msg);
+        free(msg_ptr);
     }
     else if (strcmp(mode, "verify") == 0) {
-        if (!msgfile) {
+        if (!msg_file) {
             printf("verify requires -msg\n");
             return 1;
         }
-        printf("Verifying signature on %s ...\n", msgfile);
+        printf(ANSI_COLOR_YELLOW "Verifying signature on %s" ANSI_COLOR_RESET "...\n", msg_file);
         
         size_t msg_len;
-        uint8_t *msg = read_file(msgfile, &msg_len);
+        uint8_t *msg_ptr = read_file(msg_file, &msg_len);
 
-        if (!msg) {
+        if (!msg_ptr) {
             printf("Failed to read file\n");
             return 1;
         }
+        
+        size_t ctx_len = sizeof(ctx_ptr);
 
-        verify(msg, msg_len);
+        verify(ctx_ptr, ctx_len, msg_ptr, msg_len);
 
-        free(msg);
+        free(msg_ptr);
     }
     else {
         printf("Unknown mode: %s\n", mode);

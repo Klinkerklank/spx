@@ -109,7 +109,8 @@ fn __slh_keygen_internal(
 // algorithm 19 from SLH-DSS
 fn slh_sign_internal(
     reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
-    reg u64 m_ptr m_len,         // message pointer and message length
+    reg u64 ctx_ptr ctx_len,     // context pointer and context length
+    reg u64 msg_ptr msg_len,     // message pointer and message length
     reg ptr u8[SPX_SKBYTES] sk,  // secret key
     reg ptr u8[SPX_N] addrnd     // additional randomness
 ) -> reg ptr u8[SPX_SIG] // -> sig_slh
@@ -129,31 +130,34 @@ fn slh_sign_internal(
     reg ptr u8[SPX_IDX_TREE_LEN] tmp_idx_tree; // ceil((SPX_H - SPX_H_PRIME) / 8)
     reg ptr u8[SPX_IDX_LEAF_LEN] tmp_idx_leaf; // ceil((SPX_H_PRIME) / 8)
     reg u32 idx_leaf;
-    reg u64 m_ptr_copy m_len_copy;
+    reg u64 ctx_ptr_copy ctx_len_copy;
+    reg u64 msg_ptr_copy msg_len_copy;
     
     // separate SK.prf from the overall secret key
     skprf = sk[1*SPX_N : SPX_N];
 
     adrs = __adrs_init(adrs);
 
-    m_ptr_copy = m_ptr; m_len_copy = m_len;
-    () = #spill(m_ptr_copy, m_len_copy);
+    ctx_ptr_copy = ctx_ptr; ctx_len_copy = ctx_len;
+    msg_ptr_copy = msg_ptr; msg_len_copy = msg_len;
+    () = #spill(ctx_ptr_copy, ctx_len_copy, msg_ptr_copy, msg_len_copy);
 
     r = sig_slh[0 : SPX_N];
     () = #spill(sig_slh, sk);
-    r = __PRF_msg(r, skprf, addrnd, m_ptr, m_len);
+    r = __PRF_msg(r, skprf, addrnd, ctx_ptr, ctx_len, msg_ptr, msg_len);
     () = #unspill(sig_slh, sk);
     sig_slh[0 : SPX_N] = r;
 
-    () = #unspill(m_ptr_copy, m_len_copy);
-    m_ptr = m_ptr_copy; m_len = m_len_copy;
+    () = #unspill(ctx_ptr_copy, ctx_len_copy, msg_ptr_copy, msg_len_copy);
+    ctx_ptr = ctx_ptr_copy; ctx_len = ctx_len_copy;
+    msg_ptr = msg_ptr_copy; msg_len = msg_len_copy;
     
     // // separate PK.seed and PK.root from the overall secret key
     pkseed = sk[2*SPX_N : SPX_N];
     pkroot = sk[3*SPX_N : SPX_N];
 
     () = #spill(pkseed, sig_slh, sk);
-    digest = __H_msg(digest, r, pkseed, pkroot, m_ptr, m_len);
+    digest = __H_msg(digest, r, pkseed, pkroot, ctx_ptr, ctx_len, msg_ptr, msg_len);
     () = #unspill(pkseed, sig_slh, sk);
 
     md           = digest[0                             : SPX_MD_LEN      ];
@@ -191,15 +195,16 @@ fn slh_sign_internal(
 inline
 fn __slh_sign_internal(
     reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
-    reg u64 m_ptr m_len,         // message pointer and message length
+    reg u64 msg_ptr msg_len,     // message pointer and message length
+    reg u64 ctx_ptr ctx_len,     // context pointer and context length
     reg ptr u8[SPX_SKBYTES] sk,  // secret key
     reg ptr u8[SPX_N] addrnd     // additional randomness
 ) -> reg ptr u8[SPX_SIG] // -> sig_slh
 {
     // split live-range of the input parameters into two segments
-    sig_slh = sig_slh; m_ptr = m_ptr; m_len = m_len; sk = sk; addrnd = addrnd;
+    sig_slh = sig_slh; ctx_ptr = ctx_ptr; ctx_len = ctx_len; msg_ptr = msg_ptr; msg_len = msg_len; sk = sk; addrnd = addrnd;
 
-    sig_slh = slh_sign_internal(sig_slh, m_ptr, m_len, sk, addrnd);
+    sig_slh = slh_sign_internal(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk, addrnd);
 
     // split live-range of the output parameters into two segments
     sig_slh = sig_slh;
@@ -209,7 +214,8 @@ fn __slh_sign_internal(
 
 // algorithm 20 from SLH-DSS
 fn slh_verify_internal(
-    reg u64 m_ptr m_len,         // message pointer and message length
+    reg u64 msg_ptr msg_len,     // message pointer and message length
+    reg u64 ctx_ptr ctx_len,     // context pointer and context length
     reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
     reg ptr u8[SPX_PKBYTES] pk   // public key
 ) -> reg u64 // -> res
@@ -238,7 +244,7 @@ fn slh_verify_internal(
 
     r = sig_slh[0 : SPX_N];
     () = #spill(pkseed, pkroot, sig_slh);
-    digest = __H_msg(digest, sig_slh[0 : SPX_N], pkseed, pkroot, m_ptr, m_len);
+    digest = __H_msg(digest, sig_slh[0 : SPX_N], pkseed, pkroot, ctx_ptr, ctx_len, msg_ptr, msg_len);
     () = #unspill(pkseed, pkroot, sig_slh);
 
     md           = digest[0                             : SPX_MD_LEN      ];
@@ -263,16 +269,17 @@ fn slh_verify_internal(
 
 inline
 fn __slh_verify_internal(
-    reg u64 m_ptr m_len,         // message pointer and message length
+    reg u64 ctx_ptr ctx_len,     // context pointer and context length
+    reg u64 msg_ptr msg_len,     // message pointer and message length
     reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
     reg ptr u8[SPX_PKBYTES] pk   // public key
 ) -> reg u64 // -> res
 {
     // split live-range of the input parameters into two segments
-    m_ptr = m_ptr; m_len = m_len; sig_slh = sig_slh; pk = pk;
+    ctx_ptr = ctx_ptr; ctx_len = ctx_len; msg_ptr = msg_ptr; msg_len = msg_len; sig_slh = sig_slh; pk = pk;
 
     reg u64 res;
-    res = slh_verify_internal(m_ptr, m_len, sig_slh, pk);
+    res = slh_verify_internal(ctx_ptr, ctx_len, msg_ptr, msg_len, sig_slh, pk);
 
     // split live-range of the output parameters into two segments
     res = res;

@@ -35,7 +35,8 @@ fn slh_keygen(
 export
 fn slh_sign(
     reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
-    reg u64 m_ptr m_len,         // message pointer and message length
+    reg u64 ctx_ptr ctx_len,     // context pointer and context length
+    reg u64 msg_ptr msg_len,     // message pointer and message length
     reg ptr u8[SPX_SKBYTES] sk   // secret key
 ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig_slh, res
 {
@@ -46,7 +47,7 @@ fn slh_sign(
 
     for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } // deterministic variant
 
-    sig_slh = __slh_sign_internal(sig_slh, m_ptr, m_len, sk, addrnd);
+    sig_slh = __slh_sign_internal(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk, addrnd);
 
     // set return value to 0
     reg u64 res; ?{}, res = #set0();
@@ -57,13 +58,14 @@ fn slh_sign(
 // algorithm 24 from SLH-DSS
 export
 fn slh_verify(
-    reg u64 m_ptr m_len,       // message pointer and message length
+    reg u64 ctx_ptr ctx_len,   // context pointer and context length
+    reg u64 msg_ptr msg_len,   // message pointer and message length
     reg ptr u8[SPX_SIG] sig,   // SPHINCS+ signature
     reg ptr u8[SPX_PKBYTES] pk // public key
 ) -> reg u64 // -> res
 {
     reg u64 res;
-    res = __slh_verify_internal(m_ptr, m_len, sig, pk);
+    res = __slh_verify_internal(ctx_ptr, ctx_len, msg_ptr, msg_len, sig, pk);
 
     return res;
 }
