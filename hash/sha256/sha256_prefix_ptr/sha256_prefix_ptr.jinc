@@ -306,7 +306,6 @@ fn __sha256_prefix_ptr(
   stack u32[32] sblocks;
 
   // compute number of message bits for the length encoding later
-  // computation needs to be done now as 
   bits = PREFIXLEN; // bytelength of the prefix
   bits += mlen;     // bytelength of the message
   bits <<= 3;       // convert number of bytes to number of bits

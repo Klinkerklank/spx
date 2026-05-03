@@ -15,8 +15,10 @@ fn H_msg(
     reg ptr u8[SPX_N] r,      // message randomiser
     reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u8[SPX_N] pkroot, // PK.root
-    reg u64 m_addr,           // message address
-    reg u64 m_len             // message length
+    reg u64 ctx_ptr,          // context pointer
+    reg u64 ctx_len,          // context length
+    reg u64 msg_ptr,          // message pointer
+    reg u64 msg_len           // message length
 ) -> reg ptr u8[SPX_M] // -> out
 {
     () = #spill(out); // only needed at the end of the function
@@ -43,7 +45,7 @@ fn H_msg(
     // compute seedhash = sha512(R || PK.seed || PK.root || M)
     stack u8[SHAX_OUT] seedhash;
     if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
-        seedhash = sha256_mgf1_msg::__sha256_prefix_ptr(seedhash, buf, m_addr, m_len);
+        seedhash = sha256_mgf1_msg::__sha256_absorb(seedhash, buf, ctx_ptr, ctx_len, msg_ptr, msg_len);
     }
     // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
     //     seedhash = sha512_mgf1_msg::__sha512_prefix_ptr(seedhash, buf, m_addr, m_len);
@@ -87,14 +89,16 @@ fn __H_msg(
     reg ptr u8[SPX_N] r,      // message randomiser
     reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u8[SPX_N] pkroot, // PK.root
-    reg u64 m_addr,           // message address
-    reg u64 m_len             // message length
+    reg u64 ctx_ptr,          // context pointer
+    reg u64 ctx_len,          // context length
+    reg u64 msg_ptr,          // message pointer
+    reg u64 msg_len           // message length
 ) -> reg ptr u8[SPX_M] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; r = r; pkseed = pkseed; pkroot = pkroot; m_addr = m_addr; m_len = m_len;
+    out = out; r = r; pkseed = pkseed; pkroot = pkroot; ctx_ptr = ctx_ptr; ctx_len = ctx_len; msg_ptr = msg_ptr; msg_len = msg_len;
 
-    out = H_msg(out, r, pkseed, pkroot, m_addr, m_len);
+    out = H_msg(out, r, pkseed, pkroot, ctx_ptr, ctx_len, msg_ptr, msg_len);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -110,8 +114,10 @@ fn PRF_msg(
     reg ptr u8[SPX_N] out,     // output: buffer the result gets written to
     reg ptr u8[SPX_N] skprf,   // SK.prf
     reg ptr u8[SPX_N] optrand, // (optional) additional randomness
-    reg u64 m_addr,            // message address
-    reg u64 m_len              // message length
+    reg u64 ctx_ptr,           // context pointer
+    reg u64 ctx_len,           // context length
+    reg u64 msg_ptr,           // message pointer
+    reg u64 msg_len            // message length
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out);
@@ -151,7 +157,7 @@ fn PRF_msg(
     // compute inner = shaX((key xor ipad) || optrand || M)
     stack u8[SHAX_OUT] inner; // buffer for inner hash value
     if (SPX_HASHFAM == SPX_HASH_SHA2 && SPX_SEC_CAT == 1) {
-        inner = sha256_hmac_inner::__sha256_prefix_ptr(inner, ibuf, m_addr, m_len);
+        inner = sha256_hmac_inner::__sha256_absorb(inner, ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
     }
     // else if (SPX_HASHFAM == SPX_HASH_SHA2 && (SPX_SEC_CAT == 3 || SPX_SEC_CAT == 5)) {
     //     inner = sha512_hmac_inner::__sha512_prefix_ptr(inner, ibuf, m_addr, m_len);
@@ -182,14 +188,16 @@ fn __PRF_msg(
     reg ptr u8[SPX_N] out,     // output: buffer the result gets written to
     reg ptr u8[SPX_N] skprf,   // SK.prf
     reg ptr u8[SPX_N] optrand, // (optional) additional randomness
-    reg u64 m_addr,            // message address
-    reg u64 m_len              // message length
+    reg u64 ctx_ptr,           // context pointer
+    reg u64 ctx_len,           // context length
+    reg u64 msg_ptr,           // message pointer
+    reg u64 msg_len            // message length
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; skprf = skprf; optrand = optrand; m_addr = m_addr; m_len = m_len;
+    out = out; skprf = skprf; optrand = optrand; ctx_ptr = ctx_ptr; ctx_len = ctx_len; msg_ptr = msg_ptr; msg_len = msg_len;
 
-    out = PRF_msg(out, skprf, optrand, m_addr, m_len);
+    out = PRF_msg(out, skprf, optrand, ctx_ptr, ctx_len, msg_ptr, msg_len);
 
     // split live-range of the output parameters into two segments
     out = out;

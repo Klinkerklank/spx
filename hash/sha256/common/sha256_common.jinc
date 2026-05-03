@@ -187,6 +187,24 @@ inline fn __Wt_ref(stack u32[64] W, inline int t) -> stack u32[64]
   return W;
 }
 
+// Wt = SSIG1(W(t-2)) + W(t-7) + SSIG0(t-15) + W(t-16)
+inline fn __Wt_ptr_ref(reg ptr u32[64] W, inline int t) -> reg ptr u32[64]
+{
+  reg u32 wt wt2 wt15;
+
+  wt2  = W[t-2];
+  wt   = __SSIG1_ref(wt2);
+  wt  += W[t-7];
+  wt15 = W[t-15];
+  wt15 = __SSIG0_ref(wt15);
+  wt  += wt15;
+  wt  += W[t-16];
+
+  W[t] = wt;
+
+  return W;
+}
+
 fn _blocks_1_ref(reg ptr u32[8] _H, reg ptr u32[32] sblocks, reg u64 nblocks) -> reg ptr u32[8], reg ptr u32[32]
 {
   inline int t;
