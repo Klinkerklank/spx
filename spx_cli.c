@@ -1,11 +1,9 @@
 #include <string.h>
 #include <stdint.h>
-#include <string.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 
 // contains SPX_N and SPX_SIG_BYTES, which Makefile defines based on PARAMSET
 #include "params/params.h"
