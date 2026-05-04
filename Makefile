@@ -3,17 +3,17 @@ JASMINC = jasminc
 CC = /usr/bin/gcc
 
 # Files
-JASMIN_SRC = spx.jazz
+SPX = x86-64/ref/spx.jazz
 ASM = spx.s
-TARGET = spx_cli
+CLI = spx_cli
 
 # Default parameter set (can be overridden)
 PARAMSET ?= sha2-128s
 PARAM_FILE = params-spx-$(PARAMSET).jinc
-ACTIVE_PARAM_FILE = params/active_params.jinc
-PARAM_HEADER = params/params.h
+ACTIVE_PARAM_FILE = x86-64/ref/params/active_params.jinc
+PARAM_HEADER = x86-64/ref/params/params.h
 
-all: $(TARGET)
+all: $(CLI)
 
 # TODO replace by extracting constants from .jinc param file
 ifneq (,$(filter %128f,$(PARAMSET)))
@@ -58,15 +58,15 @@ params_h:
 	echo "#define SPX_SIG_BYTES $(SPX_SIG_BYTES)" >> $(PARAM_HEADER)
 
 # step 1: compile Jasmin -> assembly
-$(ASM): $(JASMIN_SRC) params params_h
-	$(JASMINC) -o $(ASM) $(JASMIN_SRC)
+$(ASM): $(SPX) params params_h
+	$(JASMINC) -o $(ASM) $(SPX)
 	grep -q GNU-stack $(ASM) || echo '.section .note.GNU-stack,"",@progbits' >> $(ASM)
 
 # step 2: compile everything into an executable
-$(TARGET): $(ASM) spx_cli.c misc/jasmin_syscall.o
-	$(CC) $(ASM) spx_cli.c misc/jasmin_syscall.o -o $(TARGET) -no-pie
+$(CLI): $(ASM) spx_cli.c x86-64/ref/misc/jasmin_syscall.o
+	$(CC) $(ASM) spx_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
 
 # clean build artifacts
 .PHONY: clean
 clean:
-	rm -rf $(ASM) $(TARGET) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) outputs
+	rm -rf $(ASM) $(CLI) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) outputs

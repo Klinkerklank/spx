@@ -5,19 +5,14 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-// contains SPX_N and SPX_SIG_BYTES, which Makefile defines based on PARAMSET
-#include "params/params.h"
+#include "x86-64/ref/params/params.h" // contains SPX_N and SPX_SIG_BYTES
+#include "spx_api.h"                  // declare the Jasmin export function signatures in spx.jazz
 
-#define ANSI_COLOR_RESET   "\x1b[0m"
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
-
-// declare the Jasmin export functions in spx.jazz
-extern int slh_keygen(uint8_t *sk, uint8_t *pk);
-extern int slh_sign(uint8_t *sig, uint64_t ctx_ptr, uint64_t ctx_len, uint64_t msg_ptr, uint64_t msg_len, uint8_t *sk);
-extern int slh_verify(uint64_t ctx_ptr, uint64_t ctx_len, uint64_t msg_ptr, uint64_t msg_len, uint8_t *sig, uint8_t *pk);
+#define ANSI_COLOR_RESET  "\x1b[0m"
+#define ANSI_COLOR_RED    "\x1b[31m"
+#define ANSI_COLOR_GREEN  "\x1b[32m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
+#define ANSI_COLOR_BLUE   "\x1b[34m"
 
 // helper functions //
 
