@@ -17,6 +17,9 @@ fn slh_keygen(
     reg ptr u8[SPX_PKBYTES] pk  // public key
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
 {
+    // register variables
+    reg u64 res;
+
     // generate random bytes for SK.seed, SK.prf, and PK.seed
     // (and PK.root but that gets overwritten by the computed value of PK.root)
     () = #spill(pk); // resolves error 'pk and sk need to both be allocated to reg RSI due to architectural constraints'
@@ -25,8 +28,8 @@ fn slh_keygen(
 
     sk, pk = __slh_keygen_internal(sk, pk);
 
-    // set return value to 0
-    reg u64 res; ?{}, res = #set0();
+    // set return value to 0 (successful)
+    res = 0;
 
     return sk, pk, res;
 }
@@ -40,6 +43,9 @@ fn slh_sign(
     reg ptr u8[SPX_SKBYTES] sk   // secret key
 ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig_slh, res
 {
+    // register variables
+    reg u64 res;
+
     // stack variables
     stack u8[SPX_N] addrnd;
 
@@ -47,10 +53,13 @@ fn slh_sign(
 
     for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } // deterministic variant
 
-    sig_slh = __slh_sign_internal(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk, addrnd);
-
-    // set return value to 0
-    reg u64 res; ?{}, res = #set0();
+    // ensure that the context length is valid
+    if (ctx_len <= 255) {
+        sig_slh = __slh_sign_internal(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk, addrnd);
+        res = 0;  // set return value to 0 (successful)
+    } else {
+        res = -1; // set return value to -1 (error)
+    }
 
     return sig_slh, res;
 }
@@ -64,8 +73,15 @@ fn slh_verify(
     reg ptr u8[SPX_PKBYTES] pk // public key
 ) -> reg u64 // -> res
 {
+    // register variables
     reg u64 res;
-    res = __slh_verify_internal(ctx_ptr, ctx_len, msg_ptr, msg_len, sig, pk);
+
+    // ensure that the context length is valid
+    if (ctx_len <= 255) {
+        res = __slh_verify_internal(ctx_ptr, ctx_len, msg_ptr, msg_len, sig, pk);
+    } else {
+        res = -1; // set return value to -1 (error)
+    }
 
     return res;
 }
