@@ -69,4 +69,4 @@ $(CLI): $(ASM) spx_cli.c x86-64/ref/misc/jasmin_syscall.o
 # clean build artifacts
 .PHONY: clean
 clean:
-	rm -rf $(ASM) $(CLI) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) outputs
+	rm -rf $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) $(CLI) *.s *.o *.so outputs
