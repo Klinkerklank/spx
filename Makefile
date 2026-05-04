@@ -1,5 +1,3 @@
-.PHONY: params
-
 # Compiler settings
 JASMINC = jasminc
 CC = /usr/bin/gcc
@@ -49,9 +47,11 @@ ifneq (,$(filter %256s,$(PARAMSET)))
 endif
 
 # Step 0: generate correct parameter files
+.PHONY: params
 params:
 	echo 'require "$(PARAM_FILE)"' > $(ACTIVE_PARAM_FILE)
 
+.PHONY: params_h
 params_h:
 	echo "#pragma once" > $(PARAM_HEADER)
 	echo "#define SPX_N $(SPX_N)" >> $(PARAM_HEADER)
@@ -67,5 +67,6 @@ $(TARGET): $(ASM) spx_cli.c misc/jasmin_syscall.o
 	$(CC) $(ASM) spx_cli.c misc/jasmin_syscall.o -o $(TARGET) -no-pie
 
 # clean build artifacts
+.PHONY: clean
 clean:
 	rm -rf $(ASM) $(TARGET) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) outputs
