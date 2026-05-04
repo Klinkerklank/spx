@@ -17,7 +17,7 @@
 // declare the Jasmin export functions in spx.jazz
 extern int slh_keygen(uint8_t *sk, uint8_t *pk);
 extern int slh_sign(uint8_t *sig, uint64_t ctx_ptr, uint64_t ctx_len, uint64_t msg_ptr, uint64_t msg_len, uint8_t *sk);
-extern int slh_verify(uint64_t msg_ptr, uint64_t ctx_ptr, uint64_t ctx_len, uint64_t msg_len, uint8_t *sig, uint8_t *pk);
+extern int slh_verify(uint64_t ctx_ptr, uint64_t ctx_len, uint64_t msg_ptr, uint64_t msg_len, uint8_t *sig, uint8_t *pk);
 
 // helper functions //
 
