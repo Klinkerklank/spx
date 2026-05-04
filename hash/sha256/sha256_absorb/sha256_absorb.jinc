@@ -9,11 +9,21 @@ fn compress(
   stack ptr u32[8] Hp;
   reg ptr u32[8] H;
   reg u64 tr;
+  reg u32 swap;
 
   Kp = SHA256_K;
   Hp = _H;
 
   H = Hp;
+
+  // W is written to one byte at a time, but is read from in 32-bit words,
+  // so we need to account for the Endianness
+  
+  for t=0 to 16 {
+    swap = W[t];
+    swap = #BSWAP_32(swap);
+    W[t] = swap;
+  }
 
   for t=16 to 64 { W = __Wt_ptr_ref(W, t); }
 
@@ -107,7 +117,7 @@ fn absorb_pointer(
   target += in_len;
   while (idx_W < target) {
     W[:u8 idx_W] = [:u8 in_ptr];
-    idx_W += 1;
+    idx_W  += 1;
     in_ptr += 1;
   }
 
@@ -171,7 +181,7 @@ fn absorb_fixed(
   target = idx_W;
   target += in_len;
   while (idx_W < target) {
-    W[:u8 idx_W] = prefix[:u8 in_ptr];
+    W[:u8 idx_W] = prefix[in_ptr];
     idx_W  += 1;
     in_ptr += 1;
   }
@@ -190,6 +200,7 @@ fn finish(
 
   // set separation byte after input to 0x80
   W[:u8 idx_W] = 0x80;
+  idx_W += 1;
 
   // if the separation byte topped off the block, run the compression function
   if (idx_W == 64) {
@@ -256,10 +267,11 @@ fn __sha256_absorb(
   stack u32[64] W;
 
   // compute number of message bits for the length encoding later
-  bits = PREFIXLEN; // bytelength of the prefix
-  bits += ctx_len;  // bytelength of the context
-  bits += msg_len;  // bytelength of the message
-  bits <<= 3;       // convert number of bytes to number of bits
+  bits = PREFIXLEN;  // bytelength of the prefix
+  bits += ctx_len;   // bytelength of the context
+  bits += msg_len;   // bytelength of the message
+  bits += 2;         // account for the zero-byte and the context length
+  bits <<= 3;        // convert number of bytes to number of bits
   () = #spill(bits); // make space in the registers
 
   H = __initH_ref();
