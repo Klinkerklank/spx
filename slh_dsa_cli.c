@@ -117,8 +117,16 @@ int sign(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
     
     // declare buffer that will hold the signature
     uint8_t sig[SPX_SIG_BYTES];
+
+    uint64_t ctx_msg_ptrs[2];
+    uint64_t ctx_msg_lens[2];
+
+    ctx_msg_ptrs[0] = (uint64_t) ctx_ptr;
+    ctx_msg_ptrs[1] = (uint64_t) msg_ptr;
+    ctx_msg_lens[0] = (uint64_t) ctx_len;
+    ctx_msg_lens[1] = (uint64_t) msg_len;
     
-    int r = slh_sign(sig, (uint64_t)ctx_ptr, (uint64_t)ctx_len, (uint64_t)msg_ptr, (uint64_t)msg_len, sk);
+    int r = slh_sign(sig, ctx_msg_ptrs, ctx_msg_lens, sk);
     assert(r == 0);
     
     mkdir("outputs", 0700); // ensure output directory exists
@@ -138,7 +146,15 @@ int verify(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
     uint8_t sig[SPX_SIG_BYTES];
     read_file_fixed("outputs/sig.bin", sig, sizeof(sig));
 
-    int r = slh_verify((uint64_t)ctx_ptr, (uint64_t)ctx_len, (uint64_t)msg_ptr, (uint64_t)msg_len, sig, pk);
+    uint64_t ctx_msg_ptrs[2];
+    uint64_t ctx_msg_lens[2];
+
+    ctx_msg_ptrs[0] = (uint64_t) ctx_ptr;
+    ctx_msg_ptrs[1] = (uint64_t) msg_ptr;
+    ctx_msg_lens[0] = (uint64_t) ctx_len;
+    ctx_msg_lens[1] = (uint64_t) msg_len;
+
+    int r = slh_verify(ctx_msg_ptrs, ctx_msg_lens, sig, pk);
     
     printf("Verification: ");
     if (r == 0) {

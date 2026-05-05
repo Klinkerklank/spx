@@ -26,10 +26,7 @@ fn slh_keygen(
     sk = #randombytes(sk);
     () = #unspill(pk);
 
-    sk, pk = __slh_keygen_internal(sk, pk);
-
-    // set return value to 0 (successful)
-    res = 0;
+    sk, pk, res = __slh_keygen_internal(sk, pk);
 
     return sk, pk, res;
 }
@@ -38,8 +35,8 @@ fn slh_keygen(
 export
 fn slh_sign(
     reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
-    reg u64 ctx_ptr ctx_len,     // context pointer and context length
-    reg u64 msg_ptr msg_len,     // message pointer and message length
+    reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
+    reg ptr u64[2] ctx_msg_lens, // context and message lengths
     reg ptr u8[SPX_SKBYTES] sk   // secret key
 ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig_slh, res
 {
@@ -58,15 +55,14 @@ fn slh_sign(
         //  substitute opt_rand <- PK.seed for the deterministic variant
         for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } 
     } else { // non-deterministic additional randomness
-        () = #spill(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk); // resolves error 'sk needs to be allocated to reg RSI due to architectural constraints'
+        () = #spill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk); // resolves error 'sk needs to be allocated to reg RSI due to architectural constraints'
         addrnd = #randombytes(addrnd);    
-        () = #unspill(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk);                
+        () = #unspill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk);                
     }
 
     // ensure that the context length is valid
-    if (ctx_len <= 255) {
-        sig_slh = __slh_sign_internal(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk, addrnd);
-        res = 0;  // set return value to 0 (successful)
+    if (ctx_msg_lens[0] <= 255) {
+        sig_slh, res = __slh_sign_internal(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk, addrnd);
     } else {
         res = -1; // set return value to -1 (error)
     }
@@ -77,18 +73,18 @@ fn slh_sign(
 // algorithm 24 from SLH-DSS
 export
 fn slh_verify(
-    reg u64 ctx_ptr ctx_len,   // context pointer and context length
-    reg u64 msg_ptr msg_len,   // message pointer and message length
-    reg ptr u8[SPX_SIG] sig,   // SPHINCS+ signature
-    reg ptr u8[SPX_PKBYTES] pk // public key
+    reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
+    reg ptr u64[2] ctx_msg_lens, // context and message lengths
+    reg ptr u8[SPX_SIG] sig,     // SPHINCS+ signature
+    reg ptr u8[SPX_PKBYTES] pk   // public key
 ) -> reg u64 // -> res
 {
     // register variables
     reg u64 res;
 
     // ensure that the context length is valid
-    if (ctx_len <= 255) {
-        res = __slh_verify_internal(ctx_ptr, ctx_len, msg_ptr, msg_len, sig, pk);
+    if (ctx_msg_lens[0] <= 255) {
+        res = __slh_verify_internal(ctx_msg_ptrs, ctx_msg_lens, sig, pk);
     } else {
         res = -1; // set return value to -1 (error)
     }
