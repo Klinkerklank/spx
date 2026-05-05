@@ -8,7 +8,7 @@ import hashlib
 @pytest.fixture()
 def kats(slh_dsa):
     kat_file = (
-        Path(__file__).parent / "pqc" / "slh_dsa_{}.json".format(slh_dsa.parameter_set)
+        Path(__file__).parent / "pqc" / "json" / "slh_dsa_{}.json".format(slh_dsa.parameter_set)
     )
     with open(kat_file, "r") as kats_raw:
         return json.load(kats_raw)

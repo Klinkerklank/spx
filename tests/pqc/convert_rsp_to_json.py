@@ -65,7 +65,8 @@ def convert_rsp_to_json(rsp_file, json_file):
 
 
 # Example usage
-convert_rsp_to_json(
-    "PQCsignKAT_64.rsp",
-    "slh_dsa_sha2-128s.json"
-)
+for choice in ["sha2-128s", "sha2-128f", "sha2-192s", "sha2-192f", "sha2-256s", "sha2-256f"]:
+    convert_rsp_to_json(
+        "rsp/slh_dsa_{}.rsp".format(choice),
+        "json/slh_dsa_{}.json".format(choice)
+    )
