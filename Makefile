@@ -77,8 +77,13 @@ $(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
 # --------------------------------------------------------------------
 #  KAT testing and safety checking
 # --------------------------------------------------------------------
+# step 1: compile Jasmin -> assembly
+$(OUTPUT_FILE_NAME)_kattest.s: $(IMPLEMENTATION)/spx/spx.jinc params params_h
+	$(JASMINC) -o $(OUTPUT_FILE_NAME)_kattest.s $(IMPLEMENTATION)/spx/spx.jinc
+	grep -q GNU-stack $(OUTPUT_FILE_NAME)_kattest.s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME)_kattest.s
+
 # For x86-64: Generate a shared-library to pass to ctypes.
-$(OUTPUT_FILE_NAME).so: $(OUTPUT_FILE_NAME).s
+$(OUTPUT_FILE_NAME).so: $(OUTPUT_FILE_NAME)_kattest.s
 	$(CC) $^ -fPIC -shared -o $@
 
 TESTING_WRAPPER :=

@@ -2,7 +2,7 @@
 #include <stddef.h>
 
 #include "x86-64/ref/params/params.h" // contains SPX_N and SPX_SIG_BYTES
-#include "spx_api.h"                  // declare the Jasmin export function signatures in spx.jazz
+#include "slh_dsa_api.h"              // declare the Jasmin export function signatures in spx.jazz
 
 /* =========================
  * Key Generation
