@@ -1,7 +1,9 @@
-spx.s
-spx_cli
-log.txt
-params/params.h
-params/active_params.jinc
-outputs
+slh_dsa_cli
+*.s
 *.so
+*.o
+log.txt
+x86-64/ref/params/params.h
+x86-64/ref/params/active_params.jinc
+outputs
+.pytest_cache

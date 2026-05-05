@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 
 #include "x86-64/ref/params/params.h" // contains SPX_N and SPX_SIG_BYTES
-#include "spx_api.h"                  // declare the Jasmin export function signatures in spx.jazz
+#include "slh_dsa_api.h"              // declare the Jasmin export function signatures in spx.jazz
 
 #define ANSI_COLOR_RESET  "\x1b[0m"
 #define ANSI_COLOR_RED    "\x1b[31m"
