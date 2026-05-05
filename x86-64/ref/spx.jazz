@@ -22,9 +22,9 @@ fn slh_keygen(
 
     // generate random bytes for SK.seed, SK.prf, and PK.seed
     // (and PK.root but that gets overwritten by the computed value of PK.root)
-    () = #spill(pk); // resolves error 'pk and sk need to both be allocated to reg RSI due to architectural constraints'
+    () = #spill(pk); // resolves error 'sk needs to be allocated to reg RSI due to architectural constraints'
     sk = #randombytes(sk);
-    () = #unspill(pk); // resolves error 'pk and sk need to both be allocated to reg RSI due to architectural constraints'
+    () = #unspill(pk);
 
     sk, pk = __slh_keygen_internal(sk, pk);
 
@@ -50,8 +50,18 @@ fn slh_sign(
     stack u8[SPX_N] addrnd;
 
     inline int i;
+    inline int choice;
 
-    for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } // deterministic variant
+    choice = 0; // hardcode the choice for testing purposes
+
+    if (choice == 0) { // deterministic additional randomness
+        //  substitute opt_rand <- PK.seed for the deterministic variant
+        for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } 
+    } else { // non-deterministic additional randomness
+        () = #spill(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk); // resolves error 'sk needs to be allocated to reg RSI due to architectural constraints'
+        addrnd = #randombytes(addrnd);    
+        () = #unspill(sig_slh, ctx_ptr, ctx_len, msg_ptr, msg_len, sk);                
+    }
 
     // ensure that the context length is valid
     if (ctx_len <= 255) {
