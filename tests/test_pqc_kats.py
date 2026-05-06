@@ -4,6 +4,10 @@ from pathlib import Path
 import json
 import hashlib
 
+from pyAES_DRBG.aes_drbg import AES_DRBG
+
+# SPHINCS+ parameter (for sha2-128s: N = 16)
+SPX_N = 16
 
 @pytest.fixture()
 def kats(slh_dsa):
@@ -17,34 +21,40 @@ def kats(slh_dsa):
 def test_against_pqc_kats(slh_dsa, kats):
     for kat in kats:
         # Test key generation.
-        key_generation_seed = bytearray.fromhex(kat["key_generation_seed"])
-        (verification_key, signing_key) = slh_dsa.generate_keypair(key_generation_seed)
+        seed = bytearray.fromhex(kat["seed"])
 
-        sha3_256_hash_of_verification_key = hashlib.sha3_256(verification_key).digest()
-        assert sha3_256_hash_of_verification_key == bytes.fromhex(
-            (kat["sha3_256_hash_of_verification_key"])
-        )
+        # Instantiate DRBG with the 48-byte seed.
+        drbg = AES_DRBG(256)
+        drbg.instantiate(bytes(seed))
 
-        sha3_256_hash_of_signing_key = hashlib.sha3_256(signing_key).digest()
-        assert sha3_256_hash_of_signing_key == bytes.fromhex(
-            (kat["sha3_256_hash_of_signing_key"])
-        )
+        # Generate randomness for keygen (3 * N bytes).
+        drbg_key_randomness = bytearray(drbg.generate(3 * SPX_N))
+        (verification_key, signing_key) = slh_dsa.generate_keypair(drbg_key_randomness)
+
+        print("  spx pk: " + 64*" " + verification_key.hex().upper())
+        print(".json pk: " + 64*" " + kat["pk"])
+        print("  spx sk: " + signing_key.hex().upper())
+        print(".json sk: " + kat["sk"])
+
+        assert verification_key == bytes.fromhex(kat["pk"])
+        assert signing_key      == bytes.fromhex(kat["sk"])
 
         # Then signing.
 
         context = bytearray.fromhex(kat["context"])
         message = bytearray.fromhex(kat["message"])
 
-        signing_randomness = bytearray.fromhex(kat["signing_randomness"])
+        # Generate randomness for signing (N bytes)
+        drbg_signing_randomness = bytearray(drbg.generate(SPX_N))
 
         signature, result = slh_dsa.sign(
-            signing_key, context, message, signing_randomness
+            signing_key, context, message, drbg_signing_randomness
         )
         assert result == 0
 
-        sha3_256_hash_of_signature = hashlib.sha3_256(signature).digest()
-        assert sha3_256_hash_of_signature == bytes.fromhex(
-            (kat["sha3_256_hash_of_signature"])
+        sha3_256_hash_of_sig = hashlib.sha3_256(signature).digest()
+        assert sha3_256_hash_of_sig == bytes.fromhex(
+            (kat["sha3_256_hash_of_sig"])
         ), print("Failure at KAT number {}".format(kat["count"]))
 
         # And lastly, verification.

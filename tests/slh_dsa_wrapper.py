@@ -57,9 +57,7 @@ class SLH_DSA_X86_64(SLH_DSA):
         message_buffer_ptr = ctypes.cast(message_buffer, uint8_t_ptr)
         message_len = len(message)
 
-        context_message_pointers = (uint8_t_ptr * 2)(
-            context_buffer_ptr, message_buffer_ptr
-        )
+        context_message_pointers = (uint8_t_ptr * 2)(context_buffer_ptr, message_buffer_ptr)
         context_message_sizes = (ctypes.c_size_t * 2)(context_len, message_len)
 
         return context_message_pointers, context_message_sizes
