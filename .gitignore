@@ -8,3 +8,4 @@ x86-64/ref/params/active_params.jinc
 outputs
 .pytest_cache
 tests/__pycache__
+tests/pyAES_DRBG/__pycache__/
