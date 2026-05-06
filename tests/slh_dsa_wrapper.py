@@ -20,7 +20,7 @@ class SLH_DSA_X86_64(SLH_DSA):
     def __init__(self, parameter_set, implementation_type):
         slh_dsa_so_name = "slh_dsa_{}_{}_x86-64.so".format(
             parameter_set,
-            implementation_type,
+            implementation_type
         )
         slh_dsa = ctypes.PyDLL(Path(__file__).parent.parent / slh_dsa_so_name)
 

@@ -6,7 +6,8 @@
 
 int slh_keygen_internal(
   uint8_t sk[4*SPX_N],
-  uint8_t pk[2*SPX_N]
+  uint8_t pk[2*SPX_N],
+  const uint8_t rngseed[3*SPX_N]
 );
 
 int slh_sign_internal(

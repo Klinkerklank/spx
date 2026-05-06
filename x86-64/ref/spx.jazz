@@ -20,13 +20,16 @@ fn slh_keygen(
     // register variables
     reg u64 res;
 
+    // stack variables
+    stack u8[3*SPX_N] rngseed; // randomness
+
     // generate random bytes for SK.seed, SK.prf, and PK.seed
     // (and PK.root but that gets overwritten by the computed value of PK.root)
-    () = #spill(pk); // resolves error 'sk needs to be allocated to reg RSI due to architectural constraints'
-    sk = #randombytes(sk);
-    () = #unspill(pk);
+    () = #spill(sk, pk); // resolves error 'sk needs to be allocated to reg RSI due to architectural constraints'
+    rngseed = #randombytes(rngseed);
+    () = #unspill(sk, pk);
 
-    sk, pk, res = __slh_keygen_internal(sk, pk);
+    sk, pk, res = __slh_keygen_internal(sk, pk, rngseed);
 
     return sk, pk, res;
 }
