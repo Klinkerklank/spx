@@ -1,4 +1,5 @@
 import json
+import hashlib
 
 def parse_rsp(file):
     kats = []
@@ -33,8 +34,10 @@ def convert_rsp_to_json(rsp_file, json_file):
     for i, kat in enumerate(kats):
         entry = {
             "count": i,
-            "key_generation_seed": kat.get("seed", ""),
-            "message": kat.get("msg", ""),
+            "seed": kat.get("seed", ""),
+            "msg": kat.get("msg", ""),
+            "pk": kat.get("pk", ""),
+            "sk": kat.get("sk", ""),
         }
 
         # Extract signature from sm = sig || msg
@@ -42,21 +45,11 @@ def convert_rsp_to_json(rsp_file, json_file):
         msg = kat.get("msg", "")
 
         sig_len = len(sm) - len(msg)
-        signature = sm[:sig_len]
+        sig = sm[:sig_len]
 
-        import hashlib
+        entry["sig"] = sig
 
-        entry["sha3_256_hash_of_verification_key"] = hashlib.sha3_256(
-            bytes.fromhex(kat["pk"])
-        ).hexdigest()
-
-        entry["sha3_256_hash_of_signing_key"] = hashlib.sha3_256(
-            bytes.fromhex(kat["sk"])
-        ).hexdigest()
-
-        entry["sha3_256_hash_of_signature"] = hashlib.sha3_256(
-            bytes.fromhex(signature)
-        ).hexdigest()
+        entry["sha3_256_hash_of_sig"] = hashlib.sha3_256(bytes.fromhex(sig)).hexdigest()
 
         out.append(entry)
 
