@@ -93,6 +93,7 @@ endif
 
 .PHONY: pqc-kat-test
 pqc-kat-test: $(TESTING_WRAPPER)
+	python3 tests/pqc/convert_rsp_to_json.py
 	python3 -m pytest \
 		--parameter-set=$(PARAMETER_SET) \
 		--architecture=$(ARCHITECTURE) \
