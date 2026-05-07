@@ -21,18 +21,17 @@ fn __base_b(
           bits += 8;
         }   
 
-        // bits -= params->wots_log_w;
         bits -= LG_B;
-    
-        // baseb[out] = (total >> bits) & (params->wots_w - 1);
+
+        // baseb[out] = (total >> bits) & (B - 1);
         total_32 = (32u) total;
         total_32 >>= (bits & 31);
         total_32 &= (B - 1);
         baseb[out] = total_32;
 
-      // out++;
-      out += 1;
-      consumed += 1;
+        // out++;
+        out += 1;
+        consumed += 1;
     }
 
     return baseb;

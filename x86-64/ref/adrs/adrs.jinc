@@ -28,6 +28,16 @@ fn __adrs_init(
     return adrs;
 }
 
+inline
+fn __adrs_clone(
+    reg ptr u32[8] adrs_new adrs
+) -> reg ptr u32[8]
+{
+    inline int i;
+    for i=0 to 4 { adrs_new[:u64 i] = adrs[:u64 i]; }
+    return adrs_new;
+}
+
 // compress adrs to adrs^c, for SHA implementations
 inline
 fn __adrs_compress(
@@ -47,16 +57,6 @@ fn __adrs_compress(
     for i=0 to 12 { out[i+10] = adrs_b[i+20]; }
 
     return out;
-}
-
-inline
-fn __adrs_clone(
-    reg ptr u32[8] adrs_new adrs
-) -> reg ptr u32[8]
-{
-    inline int i;
-    for i=0 to 4 { adrs_new[:u64 i] = adrs[:u64 i]; }
-    return adrs_new;
 }
 
 ////////////////////////////////
@@ -86,7 +86,7 @@ fn __adrs_set_tree_addr(
 inline
 fn __adrs_set_type_and_clear(
     reg ptr u32[8] adrs,
-    reg u32 t
+    inline int t
 ) -> reg ptr u32[8]
 {
     // set the last four words of adrs (including type field) to 0

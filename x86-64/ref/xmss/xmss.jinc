@@ -84,7 +84,7 @@ fn xmss_node(
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
                 adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
-                adrs = __adrs_set_key_pair_addr(adrs, node); // adrs type is already WOTS_HASH
+                adrs = __adrs_set_key_pair_addr(adrs, node);
                 
                 node_addr = (64u) node; node_addr *= SPX_N;
 
@@ -93,7 +93,7 @@ fn xmss_node(
                 // internal node: the node value is the hash of its two children lnode and rnode
                 lnode_i = node;  lnode_i *= 2; // lnode_i = 2*node
                 lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
-                label = __tree_label(lnode_i, lnode_z); // lnode = tree_label(2*node,   layer-1)
+                label = __tree_label(lnode_i, lnode_z); // lnode = tree_label(2*node, layer-1)
                 lnode = (64u) label;
                 lnode *= SPX_N;                       // lnode = tree_label(2*node,   layer-1) * SPX_N
                 rnode = lnode; rnode += SPX_N;        // rnode = tree_label(2*node+1, layer-1) * SPX_N
@@ -103,7 +103,6 @@ fn xmss_node(
                     buf_r[j] = flat_tree[rnode + j];
                 }
                 
-                // adrs type is already TREE
                 adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
                 adrs = __adrs_set_tree_height(adrs, layer);
                 adrs = __adrs_set_tree_index(adrs, node);
