@@ -31,26 +31,36 @@ def test_against_pqc_kats(slh_dsa, kats):
         drbg_key_randomness = bytearray(drbg.generate(3 * SPX_N))
         (verification_key, signing_key) = slh_dsa.generate_keypair(drbg_key_randomness)
 
-        print("  spx pk: " + 64*" " + verification_key.hex().upper())
-        print(".json pk: " + 64*" " + kat["pk"])
-        print("  spx sk: " + signing_key.hex().upper())
-        print(".json sk: " + kat["sk"])
-
         assert verification_key == bytes.fromhex(kat["pk"])
         assert signing_key      == bytes.fromhex(kat["sk"])
 
         # Then signing.
 
-        context = bytearray.fromhex(kat["context"])
-        message = bytearray.fromhex(kat["message"])
+        # context = bytearray.fromhex(kat["context"])
+        context = bytearray()
+        message = bytearray.fromhex(kat["msg"])
 
         # Generate randomness for signing (N bytes)
         drbg_signing_randomness = bytearray(drbg.generate(SPX_N))
 
         signature, result = slh_dsa.sign(
-            signing_key, context, message, drbg_signing_randomness
+            signing_key,
+            context,
+            message,
+            drbg_signing_randomness
         )
         assert result == 0
+
+        sigstring = signature.hex().upper()
+
+        print("  spx sig outer chars: " + sigstring[:32]  + " ... " + sigstring[-64:-32]  + " " + sigstring[-32:] )
+        print(".json sig outer chars: " + kat["sig"][:32] + " ... " + kat["sig"][-64:-32] + " " + kat["sig"][-32:])
+
+        # print("spx sig:")
+        # print(sigstring)
+        # print(); print(); print()
+        # print(".json sig:")
+        # print(kat["sig"])
 
         sha3_256_hash_of_sig = hashlib.sha3_256(signature).digest()
         assert sha3_256_hash_of_sig == bytes.fromhex(
