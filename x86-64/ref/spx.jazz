@@ -10,32 +10,42 @@ require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS: HyperTree
 require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS: Forest Of Random Subsets
 require "spx/spx.jinc"   // algorithms 18-20 of SLH-DSS: Statless Practical Hash-based Incredibly Nice Cryptographic Signature Plus
 
-// algorithm 21 from SLH-DSS
-export
+/*-------------------------------------------------------------+
+| ALGORITHM 21 FROM SLH-DSS                                    |
+| Export function that generates the secret and public keys.   |
+| Generates the randomness needed for slh_keygen_internal      |
+| using the #randombytes hook.                                 |
++-------------------------------------------------------------*/
+export // this function is visible to the outside after compilation
 fn slh_keygen(
     reg ptr u8[SPX_SKBYTES] sk, // secret key
     reg ptr u8[SPX_PKBYTES] pk  // public key
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
 {
     // register variables
-    reg u64 res;
+    reg u64 res; // indicates whether running this function was successful
 
     // stack variables
-    stack u8[3*SPX_N] rngseed; // randomness
+    stack u8[3*SPX_N] keyrnd; // key randomness
 
     // generate random bytes for SK.seed, SK.prf, and PK.seed
-    // (and PK.root but that gets overwritten by the computed value of PK.root)
-    () = #spill(sk, pk); // resolves error 'sk needs to be allocated to reg RSI due to architectural constraints'
-    rngseed = #randombytes(rngseed);
+    () = #spill(sk, pk); // resolves architectural constraints error
+    keyrnd = #randombytes(keyrnd);
     () = #unspill(sk, pk);
 
-    sk, pk, res = __slh_keygen_internal(sk, pk, rngseed);
+    // compute the secret and public keys
+    sk, pk, res = __slh_keygen_internal(sk, pk, keyrnd);
 
     return sk, pk, res;
 }
 
-// algorithm 22 from SLH-DSS
-export
+/*-------------------------------------------------------------+
+| ALGORITHM 22 FROM SLH-DSS                                    |
+| Export function that computes a signature on the message and |
+| context string. Generates the additional randomness needed   |
+| for slh_sign_internal using the #randombytes hook.           |
++-------------------------------------------------------------*/
+export // this function is visible to the outside after compilation
 fn slh_sign(
     reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
@@ -44,10 +54,10 @@ fn slh_sign(
 ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig_slh, res
 {
     // register variables
-    reg u64 res;
+    reg u64 res; // indicates whether running this function was successful
 
     // stack variables
-    stack u8[SPX_N] addrnd;
+    stack u8[SPX_N] addrnd; // additional message randomness
 
     inline int i;
     inline int choice;
@@ -55,16 +65,17 @@ fn slh_sign(
     choice = 0; // hardcode the choice for testing purposes
 
     if (choice == 0) { // deterministic additional randomness
-        //  substitute opt_rand <- PK.seed for the deterministic variant
-        for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; } 
+        //  substitute opt_rand <- PK.seed for the deterministic variant (according to line 2 in algorithm 19 in SLH-DSS)
+        for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; }
     } else { // non-deterministic additional randomness
-        () = #spill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk); // resolves error 'sk needs to be allocated to reg RSI due to architectural constraints'
-        addrnd = #randombytes(addrnd);    
+        () = #spill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk); // resolves architectural constraints error
+        addrnd = #randombytes(addrnd);
         () = #unspill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk);                
     }
 
     // ensure that the context length is valid
     if (ctx_msg_lens[0] <= 255) {
+        // compute the SLH-DSA signature
         sig_slh, res = __slh_sign_internal(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk, addrnd);
     } else {
         res = -1; // set return value to -1 (error)
@@ -73,8 +84,12 @@ fn slh_sign(
     return sig_slh, res;
 }
 
-// algorithm 24 from SLH-DSS
-export
+/*-------------------------------------------------------------+
+| ALGORITHM 24 FROM SLH-DSS                                    |
+| Export function that verifies whether the signature on the   |
+| message and context string is valid.                         |
++-------------------------------------------------------------*/
+export // this function is visible to the outside after compilation
 fn slh_verify(
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
@@ -83,10 +98,11 @@ fn slh_verify(
 ) -> reg u64 // -> res
 {
     // register variables
-    reg u64 res;
+    reg u64 res; // indicates whether running this function was successful
 
     // ensure that the context length is valid
     if (ctx_msg_lens[0] <= 255) {
+        // verify the SLH-DSA signature
         res = __slh_verify_internal(ctx_msg_ptrs, ctx_msg_lens, sig, pk);
     } else {
         res = -1; // set return value to -1 (error)
