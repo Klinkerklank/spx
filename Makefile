@@ -32,7 +32,7 @@ all: $(CLI)
 # clean build artifacts
 .PHONY: clean
 clean:
-	rm -rf *.s *.o *.so outputs $(CLI) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
+	rm -rf *.s *.o *.so outputs $(CLI) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) *.json
 
 # ---------------------------------------------------------------- #
 #  PARAMETER HANDLING                                              #
