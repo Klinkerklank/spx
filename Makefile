@@ -1,6 +1,6 @@
-# ----------------------------------------------------------------
-#  SETTINGS
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------- #
+#  SETTINGS                                                        #
+# ---------------------------------------------------------------- #
 
 # compiler settings
 JASMINC  ?= jasminc
@@ -22,9 +22,9 @@ CLI = slh_dsa_cli
 # file name
 OUTPUT_FILE_NAME = slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)
 
-# ----------------------------------------------------------------
-#  STANDARD MAKEFILE STUFF
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------- #
+#  STANDARD MAKEFILE STUFF                                         #
+# ---------------------------------------------------------------- #
 
 # default behaviour
 all: $(CLI)
@@ -34,9 +34,9 @@ all: $(CLI)
 clean:
 	rm -rf *.s *.o *.so outputs $(CLI) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
 
-# ----------------------------------------------------------------
-#  PARAMETER HANDLING
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------- #
+#  PARAMETER HANDLING                                              #
+# ---------------------------------------------------------------- #
 
 # set the correct values of SPX_N and SPX_SIG_BYTES
 ifneq (,$(filter %128f,$(PARAMETER_SET)))
@@ -76,9 +76,9 @@ params_h:
 	echo "#define SPX_N $(SPX_N)" >> $(PARAM_HEADER)
 	echo "#define SPX_SIG_BYTES $(SPX_SIG_BYTES)" >> $(PARAM_HEADER)
 
-# ----------------------------------------------------------------
-#  COMPILING
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------- #
+#  COMPILING                                                       #
+# ---------------------------------------------------------------- #
 
 # compile SPHINCS+ CLI from Jasmin to assembly
 $(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz params params_h
@@ -89,9 +89,9 @@ $(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz params params_h
 $(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
 	$(CC) $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
 
-# ----------------------------------------------------------------
-#  KAT TESTING
-# ----------------------------------------------------------------
+# ---------------------------------------------------------------- #
+#  KAT TESTING                                                     #
+# ---------------------------------------------------------------- #
 
 # compile SPHINCS+ API from Jasmin to assembly
 $(OUTPUT_FILE_NAME)_kattest.s: $(IMPLEMENTATION)/spx/spx.jinc params params_h
