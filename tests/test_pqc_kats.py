@@ -34,6 +34,11 @@ def test_against_pqc_kats(slh_dsa, kats):
         assert verification_key == bytes.fromhex(kat["pk"])
         assert signing_key      == bytes.fromhex(kat["sk"])
 
+        print("SK.prf:  " + signing_key[SPX_N : 2*SPX_N].hex().upper())
+        print("PK.seed: " + signing_key[2*SPX_N : 3*SPX_N].hex().upper())
+        print("msg:")
+        print(kat["msg"])
+
         # Then signing.
 
         # context = bytearray.fromhex(kat["context"])

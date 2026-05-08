@@ -156,9 +156,6 @@ fn slh_sign_internal(
     reg u64 msg_ptr msg_len;
     reg u32 idx_leaf;
     reg u64 res;
-    
-    // separate SK.prf from the overall secret key
-    skprf = sk[1*SPX_N : SPX_N];
 
     adrs = __adrs_init(adrs);
 
@@ -169,6 +166,9 @@ fn slh_sign_internal(
     
     // set aside the register values for the H_msg call below
     () = #spill(ctx_ptr, ctx_len, msg_ptr, msg_len);
+    
+    // separate SK.prf from the overall secret key
+    skprf = sk[1*SPX_N : SPX_N];
 
     r = sig_slh[0 : SPX_N];
     () = #spill(sig_slh, sk);
