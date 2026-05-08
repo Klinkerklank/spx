@@ -173,6 +173,7 @@ fn slh_sign_internal(
     r = sig_slh[0 : SPX_N];
     () = #spill(sig_slh, sk);
     r = __PRF_msg(r, skprf, addrnd, ctx_ptr, ctx_len, msg_ptr, msg_len);
+    // inline int i; for i=0 to SPX_N { r[i] = addrnd[i]; }
     () = #unspill(sig_slh, sk);
     sig_slh[0 : SPX_N] = r;
     

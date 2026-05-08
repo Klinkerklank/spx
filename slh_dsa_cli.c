@@ -166,82 +166,104 @@ int verify(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
     return r;
 }
 
+int test_sha256_absorb(
+  uint8_t digest[32], uint64_t ctx_ptr, uint64_t ctx_len, uint64_t msg_ptr, uint64_t msg_len
+);
+
 int main(int argc, char **argv) {
-    char *mode = NULL;
-    char *msg_file = NULL;
-    char *ctx_ptr = "";
+    // char *mode = NULL;
+    // char *msg_file = NULL;
+    // char *ctx_ptr = "";
 
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-mode") == 0) {
-            mode = argv[++i];
-        } else if (strcmp(argv[i], "-msg") == 0) {
-            msg_file = argv[++i];
-        } else if (strcmp(argv[i], "-ctx") == 0) {
-            ctx_ptr = argv[++i];
-        }
-    }
+    // for (int i = 1; i < argc; i++) {
+    //     if (strcmp(argv[i], "-mode") == 0) {
+    //         mode = argv[++i];
+    //     } else if (strcmp(argv[i], "-msg") == 0) {
+    //         msg_file = argv[++i];
+    //     } else if (strcmp(argv[i], "-ctx") == 0) {
+    //         ctx_ptr = argv[++i];
+    //     }
+    // }
 
-    if (!mode) {
-        printf("Mode not defined. Usage:\n");
-        printf("  -mode keygen\n");
-        printf("  -mode sign   -msg <file>\n");
-        printf("  -mode verify -msg <file>\n");
-        return 1;
-    }
+    // if (!mode) {
+    //     printf("Mode not defined. Usage:\n");
+    //     printf("  -mode keygen\n");
+    //     printf("  -mode sign   -msg <file>\n");
+    //     printf("  -mode verify -msg <file>\n");
+    //     return 1;
+    // }
     
-    printf("\n");
+    // printf("\n");
 
-    if (strcmp(mode, "keygen") == 0) {
-        printf(ANSI_COLOR_YELLOW "Generating SPHINCS+ keys" ANSI_COLOR_RESET "...\n");
+    // if (strcmp(mode, "keygen") == 0) {
+    //     printf(ANSI_COLOR_YELLOW "Generating SPHINCS+ keys" ANSI_COLOR_RESET "...\n");
 
-        keygen();
-    }
-    else if (strcmp(mode, "sign") == 0) {
-        if (!msg_file) {
-            printf("sign requires -msg\n");
-            return 1;
-        }
-        printf(ANSI_COLOR_YELLOW "Computing signature on %s" ANSI_COLOR_RESET "...\n", msg_file);
+    //     keygen();
+    // }
+    // else if (strcmp(mode, "sign") == 0) {
+    //     if (!msg_file) {
+    //         printf("sign requires -msg\n");
+    //         return 1;
+    //     }
+    //     printf(ANSI_COLOR_YELLOW "Computing signature on %s" ANSI_COLOR_RESET "...\n", msg_file);
         
-        size_t msg_len;
-        uint8_t *msg_ptr = read_file(msg_file, &msg_len);
+    //     size_t msg_len;
+    //     uint8_t *msg_ptr = read_file(msg_file, &msg_len);
 
-        if (!msg_ptr) {
-            printf("Failed to read file\n");
-            return 1;
-        }
+    //     if (!msg_ptr) {
+    //         printf("Failed to read file\n");
+    //         return 1;
+    //     }
         
-        size_t ctx_len = strlen(ctx_ptr);
+    //     size_t ctx_len = strlen(ctx_ptr);
 
-        sign(ctx_ptr, ctx_len, msg_ptr, msg_len);
+    //     sign(ctx_ptr, ctx_len, msg_ptr, msg_len);
 
-        free(msg_ptr);
-    }
-    else if (strcmp(mode, "verify") == 0) {
-        if (!msg_file) {
-            printf("verify requires -msg\n");
-            return 1;
-        }
-        printf(ANSI_COLOR_YELLOW "Verifying signature on %s" ANSI_COLOR_RESET "...\n", msg_file);
+    //     free(msg_ptr);
+    // }
+    // else if (strcmp(mode, "verify") == 0) {
+    //     if (!msg_file) {
+    //         printf("verify requires -msg\n");
+    //         return 1;
+    //     }
+    //     printf(ANSI_COLOR_YELLOW "Verifying signature on %s" ANSI_COLOR_RESET "...\n", msg_file);
         
-        size_t msg_len;
-        uint8_t *msg_ptr = read_file(msg_file, &msg_len);
+    //     size_t msg_len;
+    //     uint8_t *msg_ptr = read_file(msg_file, &msg_len);
 
-        if (!msg_ptr) {
-            printf("Failed to read file\n");
-            return 1;
-        }
+    //     if (!msg_ptr) {
+    //         printf("Failed to read file\n");
+    //         return 1;
+    //     }
         
-        size_t ctx_len = strlen(ctx_ptr);
+    //     size_t ctx_len = strlen(ctx_ptr);
 
-        verify(ctx_ptr, ctx_len, msg_ptr, msg_len);
+    //     verify(ctx_ptr, ctx_len, msg_ptr, msg_len);
 
-        free(msg_ptr);
+    //     free(msg_ptr);
+    // }
+    // else {
+    //     printf("Unknown mode: %s\n", mode);
+    //     return 1;
+    // }
+
+    const uint8_t *ctx_ptr = (const uint8_t *)"123123123123123123123123";
+    size_t ctx_len = strlen((const char *)ctx_ptr);
+    const uint8_t *msg_ptr = (const uint8_t *)"abcabcabcabcabcabcabcabcabcabc";
+    size_t msg_len = strlen((const char *)msg_ptr);
+
+    uint8_t digest[32];
+    int r = test_sha256_absorb(digest, (uint64_t)ctx_ptr, (uint64_t)ctx_len, (uint64_t)msg_ptr, (uint64_t)msg_len);
+
+    printf("\nHash digest:\n" ANSI_COLOR_YELLOW);
+    for (int i = 0; i < 32; i++) {
+        printf("%02x", digest[i]);
+
+        if (i % 2 == 1) {
+            printf(" ");
+        }
     }
-    else {
-        printf("Unknown mode: %s\n", mode);
-        return 1;
-    }
+    printf(ANSI_COLOR_RESET "\n");
 
     return 0;
 }

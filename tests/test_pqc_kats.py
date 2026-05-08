@@ -28,16 +28,11 @@ def test_against_pqc_kats(slh_dsa, kats):
         drbg.instantiate(bytes(seed))
 
         # Generate randomness for keygen (3 * N bytes).
-        drbg_key_randomness = bytearray(drbg.generate(3 * SPX_N))
+        drbg_key_randomness = bytearray(drbg.generate(3*SPX_N))
         (verification_key, signing_key) = slh_dsa.generate_keypair(drbg_key_randomness)
 
         assert verification_key == bytes.fromhex(kat["pk"])
         assert signing_key      == bytes.fromhex(kat["sk"])
-
-        print("SK.prf:  " + signing_key[SPX_N : 2*SPX_N].hex().upper())
-        print("PK.seed: " + signing_key[2*SPX_N : 3*SPX_N].hex().upper())
-        print("msg:")
-        print(kat["msg"])
 
         # Then signing.
 
@@ -47,6 +42,13 @@ def test_against_pqc_kats(slh_dsa, kats):
 
         # Generate randomness for signing (N bytes)
         drbg_signing_randomness = bytearray(drbg.generate(SPX_N))
+        
+        print("SK.seed: " + signing_key[0*SPX_N : 1*SPX_N].hex().upper())
+        print("SK.prf:  " + signing_key[1*SPX_N : 2*SPX_N].hex().upper())
+        print("PK.seed: " + signing_key[2*SPX_N : 3*SPX_N].hex().upper())
+        print("PK.root: " + signing_key[3*SPX_N : 4*SPX_N].hex().upper())
+        print("optrand: " + drbg_signing_randomness.hex().upper())
+        print("msg: " + kat["msg"])
 
         signature, result = slh_dsa.sign(
             signing_key,
@@ -58,8 +60,9 @@ def test_against_pqc_kats(slh_dsa, kats):
 
         sigstring = signature.hex().upper()
 
-        print("  spx sig outer chars: " + sigstring[:32]  + " ... " + sigstring[-64:-32]  + " " + sigstring[-32:] )
-        print(".json sig outer chars: " + kat["sig"][:32] + " ... " + kat["sig"][-64:-32] + " " + kat["sig"][-32:])
+        print()
+        print("  spx R: " + sigstring[:32])
+        print(".json R: " + kat["sig"][:32])
 
         # print("spx sig:")
         # print(sigstring)

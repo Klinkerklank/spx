@@ -268,9 +268,9 @@ fn __sha256_absorb(
 
   // compute number of message bits for the length encoding later
   bits = PREFIXLEN;  // bytelength of the prefix
-  bits += ctx_len;   // bytelength of the context
+  // bits += ctx_len;   // bytelength of the context
   bits += msg_len;   // bytelength of the message
-  bits += 2;         // account for the zero-byte and the context length
+  // bits += 2;         // account for the zero-byte and the context length
   bits <<= 3;        // convert number of bytes to number of bits
   () = #spill(bits); // make space in the registers
 
@@ -285,31 +285,31 @@ fn __sha256_absorb(
   Hp, W, idx_W = absorb_fixed(Hp, W, idx_W, prefix);
   
   // add a zero-padding byte (preceding the context length)
-  W[:u8 idx_W] = 0x00;
-  idx_W += 1;
+  // W[:u8 idx_W] = 0x00;
+  // idx_W += 1;
 
   // if the padding byte topped off the block, run the compression function
-  if (idx_W == 64) {
-    Hp, W = compress(Hp, W);
-    idx_W = 0;
-  }
+  // if (idx_W == 64) {
+  //   Hp, W = compress(Hp, W);
+  //   idx_W = 0;
+  // }
   
   () = #unspill(ctx_len);
 
   // add the context length
-  W[:u8 idx_W] = (8u) ctx_len;
-  idx_W += 1;
+  // W[:u8 idx_W] = (8u) ctx_len;
+  // idx_W += 1;
 
   // if the context length topped off the block, run the compression function
-  if (idx_W == 64) {
-    Hp, W = compress(Hp, W);
-    idx_W = 0;
-  }
+  // if (idx_W == 64) {
+  //   Hp, W = compress(Hp, W);
+  //   idx_W = 0;
+  // }
 
   () = #unspill(ctx_ptr);
 
   // absorb the variable-sized context
-  Hp, W, idx_W = absorb_pointer(Hp, W, idx_W, ctx_ptr, ctx_len);
+  // Hp, W, idx_W = absorb_pointer(Hp, W, idx_W, ctx_ptr, ctx_len);
   
   () = #unspill(msg_ptr, msg_len);
 

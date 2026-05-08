@@ -8,7 +8,7 @@ require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS: Winternitz One-Time Sig
 require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS: eXtended Merkle Signature Scheme
 require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS: HyperTree
 require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS: Forest Of Random Subsets
-require "spx/spx.jinc"   // algorithms 18-20 of SLH-DSS: Statless Practical Hash-based Incredibly Nice Cryptographic Signature Plus
+require "spx/spx.jinc"   // algorithms 18-20 of SLH-DSS: Stateless Practical Hash-based Incredibly Nice Cryptographic Signature Plus
 
 /*-------------------------------------------------------------+
 | ALGORITHM 21 FROM SLH-DSS                                    |
@@ -110,3 +110,24 @@ fn slh_verify(
 
     return res;
 }
+
+
+
+// export
+// fn test_sha256_absorb(
+//     reg ptr u8[SHA256_OUT] digest,
+//     reg u64 ctx_ptr,
+//     reg u64 ctx_len,
+//     reg u64 msg_ptr,
+//     reg u64 msg_len
+// ) -> reg ptr u8[SHA256_OUT]
+// {
+//     stack u8[SHA_HMAC_PREFIX] ibuf;
+//     inline int i;
+
+//     for i=0 to SHA_HMAC_PREFIX { ibuf[i] = 0x00; }
+
+//     digest = sha256_hmac_inner::__sha256_absorb(digest, ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
+    
+//     return digest;
+// }
