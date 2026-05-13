@@ -9,4 +9,5 @@ outputs
 .pytest_cache
 tests/__pycache__
 tests/pyAES_DRBG/__pycache__/
-tests/pqc/json/*.json
+tests/cref/json/*.json
+tests/acvp/grouped/*.json

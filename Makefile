@@ -108,12 +108,22 @@ ifeq ($(ARCHITECTURE), x86-64)
 	TESTING_WRAPPER = $(OUTPUT_FILE_NAME).so
 endif
 
-# convert the .rsp KATs to .json, and run the implemnetation against the KATs
-.PHONY: pqc-kat-test
-pqc-kat-test: $(TESTING_WRAPPER)
-	python3 tests/pqc/convert_rsp_to_json.py
+# convert the .rsp KATs to .json, and run the implementation against the KATs
+.PHONY: cref-kat-test
+cref-kat-test: $(TESTING_WRAPPER)
+	python3 tests/cref/convert_rsp_to_json.py
 	python3 -m pytest \
 		--parameter-set=$(PARAMETER_SET) \
 		--architecture=$(ARCHITECTURE) \
 		--implementation-type=$(IMPLEMENTATION_TYPE) \
-		tests/test_pqc_kats.py
+		tests/test_cref_kats.py
+
+# group the test vectors in .json files per parameter set, and run the implementation against the KATs
+.PHONY: acvp-kat-test
+acvp-kat-test: $(TESTING_WRAPPER)
+	python3 tests/acvp/group_json_per_paramset.py
+	python3 -m pytest \
+		--parameter-set=$(PARAMETER_SET) \
+		--architecture=$(ARCHITECTURE) \
+		--implementation-type=$(IMPLEMENTATION_TYPE) \
+		tests/test_acvp_kats.py
