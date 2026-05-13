@@ -19,7 +19,7 @@ fn __base_b(
           total = input[in];
           in += 1;
           bits += 8;
-        }   
+        }
 
         bits -= LG_B;
 
@@ -32,6 +32,43 @@ fn __base_b(
         // out++;
         out += 1;
         consumed += 1;
+    }
+
+    return baseb;
+}
+
+inline
+fn __base_b_fors(
+  reg ptr u32[OUTLEN] baseb,
+  reg ptr u8[INLEN] input
+) -> reg ptr u32[OUTLEN]
+{
+    reg u64 in = 0;
+    reg u32 bits = 0;
+    reg u32 total = 0;
+
+    reg u64 digit;
+    reg u32 in_byte;
+
+    inline int out;
+
+    // for (out = 0; out < out_len; out++) 
+    for out=0 to OUTLEN {
+		while (bits < LG_B) {
+			total <<= 8;
+			in_byte = (32u) input[in];
+			total += in_byte;
+			in += 1;
+			bits += 8;
+		}
+
+		bits -= LG_B;
+		
+        digit = (64u) total;
+    	_, _, _, _, _, digit = #SHR(digit, bits); // digit >>= bits;
+		digit &= (B-1);
+
+		baseb[out] = (32u) digit;
     }
 
     return baseb;

@@ -95,8 +95,8 @@ fn xmss_node(
                 lnode_z = layer; lnode_z -= 1; // lnode_z = layer-1
                 label = __tree_label(lnode_i, lnode_z); // lnode = tree_label(2*node, layer-1)
                 lnode = (64u) label;
-                lnode *= SPX_N;                       // lnode = tree_label(2*node,   layer-1) * SPX_N
-                rnode = lnode; rnode += SPX_N;        // rnode = tree_label(2*node+1, layer-1) * SPX_N
+                lnode *= SPX_N;                // lnode = tree_label(2*node,   layer-1) * SPX_N
+                rnode = lnode; rnode += SPX_N; // rnode = tree_label(2*node+1, layer-1) * SPX_N
 
                 for j=0 to SPX_N {
                     buf_l[j] = flat_tree[lnode + j];
@@ -108,7 +108,8 @@ fn xmss_node(
                 adrs = __adrs_set_tree_index(adrs, node);
                 
                 label = __tree_label(node, layer);
-                node_addr = (64u) label; node_addr *= SPX_N;
+                node_addr = (64u) label;
+                node_addr *= SPX_N;
 
                 // node = H(PK.seed, ADRS, lnode || rnode)
                 () = #spill(adrs);
@@ -127,13 +128,12 @@ fn xmss_node(
     }
 
     label = __tree_label(i, z);
-    node_addr = (64u) label; node_addr *= SPX_N;
+    node_addr = (64u) label;
+    node_addr *= SPX_N;
     
     () = #unspill(root);
 
-    for j=0 to SPX_N {
-        root[j] = flat_tree[node_addr + j];
-    }
+    for j=0 to SPX_N { root[j] = flat_tree[node_addr + j]; }
     return root, adrs;
 }
 
@@ -181,7 +181,9 @@ fn xmss_sign(
     j = 0; div = 1; // div = 2^j
     while (j < SPX_H_PRIME) {
         // (only the least-significant bit is flipped, to get the sibling node)
-        k = idx; k /= div; k ^= 1; // k = floor(idx / 2^j) xor 1
+        k = idx;  // k = idx
+        k /= div; // k = floor(idx / 2^j)
+        k ^= 1;   // k = floor(idx / 2^j) xor 1
         
         () = #spill(skseed, pkseed, idx, j, k, div, offset); // free up space in the registers
 
@@ -299,7 +301,8 @@ fn xmss_pkfromsig(
         } else { // idx/2^k is odd
             // tree_index = (adrs_get_tree_index(adrs) - 1) / 2
             tree_index = __adrs_get_tree_index(adrs);
-            tree_index -= 1; tree_index >>= 1;
+            tree_index -= 1;
+            tree_index >>= 1;
 
             adrs = __adrs_set_tree_index(adrs, tree_index);
 

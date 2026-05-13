@@ -50,7 +50,8 @@ fn slh_sign(
     reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
-    reg ptr u8[SPX_SKBYTES] sk   // secret key
+    reg ptr u8[SPX_SKBYTES] sk,  // secret key
+    reg u8 deterministic         // Boolean whether to use opt_rand = PK.seed (else opt_rand = randombytes)
 ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig_slh, res
 {
     // register variables
@@ -60,11 +61,8 @@ fn slh_sign(
     stack u8[SPX_N] addrnd; // additional message randomness
 
     inline int i;
-    inline int choice;
 
-    choice = 0; // hardcode the choice for testing purposes
-
-    if (choice == 0) { // deterministic additional randomness
+    if (deterministic == 0) { // deterministic additional randomness
         //  substitute opt_rand <- PK.seed for the deterministic variant (according to line 2 in algorithm 19 in SLH-DSS)
         for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; }
     } else { // non-deterministic additional randomness
