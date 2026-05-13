@@ -13,7 +13,8 @@ int slh_sign(
   uint8_t sig[SPX_SIG_BYTES],
   const uint64_t ctx_msg_ptrs[2],
   const uint64_t ctx_msg_lens[2],
-  const uint8_t sk[4*SPX_N]
+  const uint8_t sk[4*SPX_N],
+  const uint8_t deterministic
 );
 
 int slh_verify(
