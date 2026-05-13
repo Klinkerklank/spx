@@ -1,6 +1,5 @@
-// +--------------------------------------------------------------+
-// |                       helper functions                       |
-// +--------------------------------------------------------------+
+
+/////////////////////// HELPER FUNCTIONS ///////////////////////
 
 // compute the position (label) of a tree node in an XMSS tree's flattened array
 inline
@@ -27,12 +26,13 @@ fn __tree_label(
     return pos;
 }
 
-// +--------------------------------------------------------------+
-// |                       main algorithms                        |
-// +--------------------------------------------------------------+
+//////////////////////// MAIN FUNCTIONS ////////////////////////
 
-// algorithm 9 from SLH-DSS (iterative instead of recursive)
-// compute the node at (i,z) in an XMSS tree
+/*-------------------------------------------------------------+
+| ALGORITHM 9 FROM SLH-DSS (FIPS 205)                          |
+| Computes the root of a Merkle subtree of WOTS+ public keys.  |
+| (iterative instead of recursive)                             |
++-------------------------------------------------------------*/
 fn xmss_node(
     reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -137,7 +137,7 @@ fn xmss_node(
     return root, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __xmss_node(
     reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -158,8 +158,10 @@ fn __xmss_node(
     return root, adrs;
 }
 
-// algorithm 10 from SLH-DSS
-// compute an XMSS signature
+/*-------------------------------------------------------------+
+| ALGORITHM 10 FROM SLH-DSS (FIPS 205)                         |
+| Generates an XMSS signature.                                 |
++-------------------------------------------------------------*/
 fn xmss_sign(
     reg ptr u8[XMSS_SIG] sig_xmss, // output: XMSS signature
     reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
@@ -189,11 +191,11 @@ fn xmss_sign(
 
         // WOTS+ signature will be placed in sig_xmss[0 : WOTS_SIG] later
         // AUTH therefore starts at WOTS_SIG, and every AUTH node is SPX_N btes long
-        auth_node = sig_xmss[offset : SPX_N];
+        auth_node = sig_xmss[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
         () = #spill(sig_xmss);
         auth_node, adrs = __xmss_node(auth_node, skseed, k, j, pkseed, adrs);
         () = #unspill(sig_xmss);
-        sig_xmss[offset : SPX_N] = auth_node;
+        sig_xmss[offset : SPX_N] = auth_node; // redesignate the pointer so the region of the full array is not partial
 
         () = #unspill(skseed, pkseed, idx, j, k, div, offset);
 
@@ -207,16 +209,16 @@ fn xmss_sign(
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_WOTS_HASH);
     adrs = __adrs_set_key_pair_addr(adrs, idx);
 
-    sig_wots = sig_xmss[0 : WOTS_SIG];
+    sig_wots = sig_xmss[0 : WOTS_SIG]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(sig_xmss);
     sig_wots, adrs = __wots_sign(sig_wots, m, skseed, pkseed, adrs);
     () = #unspill(sig_xmss);
-    sig_xmss[0 : WOTS_SIG] = sig_wots;
+    sig_xmss[0 : WOTS_SIG] = sig_wots; // redesignate the pointer so the region of the full array is not partial
 
     return sig_xmss, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __xmss_sign(
     reg ptr u8[XMSS_SIG] sig_xmss, // output: XMSS signature
     reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
@@ -237,8 +239,10 @@ fn __xmss_sign(
     return sig_xmss, adrs;
 }
 
-// algorithm 11 from SLH-DSS
-// compute an XMSS tree root (public key) from an XMSS signature
+/*-------------------------------------------------------------+
+| ALGORITHM 11 FROM SLH-DSS (FIPS 205)                         |
+| Computes an XMSS public key from an XMSS signature.          |
++-------------------------------------------------------------*/
 fn xmss_pkfromsig(
     reg ptr u8[SPX_N] pk_xmss,     // output: XMSS tree root (public key)
     reg u32 idx,                   // WOTS+ leaf index to sign with
@@ -333,7 +337,7 @@ fn xmss_pkfromsig(
     return pk_xmss, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __xmss_pkfromsig(
     reg ptr u8[SPX_N] pk_xmss,     // output: XMSS tree root (public key)
     reg u32 idx,                   // WOTS+ leaf index to sign with

@@ -2,7 +2,7 @@ require "params/active_params.jinc" // SPHINCS+ parameters
 // active_params.jinc in turn requires the chosen parameter file with the concrete parameter values  
 
 require "adrs/adrs.jinc" // ADRS data structure
-require "hash/hash.jinc" // hash function implementations
+require "hash/hash_sha256.jinc" // hash function implementations
 
 require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS: Winternitz One-Time Signature Plus
 require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS: eXtended Merkle Signature Scheme
@@ -11,15 +11,15 @@ require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS: Forest Of Random Subset
 require "spx/spx.jinc"   // algorithms 18-20 of SLH-DSS: Stateless Practical Hash-based Incredibly Nice Cryptographic Signature Plus
 
 /*-------------------------------------------------------------+
-| ALGORITHM 21 FROM SLH-DSS                                    |
-| Export function that generates the secret and public keys.   |
+| ALGORITHM 21 FROM SLH-DSS (FIPS 205)                         |
+| Generates an SLH-DSA key pair.                               |
 | Generates the randomness needed for slh_keygen_internal      |
 | using the #randombytes hook.                                 |
 +-------------------------------------------------------------*/
 export // this function is visible to the outside after compilation
 fn slh_keygen(
-    reg ptr u8[SPX_SKBYTES] sk, // secret key
-    reg ptr u8[SPX_PKBYTES] pk  // public key
+    reg ptr u8[SPX_SKBYTES] sk, // out: secret key
+    reg ptr u8[SPX_PKBYTES] pk  // out: public key
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
 {
     // register variables
@@ -29,25 +29,26 @@ fn slh_keygen(
     stack u8[3*SPX_N] keyrnd; // key randomness
 
     // generate random bytes for SK.seed, SK.prf, and PK.seed
-    () = #spill(sk, pk); // resolves architectural constraints error
+    () = #spill(sk, pk); // resolves architectural constraints compile error
     keyrnd = #randombytes(keyrnd);
     () = #unspill(sk, pk);
 
-    // compute the secret and public keys
+    // set SK.seed, SK.prf, and PK.seed based on the random bytes
+    // compute PK.root based on SK.seed, SK.prf, and PK.seed
     sk, pk, res = __slh_keygen_internal(sk, pk, keyrnd);
 
     return sk, pk, res;
 }
 
 /*-------------------------------------------------------------+
-| ALGORITHM 22 FROM SLH-DSS                                    |
-| Export function that computes a signature on the message and |
-| context string. Generates the additional randomness needed   |
-| for slh_sign_internal using the #randombytes hook.           |
+| ALGORITHM 22 FROM SLH-DSS (FIPS 205)                         |
+| Generates a pure SLH-DSA signature.                          |
+| Generates the randomness needed for slh_sign_internal using  |
+| the #randombytes hook.                                       |
 +-------------------------------------------------------------*/
 export // this function is visible to the outside after compilation
 fn slh_sign(
-    reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
+    reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
     reg ptr u8[SPX_SKBYTES] sk,  // secret key
@@ -66,7 +67,7 @@ fn slh_sign(
         //  substitute opt_rand <- PK.seed for the deterministic variant (according to line 2 in algorithm 19 in SLH-DSS)
         for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; }
     } else { // non-deterministic additional randomness
-        () = #spill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk); // resolves architectural constraints error
+        () = #spill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk); // resolves architectural constraints compile error
         addrnd = #randombytes(addrnd);
         () = #unspill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk);                
     }
@@ -83,9 +84,8 @@ fn slh_sign(
 }
 
 /*-------------------------------------------------------------+
-| ALGORITHM 24 FROM SLH-DSS                                    |
-| Export function that verifies whether the signature on the   |
-| message and context string is valid.                         |
+| ALGORITHM 24 FROM SLH-DSS (FIPS 205)                         |
+| Verifies a pure SLH-DSA signature.                           |
 +-------------------------------------------------------------*/
 export // this function is visible to the outside after compilation
 fn slh_verify(
@@ -108,24 +108,3 @@ fn slh_verify(
 
     return res;
 }
-
-
-
-// export
-// fn test_sha256_absorb(
-//     reg ptr u8[SHA256_OUT] digest,
-//     reg u64 ctx_ptr,
-//     reg u64 ctx_len,
-//     reg u64 msg_ptr,
-//     reg u64 msg_len
-// ) -> reg ptr u8[SHA256_OUT]
-// {
-//     stack u8[SHA_HMAC_PREFIX] ibuf;
-//     inline int i;
-
-//     for i=0 to SHA_HMAC_PREFIX { ibuf[i] = 0x00; }
-
-//     digest = sha256_hmac_inner::__sha256_absorb(digest, ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
-    
-//     return digest;
-// }

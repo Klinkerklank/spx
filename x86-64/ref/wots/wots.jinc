@@ -14,9 +14,7 @@ namespace baseb_wots_c {
   require "../misc/baseb.jinc"
 }
 
-// +--------------------------------------------------------------+
-// |                       helper functions                       |
-// +--------------------------------------------------------------+
+/////////////////////// HELPER FUNCTIONS ///////////////////////
 
 inline
 fn __csum(
@@ -66,11 +64,12 @@ fn __chain_lengths(
     return lengths;
 }
 
-// +--------------------------------------------------------------+
-// |                       main algorithms                        |
-// +--------------------------------------------------------------+
+//////////////////////// MAIN FUNCTIONS ////////////////////////
 
-// algorithm 5 from SLH-DSS
+/*-------------------------------------------------------------+
+| ALGORITHM 5 FROM SLH-DSS (FIPS 205)                          |
+| Chaining function used in WOTS+.                             |
++-------------------------------------------------------------*/
 fn chain(
     reg ptr u8[SPX_N] out,    // input and also output (chain is in-place)
     reg u32 i,                // position in the chain
@@ -97,7 +96,7 @@ fn chain(
     return out, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __chain(
     reg ptr u8[SPX_N] out,    // input and also output (chain is in-place)
     reg u32 i,                // position in the chain
@@ -117,7 +116,10 @@ fn __chain(
     return out, adrs;
 }
 
-// algorithm 6 from SLH-DSS
+/*-------------------------------------------------------------+
+| ALGORITHM 6 FROM SLH-DSS (FIPS 205)                          |
+| Generates a WOTS+ public key.                                |
++-------------------------------------------------------------*/
 fn wots_pkgen(
     reg ptr u8[SPX_N] pk,     // output: WOTS+ public key
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -206,7 +208,7 @@ fn wots_pkgen(
     return pk, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __wots_pkgen(
     reg ptr u8[SPX_N] pk,     // output: WOTS+ public key
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -225,7 +227,10 @@ fn __wots_pkgen(
     return pk, adrs;
 }
 
-// algorithm 7 from SLH-DSS
+/*-------------------------------------------------------------+
+| ALGORITHM 7 FROM SLH-DSS (FIPS 205)                          |
+| Generates a WOTS+ signature on an 𝑛-byte message.            |
++-------------------------------------------------------------*/
 fn wots_sign(
     reg ptr u8[WOTS_SIG] sig_wots, // output: WOTS+ signature
     reg ptr u8[SPX_N] m,           // message to sign (XMSS tree root or FORS public key)
@@ -266,11 +271,11 @@ fn wots_sign(
         subarray_start_index *= SPX_N;
 
         // compute sk in sig_wots[i : SPX_N]
-        sk_wots = sig_wots[subarray_start_index : SPX_N];
+        sk_wots = sig_wots[subarray_start_index : SPX_N]; // get the pointer to the subarray so the full array can be spilled
         () = #spill(sig_wots);
         sk_wots = __PRF(sk_wots, pkseed, skseed, skadrs);
         () = #unspill(sig_wots);
-        sig_wots[subarray_start_index : SPX_N] = sk_wots;
+        sig_wots[subarray_start_index : SPX_N] = sk_wots; // redesignate the pointer so the region of the full array is not partial
 
         () = #unspill(skseed, pkseed, i);
 
@@ -294,11 +299,11 @@ fn wots_sign(
         subarray_start_index *= SPX_N;
 
         // hash the secret key value to the public key value
-        pk_wots = sig_wots[subarray_start_index : SPX_N];
+        pk_wots = sig_wots[subarray_start_index : SPX_N]; // get the pointer to the subarray so the full array can be spilled
         () = #spill(sig_wots);
         pk_wots, adrs = __chain(pk_wots, start, steps, pkseed, adrs);
         () = #unspill(sig_wots);
-        sig_wots[subarray_start_index : SPX_N] = pk_wots;
+        sig_wots[subarray_start_index : SPX_N] = pk_wots; // redesignate the pointer so the region of the full array is not partial
 
         () = #unspill(pkseed, i);
 
@@ -308,7 +313,7 @@ fn wots_sign(
     return sig_wots, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __wots_sign(
     reg ptr u8[WOTS_SIG] sig_wots, // output: WOTS+ signature
     reg ptr u8[SPX_N] m,           // message to sign (XMSS tree root or FORS public key)
@@ -328,7 +333,11 @@ fn __wots_sign(
     return sig_wots, adrs;
 }
 
-// algorithm 8 from SLH-DSS
+/*-------------------------------------------------------------+
+| ALGORITHM 8 FROM SLH-DSS (FIPS 205)                          |
+| Computes a WOTS+ public key from a message and its           |
+| signature.                                                   |
++-------------------------------------------------------------*/
 fn wots_pkfromsig(
     reg ptr u8[SPX_N] pk_wots,     // output: WOTS+ public key
     reg ptr u8[WOTS_SIG] sig_wots, // WOTS+ signature
@@ -391,7 +400,7 @@ fn wots_pkfromsig(
     return pk_wots, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __wots_pkfromsig(
     reg ptr u8[SPX_N] pk_wots,     // output: WOTS+ public key
     reg ptr u8[WOTS_SIG] sig_wots, // WOTS+ signature

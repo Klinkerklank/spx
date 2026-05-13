@@ -6,9 +6,7 @@ namespace baseb_fors {
   require "../misc/baseb.jinc"
 }
 
-// +--------------------------------------------------------------+
-// |                       helper functions                       |
-// +--------------------------------------------------------------+
+/////////////////////// HELPER FUNCTIONS ///////////////////////
 
 // compute the position (label) of a tree node in a FORS tree's flattened array 
 inline
@@ -37,11 +35,12 @@ fn __forest_label(
     return pos;
 }
 
-// +--------------------------------------------------------------+
-// |                       main algorithms                        |
-// +--------------------------------------------------------------+
+//////////////////////// MAIN FUNCTIONS ////////////////////////
 
-// algorithm 14 from SLH-DSS
+/*-------------------------------------------------------------+
+| ALGORITHM 14 FROM SLH-DSS (FIPS 205)                         |
+| Generates a FORS private-key value.                          |
++-------------------------------------------------------------*/
 fn fors_skgen(
     reg ptr u8[SPX_N] sk,     // output: FORS secret key value
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -64,7 +63,7 @@ fn fors_skgen(
     return sk;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __fors_skgen(
     reg ptr u8[SPX_N] sk,     // output: FORS secret key value
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -84,8 +83,11 @@ fn __fors_skgen(
     return sk;
 }
 
-// algorithm 15 from SLH-DSS (iterative instead of recursive)
-// compute the node at (i,z) in a FORS tree
+/*-------------------------------------------------------------+
+| ALGORITHM 15 FROM SLH-DSS (FIPS 205)                         |
+| Computes the root of a Merkle subtree of FORS public values. |
+| (iterative instead of recursive)                             |
++-------------------------------------------------------------*/
 fn fors_node(
     reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -197,7 +199,7 @@ fn fors_node(
     return root, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __fors_node(
     reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
     reg ptr u8[SPX_N] skseed, // SK.seed
@@ -218,8 +220,10 @@ fn __fors_node(
     return root, adrs;
 }
 
-// algorithm 16 from SLH-DSS
-// compute a FORS signature
+/*-------------------------------------------------------------+
+| ALGORITHM 16 FROM SLH-DSS (FIPS 205)                         |
+| Generates a FORS signature.                                  |
++-------------------------------------------------------------*/
 fn fors_sign(
     reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
     reg ptr u8[SPX_MD_LEN] md,     // message digest
@@ -237,7 +241,7 @@ fn fors_sign(
     reg u64 i offset;
     
     // compute base-a indices
-    indices = baseb_fors::__base_b_fors(indices, md);
+    indices = baseb_fors::__base_b(indices, md);
     
     offset = 0; i = 0;
     while (i < SPX_K) {
@@ -246,11 +250,11 @@ fn fors_sign(
         idx += indices[i];  // idx = i*(2^a) + indices[i]
 
         // compute the i-th secret key value
-        node = sig_fors[offset : SPX_N];
+        node = sig_fors[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
         () = #spill(skseed, pkseed, adrs, sig_fors, i, offset);
         node = __fors_skgen(node, skseed, pkseed, adrs, idx);
         () = #unspill(skseed, pkseed, adrs, sig_fors, i, offset);
-        sig_fors[offset : SPX_N] = node;
+        sig_fors[offset : SPX_N] = node; // redesignate the pointer so the region of the full array is not partial
 
         offset += SPX_N;
 
@@ -271,11 +275,11 @@ fn fors_sign(
             () = #unspill(s);
             idx += s;           // idx = i*2^(a-j) + s
 
-            node = sig_fors[offset : SPX_N];
+            node = sig_fors[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
             () = #spill(sig_fors);
             node, adrs = __fors_node(node, skseed, idx, j, pkseed, adrs);
             () = #unspill(sig_fors);
-            sig_fors[offset : SPX_N] = node;
+            sig_fors[offset : SPX_N] = node; // redesignate the pointer so the region of the full array is not partial
 
             () = #unspill(skseed, pkseed, i, j, offset, div);
 
@@ -290,7 +294,7 @@ fn fors_sign(
     return sig_fors, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __fors_sign(
     reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
     reg ptr u8[SPX_MD_LEN] md,     // message digest
@@ -310,8 +314,10 @@ fn __fors_sign(
     return sig_fors, adrs;
 }
 
-// algorithm 17 from SLH-DSS
-// compute a compressed FORS public key from a FORS signature
+/*-------------------------------------------------------------+
+| ALGORITHM 17 FROM SLH-DSS (FIPS 205)                         |
+| Computes a FORS public key from a FORS signature.            |
++-------------------------------------------------------------*/
 fn fors_pkfromsig(
     reg ptr u8[SPX_N] pk_fors,     // output: compressed FORS public key
     reg ptr u8[FORS_SIG] sig_fors, // FORS signature
@@ -336,7 +342,7 @@ fn fors_pkfromsig(
     inline int k;
     
     // compute base-a indices
-    indices = baseb_fors::__base_b_fors(indices, md);
+    indices = baseb_fors::__base_b(indices, md);
 
     i = 0; offset = 0; offset_roots = 0;
     while (i < SPX_K) {
@@ -429,7 +435,7 @@ fn fors_pkfromsig(
     return pk_fors, adrs;
 }
 
-inline
+inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __fors_pkfromsig(
     reg ptr u8[SPX_N] pk_fors,     // output: compressed FORS public key
     reg ptr u8[FORS_SIG] sig_fors, // FORS signature
