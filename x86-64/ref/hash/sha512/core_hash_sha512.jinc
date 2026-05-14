@@ -2,7 +2,7 @@ require "common/sha512_common.jinc"
 
 namespace sha512_hmac_inner {
     param int PREFIXLEN = SHA_HMAC_PREFIX;
-    require "sha512_prefix_ptr/sha512_prefix_ptr.jinc"
+    require "sha512_absorb/sha512_absorb.jinc"
 }
 
 namespace sha512_hmac_outer {
@@ -12,11 +12,16 @@ namespace sha512_hmac_outer {
 
 namespace sha512_mgf1_msg {
     param int PREFIXLEN = SHA_MGF1_PREFIX;
-    require "sha512_prefix_ptr/sha512_prefix_ptr.jinc"
+    require "sha512_absorb/sha512_absorb.jinc"
 }
 
 namespace sha512_mgf1_seed {
     param int INLEN = 2*SPX_N + SHA512_OUT + 4;
+    require "sha512_array/sha512_array.jinc"
+}
+
+namespace sha512_tl_1n {
+    param int INLEN = SHA512_IN + 22 + SPX_N;
     require "sha512_array/sha512_array.jinc"
 }
 
