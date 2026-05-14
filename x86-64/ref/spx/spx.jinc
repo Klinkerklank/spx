@@ -1,5 +1,5 @@
 require "../params/active_params.jinc" // SPHINCS+ parameters
-// active_params.jinc in turn requires the chosen parameter file with the concrete parameter values  
+// active_params.jinc in turn requires the chosen parameter file with the concrete parameter values
 
 require "../adrs/adrs.jinc" // ADRS data structure
 require "../hash/hash_sha256.jinc" // hash function implementations
@@ -108,12 +108,12 @@ fn slh_keygen_internal(
     reg u64 res;   // indicates whether running this function was successful
 
     inline int j;
-    
+
     for j=0 to SPX_N { sk[0*SPX_N + j] = keyrnd[0*SPX_N + j]; } // copy SK.seed to SK
     for j=0 to SPX_N { sk[1*SPX_N + j] = keyrnd[1*SPX_N + j]; } // copy SK.prf  to SK
     for j=0 to SPX_N { sk[2*SPX_N + j] = keyrnd[2*SPX_N + j]; } // copy PK.seed to SK
     for j=0 to SPX_N { pk[0*SPX_N + j] = keyrnd[2*SPX_N + j]; } // copy PK.seed to PK
-    
+
     // get the pointers to the individual parts of sk and pk
     skseed = sk[0*SPX_N : SPX_N];
     pkseed = sk[2*SPX_N : SPX_N];
@@ -135,7 +135,7 @@ fn slh_keygen_internal(
     pkroot, adrs = __xmss_node(pkroot, skseed, i, z, pkseed, adrs);
     () = #unspill(sk, pk);
     sk[3*SPX_N : SPX_N] = pkroot; // redesignate the pointer so the region of the full array is not partial
-    
+
     for j=0 to SPX_N { pk[1*SPX_N + j] = pkroot[j]; } // copy PK.root to PK
 
     res = 0; // set return value to 0 (successful)
@@ -202,10 +202,10 @@ fn slh_sign_internal(
     msg_ptr = ctx_msg_ptrs[1];
     ctx_len = ctx_msg_lens[0];
     msg_len = ctx_msg_lens[1];
-    
+
     // set aside the register values for the H_msg call
     () = #spill(ctx_ptr, ctx_len, msg_ptr, msg_len);
-    
+
     // separate SK.prf from the overall secret key
     skprf = sk[1*SPX_N : SPX_N];
 
@@ -215,9 +215,9 @@ fn slh_sign_internal(
     r = __PRF_msg(r, skprf, addrnd, ctx_ptr, ctx_len, msg_ptr, msg_len);
     () = #unspill(sig_slh, sk);
     sig_slh[0 : SPX_N] = r;  // redesignate the pointer so the region of the full array is not partial
-    
+
     () = #unspill(ctx_ptr, ctx_len, msg_ptr, msg_len);
-    
+
     // separate PK.seed and PK.root from the overall secret key
     pkseed = sk[2*SPX_N : SPX_N];
     pkroot = sk[3*SPX_N : SPX_N];
@@ -239,7 +239,7 @@ fn slh_sign_internal(
     adrs = __adrs_set_tree_addr(adrs, idx_tree);     // lowest-layer tree index of the XMSS tree that will sign the FORS public key
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
     adrs = __adrs_set_key_pair_addr(adrs, idx_leaf); // Leaf index of the XMSS tree that will sign the FORS public key
-    
+
     // separate SK.seed from the overall secret key
     skseed = sk[0*SPX_N : SPX_N];
 
@@ -325,7 +325,7 @@ fn slh_verify_internal(
     msg_ptr = ctx_msg_ptrs[1];
     ctx_len = ctx_msg_lens[0];
     msg_len = ctx_msg_lens[1];
-    
+
     // separate PK.seed and PK.root from the overall public key
     pkseed = pk[0*SPX_N : SPX_N];
     pkroot = pk[1*SPX_N : SPX_N];

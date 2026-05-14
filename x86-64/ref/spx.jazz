@@ -1,5 +1,5 @@
 require "params/active_params.jinc" // SPHINCS+ parameters
-// active_params.jinc in turn requires the chosen parameter file with the concrete parameter values  
+// active_params.jinc in turn requires the chosen parameter file with the concrete parameter values
 
 require "adrs/adrs.jinc" // ADRS data structure
 require "hash/hash_sha256.jinc" // hash function implementations
@@ -69,7 +69,7 @@ fn slh_sign(
     } else { // non-deterministic additional randomness
         () = #spill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk); // resolves architectural constraints compile error
         addrnd = #randombytes(addrnd);
-        () = #unspill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk);                
+        () = #unspill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk);
     }
 
     // ensure that the context length is valid

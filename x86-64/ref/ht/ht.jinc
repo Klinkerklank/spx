@@ -35,7 +35,7 @@ fn __ht_update_idx(
 
     // update idx_tree[0]
     idx_tree[0] >>= SPX_H_PRIME; // shift the reference word right by h' bits
-    
+
     return idx_leaf, idx_tree;
 }
 
@@ -59,13 +59,13 @@ fn ht_sign(
     stack u8[SPX_N] root_prev; // root of the previous XMSS tree
     stack u32[8] adrs;         // ADRS data structure
     stack u32[3] idx_tree;     // tree index selecting an XMSS tree to sign with
-    
+
     // register variables
     reg ptr u8[XMSS_SIG] sig_xmss; // one XMSS part of the signature
     reg u64 offset;   // byte offset within the hypertree signature
     reg u32 idx_leaf; // leaf index selecting a leaf within an XMSS tree to sign with
     reg u32 j;        // layer iterator
-    
+
     inline int i;
 
     // copy the given tree and leaf indices
@@ -120,7 +120,7 @@ fn ht_sign(
             root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, root_prev, pkseed, adrs);
             () = #unspill(pkseed, sig_ht, j, offset);
         }
-        
+
         () = #unspill(skseed);
 
         offset += XMSS_SIG; // next signature will get placed immediately adjoining the previous one
@@ -144,7 +144,7 @@ fn __ht_sign(
     sig_ht = sig_ht; pk_fors = pk_fors; skseed = skseed; pkseed = pkseed; tree = tree; leaf = leaf;
 
     sig_ht = ht_sign(sig_ht, pk_fors, skseed, pkseed, tree, leaf);
-    
+
     // split live-range of the output parameters into two segments
     sig_ht = sig_ht;
 
@@ -171,7 +171,7 @@ fn ht_verify(
     stack u8[SPX_N] root_prev; // root of the previous XMSS tree
     stack u32[8] adrs;         // ADRS data structure
     stack u32[3] idx_tree;     // tree index selecting an XMSS tree to sign with
-    
+
     // register variables
     reg ptr u8[XMSS_SIG] sig_xmss; // one XMSS part of the signature
     reg u64 offset;   // byte offset within the hypertree signature
@@ -179,7 +179,7 @@ fn ht_verify(
     reg u32 idx_leaf; // leaf index selecting a leaf within an XMSS tree to sign with
     reg u32 j;        // layer iterator
     reg u8 comp;      // temporary variable for byte comparisons
-    
+
     inline int i;
 
     // copy the given tree and leaf indices
@@ -215,7 +215,7 @@ fn ht_verify(
 
         // copy the root of the previous XMSS tree
         for i=0 to SPX_N { root_prev[i] = root[i]; }
-        
+
         // extract the XMSS signature on the previous XMSS tree's root
         sig_xmss = sig_ht[offset : XMSS_SIG]; // get the pointer to the subarray so the full array can be spilled
 
@@ -237,7 +237,7 @@ fn ht_verify(
     for i=0 to SPX_N {
         comp = root[i]; // extract a byte from the computed root
 
-        // check whether the computed and claimed bytes are equal 
+        // check whether the computed and claimed bytes are equal
         if (pkroot[i] != comp) {
             res = 1; // set result to 'equal = false'
         }
@@ -261,7 +261,7 @@ fn __ht_verify(
 
     reg u64 res;
     res = ht_verify(pk_fors, sig_ht, pkseed, tree, leaf, pkroot);
-    
+
     // split live-range of the output parameters into two segments
     res = res;
 
