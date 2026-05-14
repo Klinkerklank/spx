@@ -32,7 +32,13 @@ all: $(CLI)
 # clean build artifacts
 .PHONY: clean
 clean:
-	rm -rf *.s *.o *.so outputs $(CLI) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) *.json
+	rm -rf \
+		*.s *.o *.so \
+		outputs \
+		$(CLI) \
+		$(ACTIVE_PARAM_FILE) $(PARAM_HEADER) \
+		.pytest_cache tests/__pycache__ tests/pyAES_DRBG/__pycache__/ \
+		tests/cref/json/*.json tests/acvp/grouped/*.json
 
 # ---------------------------------------------------------------- #
 #  PARAMETER HANDLING                                              #
