@@ -13,7 +13,7 @@ IMPLEMENTATION_TYPE ?= ref
 IMPLEMENTATION = $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)
 
 # parameter settings
-PARAMETER_SET ?= sha2-128s
+PARAMETER_SET ?= sha2-128f
 PARAM_FILE = params-spx-$(PARAMETER_SET).jinc
 ACTIVE_PARAM_FILE = x86-64/ref/params/active_params.jinc
 PARAM_HEADER = x86-64/ref/params/params.h
@@ -27,7 +27,7 @@ OUTPUT_FILE_NAME = slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTUR
 # ---------------------------------------------------------------- #
 
 # default behaviour
-all: $(CLI)
+all: acvp-kat-test
 
 # clean build artifacts
 .PHONY: clean
@@ -70,15 +70,21 @@ ifneq (,$(filter %256s,$(PARAMETER_SET)))
   SPX_SIG_BYTES = 29792
 endif
 
-# link the correct parameter Jasmin file
-.PHONY: params
-params:
-	echo 'require "$(PARAM_FILE)"' > $(ACTIVE_PARAM_FILE)
+# select the correct hash function implementation file
+ifneq (,$(filter sha2-128s sha2-128f,$(PARAMETER_SET)))
+  HASH_IMPL = ../hash/hash_sha256.jinc
+endif
+ifneq (,$(filter sha2-192s sha2-192f sha2-256s sha2-256f,$(PARAMETER_SET)))
+  HASH_IMPL = ../hash/hash_sha512.jinc
+endif
 
-# link the correct parameter header
-.PHONY: params_h
-params_h:
-	echo "#pragma once" > $(PARAM_HEADER)
+# Make the Jasmin parameter header, with the SPHINCS+ parameters and the hash function implementations
+$(ACTIVE_PARAM_FILE):
+	echo 'require "$(PARAM_FILE)" // SPHINCS+ parameters' >> $(ACTIVE_PARAM_FILE)
+	echo 'require "$(HASH_IMPL)" // hash function implementations' >> $(ACTIVE_PARAM_FILE)
+
+# Make the C parameter header
+$(PARAM_HEADER):
 	echo "#define SPX_N $(SPX_N)" >> $(PARAM_HEADER)
 	echo "#define SPX_SIG_BYTES $(SPX_SIG_BYTES)" >> $(PARAM_HEADER)
 
@@ -87,7 +93,7 @@ params_h:
 # ---------------------------------------------------------------- #
 
 # compile SPHINCS+ CLI from Jasmin to assembly
-$(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz params params_h
+$(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
 	$(JASMINC) -o $(OUTPUT_FILE_NAME).s $(IMPLEMENTATION)/spx.jazz
 	grep -q GNU-stack $(OUTPUT_FILE_NAME).s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME).s
 
@@ -100,7 +106,7 @@ $(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
 # ---------------------------------------------------------------- #
 
 # compile SPHINCS+ API from Jasmin to assembly
-$(OUTPUT_FILE_NAME)_kattest.s: $(IMPLEMENTATION)/spx/spx.jinc params params_h
+$(OUTPUT_FILE_NAME)_kattest.s: $(IMPLEMENTATION)/spx/spx.jinc $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
 	$(JASMINC) -o $(OUTPUT_FILE_NAME)_kattest.s $(IMPLEMENTATION)/spx/spx.jinc
 	grep -q GNU-stack $(OUTPUT_FILE_NAME)_kattest.s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME)_kattest.s
 

@@ -191,6 +191,24 @@ inline fn __SHA512_Wt_ref(stack u64[80] W, inline int t) -> stack u64[80]
   return W;
 }
 
+// Wt = SSIG1(W(t-2)) + W(t-7) + SSIG0(t-15) + W(t-16)
+inline fn __SHA512_Wt_ptr_ref(reg ptr u64[80] W, inline int t) -> reg ptr u64[80]
+{
+  reg u64 wt wt2 wt15;
+
+  wt2  = W[t-2];
+  wt   = __SHA512_SSIG1_ref(wt2);
+  wt  += W[t-7];
+  wt15 = W[t-15];
+  wt15 = __SHA512_SSIG0_ref(wt15);
+  wt  += wt15;
+  wt  += W[t-16];
+
+  W[t] = wt;
+
+  return W;
+}
+
 fn _SHA512_blocks_1_ref(reg ptr u64[8] _H, reg ptr u64[32] sblocks, reg u64 nblocks) -> reg ptr u64[8], reg ptr u64[32]
 {
   inline int t;

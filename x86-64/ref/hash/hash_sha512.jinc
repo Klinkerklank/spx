@@ -1,5 +1,6 @@
 require "sha256/core_hash_sha256.jinc"
-require "sha256/core_hash_sha512.jinc"
+require "sha512/core_hash_sha512.jinc"
+require "../adrs/adrs.jinc" // ADRS data structure
 
 require "../stdlib/memcpy/memcpy.jinc"
 
@@ -40,8 +41,8 @@ fn H_msg(
     () = #unspill(pkroot);
     buf[2*SPX_N : SPX_N] = copy_nbytes(buf[2*SPX_N : SPX_N], pkroot);
 
-    // compute the inner hash value = sha256(R || PK.seed || PK.root || M)
-    seed[2*SPX_N : SHA512_OUT] = sha256_mgf1_msg::__sha256_absorb(seed[2*SPX_N : SHA512_OUT], buf, ctx_ptr, ctx_len, msg_ptr, msg_len);
+    // compute the inner hash value = sha512(R || PK.seed || PK.root || M)
+    seed[2*SPX_N : SHA512_OUT] = sha512_mgf1_msg::__sha512_absorb(seed[2*SPX_N : SHA512_OUT], buf, ctx_ptr, ctx_len, msg_ptr, msg_len);
 
     // set the first three of the four bytes of the counter to 0
     // (for all approved parameter sets, we will never need > 255 hash output concatenations)
@@ -52,8 +53,8 @@ fn H_msg(
         // set the last byte of 'seed' to the hash iteration counter
         seed[2*SPX_N + SHA512_OUT + 3] = (8u) hash_nr;
         
-        // compute sha256(seed), where seed includes the counter
-        concat[hash_nr*SHA512_OUT : SHA512_OUT] = sha256_mgf1_seed::__sha256(concat[hash_nr*SHA512_OUT : SHA512_OUT], seed);
+        // compute sha512(seed), where seed includes the counter
+        concat[hash_nr*SHA512_OUT : SHA512_OUT] = sha512_mgf1_seed::__sha512(concat[hash_nr*SHA512_OUT : SHA512_OUT], seed);
     }
     
     () = #unspill(out);
@@ -103,9 +104,9 @@ fn PRF_msg(
     reg u64 xor; // temporary variable for computing XORs
 
     // stack variables
-    stack u8[SHA256_IN] key;             // buffer for the key
+    stack u8[SHA512_IN] key;             // buffer for the key
     stack u8[SHA_HMAC_PREFIX] ibuf;    // buffer for inner hash call
-    stack u8[SHA256_IN + SHA512_OUT] obuf; // buffer for outer hash call
+    stack u8[SHA512_IN + SHA512_OUT] obuf; // buffer for outer hash call
     stack u8[SHA512_OUT] hmac;
     
     inline int i;
@@ -114,12 +115,12 @@ fn PRF_msg(
 
     // set key = SK.prf || 00..0
     key[0 : SPX_N] = copy_nbytes(key[0 : SPX_N], skprf); // first part of the key is SK.prf
-    for i=SPX_N to SHA256_IN { key[i] = 0; } // pad the rest of the key with zeroes
+    for i=SPX_N to SHA512_IN { key[i] = 0; } // pad the rest of the key with zeroes
 
     // compute ibuf = (key XOR ipad) eight bytes at a time
     // reading a u64 word of a byte array incurs an Endianness byteswap,
     // but we also write a u64 word to a byte array which undoes the byteswap
-    for i=0 to SHA256_IN/8 {
+    for i=0 to SHA512_IN/8 {
         xor = 0x3636363636363636; // set ipad
         xor ^= key[:u64 i];       // bitwise xor ipad with the key
         ibuf[:u64 i] = xor;
@@ -127,7 +128,7 @@ fn PRF_msg(
     // compute obuf = (key XOR opad) eight bytes at a time
     // reading a u64 word of a byte array incurs an Endianness byteswap,
     // but we also write a u64 word to a byte array which undoes the byteswap
-    for i=0 to SHA256_IN/8 {
+    for i=0 to SHA512_IN/8 {
         xor = 0x5C5C5C5C5C5C5C5C; // set opad
         xor ^= key[:u64 i];       // bitwise xor opad with the key
         obuf[:u64 i] = xor;
@@ -136,13 +137,13 @@ fn PRF_msg(
     // append optrand to ibuf
     // i.e. ibuf = (key xor ipad) || optrand
     () = #unspill(optrand);
-    ibuf[SHA256_IN : SPX_N] = copy_nbytes(ibuf[SHA256_IN : SPX_N], optrand);
+    ibuf[SHA512_IN : SPX_N] = copy_nbytes(ibuf[SHA512_IN : SPX_N], optrand);
 
-    // compute inner = sha256((key xor ipad) || optrand || M)
-    obuf[SHA256_IN : SHA512_OUT] = sha256_hmac_inner::__sha256_absorb(obuf[SHA256_IN : SHA512_OUT], ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
+    // compute inner = sha512((key xor ipad) || optrand || M)
+    obuf[SHA512_IN : SHA512_OUT] = sha512_hmac_inner::__sha512_absorb(obuf[SHA512_IN : SHA512_OUT], ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
 
-    // compute hmac = sha256((key xor opad) || inner)
-    hmac = sha256_hmac_outer::__sha256(hmac, obuf);
+    // compute hmac = sha512((key xor opad) || inner)
+    hmac = sha512_hmac_outer::__sha512(hmac, obuf);
 
     () = #unspill(out);
 
@@ -315,8 +316,8 @@ fn H(
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_2     (for sha2-128)
     //     = SPX_N    + (64-SPX_N)      + 22      + 2*SPX_N (for sha2-128)
     //     =        ... (128-SPX_N) ...                     (for sha2-192 and sha2-256)
-    //     =       SHA256_IN              + 22      + 2*SPX_N (any case)
-    stack u8[SHA256_IN + 22 + 2*SPX_N] buf;
+    //     =       SHA512_IN              + 22      + 2*SPX_N (any case)
+    stack u8[SHA512_IN + 22 + 2*SPX_N] buf;
 
     // buffer for the output
     stack u8[SHA512_OUT] digest;
@@ -329,19 +330,19 @@ fn H(
     buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
-    for i=SPX_N to SHA256_IN { buf[i] = 0; } 
+    for i=SPX_N to SHA512_IN { buf[i] = 0; } 
 
     // buf = PK.seed || zero-padding || ADRS^c
-    buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
+    buf[SHA512_IN : 22] = __adrs_compress(buf[SHA512_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_2
     () = #unspill(in1);
-    buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], in1);
+    buf[SHA512_IN+22 : SPX_N] = copy_nbytes(buf[SHA512_IN+22 : SPX_N], in1);
     () = #unspill(in2);
-    buf[SHA256_IN+22+SPX_N : SPX_N] = copy_nbytes(buf[SHA256_IN+22+SPX_N : SPX_N], in2);
+    buf[SHA512_IN+22+SPX_N : SPX_N] = copy_nbytes(buf[SHA512_IN+22+SPX_N : SPX_N], in2);
 
-    // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_2)
-    digest = sha256_tl_2n::__sha256(digest, buf);
+    // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_2)
+    digest = sha512_tl_2n::__sha512(digest, buf);
 
     () = #unspill(out);
 
@@ -384,8 +385,8 @@ fn T_len(
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_len         (for sha2-128)
     //     = SPX_N    + (64-SPX_N)      + 22      + SPX_LEN*SPX_N (for sha2-128)
     //     =        ... (128-SPX_N) ...                           (for sha2-192 and sha2-256)
-    //     =       SHA256_IN              + 22      + SPX_LEN*SPX_N (any case)
-    stack u8[SHA256_IN + 22 + SPX_LEN*SPX_N] buf;
+    //     =       SHA512_IN              + 22      + SPX_LEN*SPX_N (any case)
+    stack u8[SHA512_IN + 22 + SPX_LEN*SPX_N] buf;
 
     // buffer for the output
     stack u8[SHA512_OUT] digest;
@@ -396,16 +397,16 @@ fn T_len(
     buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
-    for i=SPX_N to SHA256_IN { buf[i] = 0; } 
+    for i=SPX_N to SHA512_IN { buf[i] = 0; } 
 
     // buf = PK.seed || zero-padding || ADRS^c
-    buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
+    buf[SHA512_IN : 22] = __adrs_compress(buf[SHA512_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_len
-    for i=0 to SPX_LEN*SPX_N { buf[SHA256_IN+22+i] = chains[i]; }
+    for i=0 to SPX_LEN*SPX_N { buf[SHA512_IN+22+i] = chains[i]; }
 
-    // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_len)
-    digest = sha256_compress_wots::__sha256(digest, buf);
+    // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_len)
+    digest = sha512_compress_wots::__sha512(digest, buf);
 
     () = #unspill(out);
 
@@ -447,8 +448,8 @@ fn T_k(
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_k         (for sha2-128)
     //     = SPX_N    + (64-SPX_N)      + 22      + SPX_K*SPX_N (for sha2-128)
     //     =        ... (128-SPX_N) ...                         (for sha2-192 and sha2-256)
-    //     =       SHA256_IN              + 22      + SPX_K*SPX_N (any case)
-    stack u8[SHA256_IN + 22 + SPX_K*SPX_N] buf;
+    //     =       SHA512_IN              + 22      + SPX_K*SPX_N (any case)
+    stack u8[SHA512_IN + 22 + SPX_K*SPX_N] buf;
 
     // buffer for the output
     stack u8[SHA512_OUT] digest;
@@ -459,16 +460,16 @@ fn T_k(
     buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
-    for i=SPX_N to SHA256_IN { buf[i] = 0; } 
+    for i=SPX_N to SHA512_IN { buf[i] = 0; } 
 
     // buf = PK.seed || zero-padding || ADRS^c
-    buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
+    buf[SHA512_IN : 22] = __adrs_compress(buf[SHA512_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_k
-    for i=0 to SPX_K*SPX_N { buf[SHA256_IN+22+i] = roots[i]; }
+    for i=0 to SPX_K*SPX_N { buf[SHA512_IN+22+i] = roots[i]; }
 
-    // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_k)
-    digest = sha256_compress_fors::__sha256(digest, buf);
+    // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_k)
+    digest = sha512_compress_fors::__sha512(digest, buf);
 
     () = #unspill(out);
 

@@ -33,6 +33,26 @@ class SLH_DSA_X86_64(SLH_DSA):
             self.verification_key_size = 32
             self.signing_key_size      = 64
             self.signature_size        = 7856
+        elif parameter_set == "sha2-128f":
+            self.verification_key_size = 32
+            self.signing_key_size      = 64
+            self.signature_size        = 17088
+        elif parameter_set == "sha2-192s":
+            self.verification_key_size = 48
+            self.signing_key_size      = 96
+            self.signature_size        = 16224
+        elif parameter_set == "sha2-192f":
+            self.verification_key_size = 48
+            self.signing_key_size      = 96
+            self.signature_size        = 35664
+        elif parameter_set == "sha2-256s":
+            self.verification_key_size = 64
+            self.signing_key_size      = 128
+            self.signature_size        = 29792
+        elif parameter_set == "sha2-256f":
+            self.verification_key_size = 64
+            self.signing_key_size      = 128
+            self.signature_size        = 49856
 
         self.keygen_internal = slh_dsa.slh_keygen_internal
         self.sign_internal   = slh_dsa.slh_sign_internal

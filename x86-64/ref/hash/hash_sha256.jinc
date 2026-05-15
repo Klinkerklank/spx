@@ -1,4 +1,5 @@
 require "sha256/core_hash_sha256.jinc"
+require "../adrs/adrs.jinc" // ADRS data structure
 
 require "../stdlib/memcpy/memcpy.jinc"
 

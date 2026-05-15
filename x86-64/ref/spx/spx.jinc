@@ -2,7 +2,6 @@ require "../params/active_params.jinc" // SPHINCS+ parameters
 // active_params.jinc in turn requires the chosen parameter file with the concrete parameter values
 
 require "../adrs/adrs.jinc" // ADRS data structure
-require "../hash/hash_sha256.jinc" // hash function implementations
 
 require "../wots/wots.jinc" // algorithms 5-8   of SLH-DSS: Winternitz One-Time Signature Plus
 require "../xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS: eXtended Merkle Signature Scheme
