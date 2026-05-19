@@ -18,7 +18,7 @@ fn H_msg(
     () = #spill(out); // only needed at the end of the function
 
     // stack variables
-    stack u8[SHA_MGF1_PREFIX] buf;           // buffer for the inner hash call
+    stack u8[3*SPX_N] buf; // buffer for the inner hash call
     stack u8[2*SPX_N + SHA256_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
     stack u8[((SPX_M + SHA256_OUT - 1) / SHA256_OUT) * SHA256_OUT] concat; // concatenated hash outputs
     
@@ -103,8 +103,8 @@ fn PRF_msg(
     reg u64 xor; // temporary variable for computing XORs
 
     // stack variables
-    stack u8[SHA256_IN] key;             // buffer for the key
-    stack u8[SHA_HMAC_PREFIX] ibuf;    // buffer for inner hash call
+    stack u8[SHA256_IN] key;               // buffer for the key
+    stack u8[SHA256_IN + SPX_N] ibuf;      // buffer for inner hash call
     stack u8[SHA256_IN + SHA256_OUT] obuf; // buffer for outer hash call
     stack u8[SHA256_OUT] hmac;
     

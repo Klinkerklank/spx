@@ -1,7 +1,7 @@
 require "common/sha256_common.jinc"
 
 namespace sha256_hmac_inner {
-    param int PREFIXLEN = SHA_HMAC_PREFIX;
+    param int PREFIXLEN = SHA256_IN + SPX_N;
     require "sha256_absorb/sha256_absorb.jinc"
 }
 
@@ -11,7 +11,7 @@ namespace sha256_hmac_outer {
 }
 
 namespace sha256_mgf1_msg {
-    param int PREFIXLEN = SHA_MGF1_PREFIX;
+    param int PREFIXLEN = 3*SPX_N;
     require "sha256_absorb/sha256_absorb.jinc"
 }
 
