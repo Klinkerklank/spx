@@ -12,6 +12,12 @@ PARAMETER_SETS = {
     "SLH-DSA-SHA2-192f": "slh_dsa_sha2-192f.json",
     "SLH-DSA-SHA2-256s": "slh_dsa_sha2-256s.json",
     "SLH-DSA-SHA2-256f": "slh_dsa_sha2-256f.json",
+    "SLH-DSA-SHAKE-128s": "slh_dsa_shake-128s.json",
+    "SLH-DSA-SHAKE-128f": "slh_dsa_shake-128f.json",
+    "SLH-DSA-SHAKE-192s": "slh_dsa_shake-192s.json",
+    "SLH-DSA-SHAKE-192f": "slh_dsa_shake-192f.json",
+    "SLH-DSA-SHAKE-256s": "slh_dsa_shake-256s.json",
+    "SLH-DSA-SHAKE-256f": "slh_dsa_shake-256f.json",
 }
 
 

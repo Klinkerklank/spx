@@ -8,8 +8,8 @@ def pytest_addoption(parser):
         "--parameter-set",
         action="store",
         default="sha2-128f",
-        help="SLH_DSA parameter set: sha2-128s",
-        choices=("sha2-128s", "sha2-128f", "sha2-192s", "sha2-192f", "sha2-256s", "sha2-256f"),
+        help="SLH_DSA parameter set example: sha2-128f",
+        choices=("sha2-128s", "sha2-128f", "sha2-192s", "sha2-192f", "sha2-256s", "sha2-256f", "shake-128s", "shake-128f", "shake-192s", "shake-192f", "shake-256s", "shake-256f"),
     )
     parser.addoption(
         "--architecture",

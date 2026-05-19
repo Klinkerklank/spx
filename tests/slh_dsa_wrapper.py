@@ -29,27 +29,27 @@ class SLH_DSA_X86_64(SLH_DSA):
         # While we could get this parameters from the source code, they
         # change so infrequently that we might as well just hardcode them
         # and be done with it.
-        if parameter_set == "sha2-128s":
+        if parameter_set == "sha2-128s" or parameter_set == "shake-128s":
             self.verification_key_size = 32
             self.signing_key_size      = 64
             self.signature_size        = 7856
-        elif parameter_set == "sha2-128f":
+        elif parameter_set == "sha2-128f" or parameter_set == "shake-128f":
             self.verification_key_size = 32
             self.signing_key_size      = 64
             self.signature_size        = 17088
-        elif parameter_set == "sha2-192s":
+        elif parameter_set == "sha2-192s" or parameter_set == "shake-192s":
             self.verification_key_size = 48
             self.signing_key_size      = 96
             self.signature_size        = 16224
-        elif parameter_set == "sha2-192f":
+        elif parameter_set == "sha2-192f" or parameter_set == "shake-192f":
             self.verification_key_size = 48
             self.signing_key_size      = 96
             self.signature_size        = 35664
-        elif parameter_set == "sha2-256s":
+        elif parameter_set == "sha2-256s" or parameter_set == "shake-256s":
             self.verification_key_size = 64
             self.signing_key_size      = 128
             self.signature_size        = 29792
-        elif parameter_set == "sha2-256f":
+        elif parameter_set == "sha2-256f" or parameter_set == "shake-256f":
             self.verification_key_size = 64
             self.signing_key_size      = 128
             self.signature_size        = 49856

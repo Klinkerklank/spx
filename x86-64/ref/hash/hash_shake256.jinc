@@ -1,45 +1,52 @@
 require "../adrs/adrs.jinc" // ADRS data structure
 require "../stdlib/memcpy/memcpy.jinc"
 
-from Keccak require "ref/select_bmi1.jinc"
+// import the formosa-keccak SHAKE256 implementation
 from Keccak require "common/keccak1600_generic.jinc"
-
+from Keccak require "ref/select_bmi1.jinc"
 from Keccak require "ref/keccak1600.jinc"
+// from Keccak require "ref/keccak1600_updstate.jinc"
+
+// for single bytes
+namespace A_1 {
+    param int _ASIZE = 1;
+    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
 
 // for separation byte and context length
-namespace A_1 {
-  param int _ASIZE = 1;
-  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+namespace A_2 {
+    param int _ASIZE = 2;
+    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for ADRS
 namespace A_32 {
-  param int _ASIZE = 32;
-  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    param int _ASIZE = 32;
+    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for PK and SK elements, M_1, and output size of PRF, PRF_msg, F, H, T_len, and T_k
 namespace A_N {
-  param int _ASIZE = SPX_N;
-  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    param int _ASIZE = SPX_N;
+    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for output size of H_msg
 namespace A_M {
-  param int _ASIZE = SPX_M;
-  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    param int _ASIZE = SPX_M;
+    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for M_len
 namespace A_LENN {
-  param int _ASIZE = SPX_LEN*SPX_N;
-  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    param int _ASIZE = SPX_LEN*SPX_N;
+    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for M_k
 namespace A_KN {
-  param int _ASIZE = SPX_K*SPX_N;
-  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    param int _ASIZE = SPX_K*SPX_N;
+    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // H_msg(R, PK.seed, PK.root, M) = SHAKE256(R || PK.seed || PK.root || M, 8*SPX_M)
@@ -58,23 +65,49 @@ fn H_msg(
     
     // register variables
     reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
-    reg u8 byte;        // temporary variable for passing inputs
 
     // stack variables
     stack u64[25] st_s; // internal state of SHAKE256
+    stack u8[2] ctx_prefix; // temporary variable for passing the separator byte and context length
 
     // SHAKE256 state initialisation
     st = st_s;
     st = __state_init_ref(st);
     
     // absorb all inputs
-    st, _ = A_N::__absorb_ref(st, 0,         r,      UNFINISHED, R136); // absorb R
-    st, _ = A_N::__absorb_ref(st, SPX_N,     pkseed, UNFINISHED, R136); // absorb PK.seed
-    st, _ = A_N::__absorb_ref(st, 2*SPX_N,   pkroot, UNFINISHED, R136); // absorb PK.root
-    byte = 0x00;
-    st, _ = A_1::__absorb_ref(st, 3*SPX_N,   byte,   UNFINISHED, R136); // absorb separation byte
-    byte = (8u) ctx_len;
-    st, _ = A_1::__absorb_ref(st, 3*SPX_N+1, byte,   UNFINISHED, R136); // absorb context length
+    st, _ = A_N::__absorb_ref(st, 0,       r,          UNFINISHED, R136); // absorb R
+    st, _ = A_N::__absorb_ref(st, SPX_N,   pkseed,     UNFINISHED, R136); // absorb PK.seed
+    st, _ = A_N::__absorb_ref(st, 2*SPX_N, pkroot,     UNFINISHED, R136); // absorb PK.root
+    ctx_prefix[0] = 0x00; ctx_prefix[1] = (8u) ctx_len;
+    st, _ = A_2::__absorb_ref(st, 3*SPX_N, ctx_prefix, UNFINISHED, R136); // absorb separation byte and context length
+    
+    () = #spill(ctx_ptr, ctx_len);
+
+    reg u64 msg_i;
+    reg u64 msg_ptr_i;
+    reg u64 offset;
+    stack u8[1] msg_byte;
+    inline int i;
+
+    msg_i=0;
+    // offset = 3*SPX_N+2;
+    offset = 0;
+    msg_ptr_i = msg_ptr;
+    while (msg_i < msg_len) {
+        msg_byte[0] = [:u8 msg_ptr_i];
+
+        () = #spill(msg_len, msg_ptr_i, msg_i, offset);
+
+        st, _ = A_1::__absorb_ref(st, 0, msg_byte, UNFINISHED, R136);
+
+        () = #unspill(msg_len, msg_ptr_i, msg_i, offset);
+
+        msg_i += 1;
+        msg_ptr_i += 1;
+        // offset += 1;
+    }
+    
+    () = #unspill(ctx_ptr, ctx_len);
 
     // out = shake256_m::__shake256(out, ctx_ptr, ctx_len);
     // out = shake256_m::__shake256(out, msg_ptr, msg_len);
@@ -124,10 +157,10 @@ fn PRF_msg(
     
     // register variables
     reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
-    reg u8 byte;        // temporary variable for passing inputs
 
     // stack variables
     stack u64[25] st_s; // internal state of SHAKE256
+    stack u8[2] ctx_prefix; // temporary variable for passing the separator byte and context length
 
     // SHAKE256 state initialisation
     st = st_s;
@@ -136,10 +169,8 @@ fn PRF_msg(
     // absorb all inputs
     st, _ = A_N::__absorb_ref(st, 0,         skprf,   UNFINISHED, R136); // absorb SK.prf
     st, _ = A_N::__absorb_ref(st, SPX_N,     optrand, UNFINISHED, R136); // absorb opt_rand
-    byte = 0x00;
-    st, _ = A_1::__absorb_ref(st, 2*SPX_N,   byte,    UNFINISHED, R136); // absorb separation byte
-    byte = (8u) ctx_len;
-    st, _ = A_1::__absorb_ref(st, 2*SPX_N+1, byte,    UNFINISHED, R136); // absorb context length
+    ctx_prefix[0] = 0x00; ctx_prefix[1] = (8u) ctx_len;
+    st, _ = A_2::__absorb_ref(st, 2*SPX_N, ctx_prefix, UNFINISHED, R136); // absorb separation byte and context length
 
     // out = shake256_m::__shake256(out, ctx_ptr, ctx_len);
     // out = shake256_m::__shake256(out, msg_ptr, msg_len);
