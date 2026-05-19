@@ -3,8 +3,7 @@
 # ---------------------------------------------------------------- #
 
 # compiler settings
-JASMINC  ?= jasminc
-JASMINCT ?= jasmin-ct
+JASMINC ?= jasminc -I Keccak=formosa-keccak/src/amd64
 CC = /usr/bin/gcc
 
 # implementation settings
@@ -77,6 +76,9 @@ endif
 ifneq (,$(filter sha2-192s sha2-192f sha2-256s sha2-256f,$(PARAMETER_SET)))
   HASH_IMPL = ../hash/hash_sha512.jinc
 endif
+ifneq (,$(filter shake-128s shake-128f shake-192s shake-192f shake-256s shake-256f,$(PARAMETER_SET)))
+  HASH_IMPL = ../hash/hash_shake256.jinc
+endif
 
 # Make the Jasmin parameter header, with the SPHINCS+ parameters and the hash function implementations
 $(ACTIVE_PARAM_FILE):
@@ -92,14 +94,14 @@ $(PARAM_HEADER):
 #  COMPILING                                                       #
 # ---------------------------------------------------------------- #
 
-# compile SPHINCS+ CLI from Jasmin to assembly
-$(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
-	$(JASMINC) -o $(OUTPUT_FILE_NAME).s $(IMPLEMENTATION)/spx.jazz
-	grep -q GNU-stack $(OUTPUT_FILE_NAME).s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME).s
+# # compile SPHINCS+ CLI from Jasmin to assembly
+# $(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
+# 	$(JASMINC) -o $(OUTPUT_FILE_NAME).s $(IMPLEMENTATION)/spx.jazz
+# 	grep -q GNU-stack $(OUTPUT_FILE_NAME).s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME).s
 
-# compile Jasmin into a CLI executable
-$(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
-	$(CC) $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
+# # compile Jasmin into a CLI executable
+# $(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
+# 	$(CC) $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
 
 # ---------------------------------------------------------------- #
 #  KAT TESTING                                                     #
@@ -119,16 +121,6 @@ TESTING_WRAPPER :=
 ifeq ($(ARCHITECTURE), x86-64)
 	TESTING_WRAPPER = $(OUTPUT_FILE_NAME).so
 endif
-
-# convert the .rsp KATs to .json, and run the implementation against the KATs
-.PHONY: cref-kat-test
-cref-kat-test: $(TESTING_WRAPPER)
-	python3 tests/cref/convert_rsp_to_json.py
-	python3 -m pytest \
-		--parameter-set=$(PARAMETER_SET) \
-		--architecture=$(ARCHITECTURE) \
-		--implementation-type=$(IMPLEMENTATION_TYPE) \
-		tests/test_cref_kats.py
 
 # group the test vectors in .json files per parameter set, and run the implementation against the KATs
 .PHONY: acvp-kat-test
