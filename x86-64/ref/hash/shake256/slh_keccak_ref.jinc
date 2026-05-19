@@ -1,0 +1,105 @@
+// adapted from https://github.com/formosa-crypto/formosa-mlkem/blob/33c2a24bf1c3c7ed0dc74461cbd945ea3008db06/code/jasmin/common/ref/mlkem_keccak_ref.jinc
+
+from Keccak require "ref/select_bmi1.jinc"
+from Keccak require "common/keccak1600_generic.jinc"
+
+from Keccak require "ref/keccak1600.jinc"
+
+namespace A32 {
+  param int _ASIZE = 32;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+namespace A33 {
+  param int _ASIZE = 33;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+namespace A34 {
+  param int _ASIZE = 34;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+namespace A64 {
+  param int _ASIZE = 64;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+namespace A128 {
+  param int _ASIZE = 128;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+namespace A168 {
+  param int _ASIZE = 168;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+namespace A1088 {
+  param int _ASIZE = 1088;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+namespace A1184 {
+  param int _ASIZE = 1184;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+namespace A1568 {
+  param int _ASIZE = 1568;
+  from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+}
+
+fn _shake256_128_33
+( reg mut ptr u8[128] out
+, reg const ptr u8[33] in
+) -> reg ptr u8[128]
+{ stack u64[25] st_s;
+  reg ptr u64[25] st;
+
+  st = st_s;
+  st = __state_init_ref(st);
+  () = #spill(out);
+  st, _ = A33::__absorb_ref(st, 0, in, SHAKE, R136);
+  () = #unspill(out);
+  _, out = A128::__squeeze_ref(st, out, R136);
+
+  return out;
+}
+
+fn _shake256_A32__A1120
+( reg mut ptr u8[32] out
+, reg const ptr u8[32] in0
+, reg const ptr u8[1088] in1) -> reg ptr u8[32]
+{ stack u64[25] st_s;
+  reg ptr u64[25] st;
+
+  st = st_s;
+  st = __state_init_ref(st);
+  () = #spill(out, in1);
+  st, _ = A32::__absorb_ref(st, 0, in0, UNFINISHED, R136);
+  () = #unspill(in1);
+  st, _ = A1088::__absorb_ref(st, 32, in1, SHAKE, R136);
+  () = #unspill(out);
+  _, out = A32::__squeeze_ref(st, out, R136);
+  return out;
+}
+
+fn _shake256_A32__A1600
+( #[spill_to_mmx] reg mut ptr u8[32] out
+, reg const ptr u8[32] in0
+, reg const ptr u8[1568] in1) -> reg ptr u8[32]
+{ stack u64[25] st_s;
+  reg ptr u64[25] st;
+
+  () = #spill(out);
+  () = #spill(in1);
+  st = st_s;
+  st = __state_init_ref(st);
+  st, _ = A32::__absorb_ref(st, 0, in0, UNFINISHED, R136);
+  () = #unspill(in1);
+  st, _ = A1568::__absorb_ref(st, 32, in1, SHAKE, R136);
+  () = #unspill(out);
+  _, out = A32::__squeeze_ref(st, out, R136);
+  return out;
+}
