@@ -5,7 +5,13 @@ require "../stdlib/memcpy/memcpy.jinc"
 from Keccak require "common/keccak1600_generic.jinc"
 from Keccak require "ref/select_bmi1.jinc"
 from Keccak require "ref/keccak1600.jinc"
-// from Keccak require "ref/keccak1600_updstate.jinc"
+from Keccak require "ref/keccak1600_updstate.jinc"
+
+// import a SHAKE256 implementation in which it is able to manually set 
+require "shake256/keccak1600.jinc"
+require "shake256/keccakf1600.jinc"
+require "shake256/keccakf1600_globals.jinc"
+require "shake256/keccakf1600_spec.jinc"
 
 // for single bytes
 namespace A_1 {
@@ -49,6 +55,15 @@ namespace A_KN {
     from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
+inline
+fn __shake256_consider_permute(reg ptr u64[25] state, reg u64 offset) -> reg ptr u64[25], reg u64 {
+    if (offset >= SHAKE256_RATE) {
+        state = _keccakf1600_ref1(state);
+        offset = 0;
+    }
+    return state, offset;
+}
+
 // H_msg(R, PK.seed, PK.root, M) = SHAKE256(R || PK.seed || PK.root || M, 8*SPX_M)
 fn H_msg(
     reg ptr u8[SPX_M] out,    // output: buffer the result gets written to
@@ -62,59 +77,90 @@ fn H_msg(
 ) -> reg ptr u8[SPX_M] // -> out
 {
     () = #spill(out); // only needed at the end of the function
+
+    () = #spill(ctx_ptr, ctx_len, msg_ptr, msg_len);
     
     // register variables
-    reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
+    reg u128 copied_16_bytes;
+    reg u64 state_offset;
+    reg u64 ctx_offset;
+    reg u64 msg_offset;
+    reg u8 byte;
 
     // stack variables
-    stack u64[25] st_s; // internal state of SHAKE256
-    stack u8[2] ctx_prefix; // temporary variable for passing the separator byte and context length
+    stack u64[25] state; // internal state of SHAKE256
 
-    // SHAKE256 state initialisation
-    st = st_s;
-    st = __state_init_ref(st);
-    
-    // absorb all inputs
-    st, _ = A_N::__absorb_ref(st, 0,       r,          UNFINISHED, R136); // absorb R
-    st, _ = A_N::__absorb_ref(st, SPX_N,   pkseed,     UNFINISHED, R136); // absorb PK.seed
-    st, _ = A_N::__absorb_ref(st, 2*SPX_N, pkroot,     UNFINISHED, R136); // absorb PK.root
-    ctx_prefix[0] = 0x00; ctx_prefix[1] = (8u) ctx_len;
-    st, _ = A_2::__absorb_ref(st, 3*SPX_N, ctx_prefix, UNFINISHED, R136); // absorb separation byte and context length
-    
-    () = #spill(ctx_ptr, ctx_len);
-
-    reg u64 msg_i;
-    reg u64 msg_ptr_i;
-    reg u64 offset;
-    stack u8[1] msg_byte;
     inline int i;
 
-    msg_i=0;
-    // offset = 3*SPX_N+2;
-    offset = 0;
-    msg_ptr_i = msg_ptr;
-    while (msg_i < msg_len) {
-        msg_byte[0] = [:u8 msg_ptr_i];
+    // initialise the SHAKE256 state
+    state = __keccak_init_ref1(state);
+    
+    // absorb R, PK.seed, and PK.root
+    copied_16_bytes = r[:u128 0];
+    state.[:u128 0]  = copied_16_bytes;
+    copied_16_bytes = pkseed[:u128 0];
+    state.[:u128 16] = copied_16_bytes;
+    copied_16_bytes = pkroot[:u128 0];
+    state.[:u128 32] = copied_16_bytes;
 
-        () = #spill(msg_len, msg_ptr_i, msg_i, offset);
+    // absorb 0 || ctx_len (part of the message/context encoding)
+    state.[:u8 48] = 0;
+    state.[:u8 49] = (8u) ctx_len;
+    state_offset = 50;
 
-        st, _ = A_1::__absorb_ref(st, 0, msg_byte, UNFINISHED, R136);
+    // absorb context string
+    ctx_offset = 0;
+    () = #unspill(ctx_ptr, ctx_len);
+    while(ctx_offset < ctx_len) {
+        if (state_offset >= SHAKE256_RATE) {
+            () = #spill(ctx_ptr, ctx_offset, ctx_len);
+            state = _keccakf1600_ref1(state);
+            () = #unspill(ctx_ptr, ctx_offset, ctx_len);
 
-        () = #unspill(msg_len, msg_ptr_i, msg_i, offset);
+            state_offset = 0;
+        }
 
-        msg_i += 1;
-        msg_ptr_i += 1;
-        // offset += 1;
+        byte = [:u8 ctx_ptr + ctx_offset];
+        ctx_offset += 1;
+
+        state[:u8 state_offset] ^= byte;
+        state_offset += 1;
     }
     
-    () = #unspill(ctx_ptr, ctx_len);
+    // absorb message string
+    msg_offset = 0;
+    () = #unspill(msg_ptr, msg_len);
+    while(msg_offset < msg_len) {
+        if (state_offset >= SHAKE256_RATE) {
+            () = #spill(msg_ptr, msg_offset, msg_len);
+            state = _keccakf1600_ref1(state);
+            () = #unspill(msg_ptr, msg_offset, msg_len);
 
-    // out = shake256_m::__shake256(out, ctx_ptr, ctx_len);
-    // out = shake256_m::__shake256(out, msg_ptr, msg_len);
+            state_offset = 0;
+        }
 
-    // squeeze to get the output
+        byte = [:u8 msg_ptr + msg_offset];
+        msg_offset += 1;
+
+        state[:u8 state_offset] ^= byte;
+        state_offset += 1;
+    }
+
+    // absorb separator byte
+    state, state_offset = __shake256_consider_permute(state, state_offset);
+    state[:u8 state_offset] ^= 0x1f;
+
+    // finalise state
+    state, _ = __shake256_consider_permute(state, state_offset);
+    state[:u8 SHAKE256_RATE-1] ^= 0x80;
+
+    state = _keccakf1600_ref1(state);
+
     () = #unspill(out);
-    _, out = A_M::__squeeze_ref(st, out, R136);
+    for i=0 to SPX_M {
+        byte = state[:u8 i];
+        out[i] = byte;
+    }
     
     return out;
 }
@@ -154,30 +200,84 @@ fn PRF_msg(
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // only needed at the end of the function
+
+    () = #spill(ctx_ptr, ctx_len, msg_ptr, msg_len);
     
     // register variables
-    reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
+    reg u128 copied_16_bytes;
+    reg u64 state_offset;
+    reg u64 ctx_offset;
+    reg u64 msg_offset;
+    reg u8 byte;
 
     // stack variables
-    stack u64[25] st_s; // internal state of SHAKE256
-    stack u8[2] ctx_prefix; // temporary variable for passing the separator byte and context length
+    stack u64[25] state; // internal state of SHAKE256
 
-    // SHAKE256 state initialisation
-    st = st_s;
-    st = __state_init_ref(st);
+    // initialise the SHAKE256 state
+    state = __keccak_init_ref1(state);
     
-    // absorb all inputs
-    st, _ = A_N::__absorb_ref(st, 0,         skprf,   UNFINISHED, R136); // absorb SK.prf
-    st, _ = A_N::__absorb_ref(st, SPX_N,     optrand, UNFINISHED, R136); // absorb opt_rand
-    ctx_prefix[0] = 0x00; ctx_prefix[1] = (8u) ctx_len;
-    st, _ = A_2::__absorb_ref(st, 2*SPX_N, ctx_prefix, UNFINISHED, R136); // absorb separation byte and context length
+    // absorb SK.prf and opt_rand
+    copied_16_bytes = skprf[:u128 0];
+    state.[:u128 0] = copied_16_bytes;
+    copied_16_bytes = optrand[:u128 0];
+    state.[:u128 16] = copied_16_bytes;
 
-    // out = shake256_m::__shake256(out, ctx_ptr, ctx_len);
-    // out = shake256_m::__shake256(out, msg_ptr, msg_len);
+    // absorb 0 || ctx_len (part of the message/context encoding)
+    state.[:u8 32] = 0;
+    state.[:u8 33] = (8u) ctx_len;
+    state_offset = 34;
 
-    // squeeze to get the output
+    // absorb context string
+    ctx_offset = 0;
+    () = #unspill(ctx_ptr, ctx_len);
+    while(ctx_offset < ctx_len) {
+        if (state_offset >= SHAKE256_RATE) {
+            () = #spill(ctx_ptr, ctx_offset, ctx_len);
+            state = _keccakf1600_ref1(state);
+            () = #unspill(ctx_ptr, ctx_offset, ctx_len);
+
+            state_offset = 0;
+        }
+
+        byte = [:u8 ctx_ptr + ctx_offset];
+        ctx_offset += 1;
+
+        state[:u8 state_offset] ^= byte;
+        state_offset += 1;
+    }
+    
+    // absorb message string
+    msg_offset = 0;
+    () = #unspill(msg_ptr, msg_len);
+    while(msg_offset < msg_len) {
+        if (state_offset >= SHAKE256_RATE) {
+            () = #spill(msg_ptr, msg_offset, msg_len);
+            state = _keccakf1600_ref1(state);
+            () = #unspill(msg_ptr, msg_offset, msg_len);
+
+            state_offset = 0;
+        }
+
+        byte = [:u8 msg_ptr + msg_offset];
+        msg_offset += 1;
+
+        state[:u8 state_offset] ^= byte;
+        state_offset += 1;
+    }
+
+    // absorb separator byte
+    state, state_offset = __shake256_consider_permute(state, state_offset);
+    state[:u8 state_offset] ^= 0x1f;
+
+    // finalise state
+    state, _ = __shake256_consider_permute(state, state_offset);
+    state[:u8 SHAKE256_RATE-1] ^= 0x80;
+
+    state = _keccakf1600_ref1(state);
+
     () = #unspill(out);
-    _, out = A_N::__squeeze_ref(st, out, R136);
+    copied_16_bytes = state.[:u128 0];
+    out.[:u128 0] = copied_16_bytes;
     
     return out;
 }
