@@ -5,7 +5,6 @@ require "../stdlib/memcpy/memcpy.jinc"
 from Keccak require "common/keccak1600_generic.jinc"
 from Keccak require "ref/select_bmi1.jinc"
 from Keccak require "ref/keccak1600.jinc"
-from Keccak require "ref/keccak1600_updstate.jinc"
 
 // import a SHAKE256 implementation in which it is able to manually set 
 require "shake256/keccak1600.jinc"
@@ -81,6 +80,7 @@ fn H_msg(
     () = #spill(ctx_ptr, ctx_len, msg_ptr, msg_len);
     
     // register variables
+    reg u256 copied_32_bytes;
     reg u128 copied_16_bytes;
     reg u64 state_offset;
     reg u64 ctx_offset;
@@ -95,18 +95,33 @@ fn H_msg(
     // initialise the SHAKE256 state
     state = __keccak_init_ref1(state);
     
-    // absorb R, PK.seed, and PK.root
-    copied_16_bytes = r[:u128 0];
-    state.[:u128 0]  = copied_16_bytes;
-    copied_16_bytes = pkseed[:u128 0];
-    state.[:u128 16] = copied_16_bytes;
-    copied_16_bytes = pkroot[:u128 0];
-    state.[:u128 32] = copied_16_bytes;
+    if (SPX_N == 16) {
+        // absorb R, PK.seed, and PK.root
+        copied_16_bytes = r[:u128 0];
+        state.[:u128 0]  = copied_16_bytes;
+        copied_16_bytes = pkseed[:u128 0];
+        state.[:u128 16] = copied_16_bytes;
+        copied_16_bytes = pkroot[:u128 0];
+        state.[:u128 32] = copied_16_bytes;
 
-    // absorb 0 || ctx_len (part of the message/context encoding)
-    state.[:u8 48] = 0;
-    state.[:u8 49] = (8u) ctx_len;
-    state_offset = 50;
+        // absorb 0 || ctx_len (part of the message/context encoding)
+        state.[:u8 48] = 0;
+        state.[:u8 49] = (8u) ctx_len;
+        state_offset = 50;
+    } else if (SPX_N == 32) {
+        // absorb R, PK.seed, and PK.root
+        copied_32_bytes = r[:u256 0];
+        state.[:u256 0]  = copied_32_bytes;
+        copied_32_bytes = pkseed[:u256 0];
+        state.[:u256 32] = copied_32_bytes;
+        copied_32_bytes = pkroot[:u256 0];
+        state.[:u256 64] = copied_32_bytes;
+
+        // absorb 0 || ctx_len (part of the message/context encoding)
+        state.[:u8 96] = 0;
+        state.[:u8 97] = (8u) ctx_len;
+        state_offset = 98;
+    }
 
     // absorb context string
     ctx_offset = 0;
@@ -204,6 +219,7 @@ fn PRF_msg(
     () = #spill(ctx_ptr, ctx_len, msg_ptr, msg_len);
     
     // register variables
+    reg u256 copied_32_bytes;
     reg u128 copied_16_bytes;
     reg u64 state_offset;
     reg u64 ctx_offset;
@@ -215,17 +231,30 @@ fn PRF_msg(
 
     // initialise the SHAKE256 state
     state = __keccak_init_ref1(state);
-    
-    // absorb SK.prf and opt_rand
-    copied_16_bytes = skprf[:u128 0];
-    state.[:u128 0] = copied_16_bytes;
-    copied_16_bytes = optrand[:u128 0];
-    state.[:u128 16] = copied_16_bytes;
 
-    // absorb 0 || ctx_len (part of the message/context encoding)
-    state.[:u8 32] = 0;
-    state.[:u8 33] = (8u) ctx_len;
-    state_offset = 34;
+    if (SPX_N == 16) {
+        // absorb SK.prf and opt_rand
+        copied_16_bytes = skprf[:u128 0];
+        state.[:u128 0] = copied_16_bytes;
+        copied_16_bytes = optrand[:u128 0];
+        state.[:u128 16] = copied_16_bytes;
+
+        // absorb 0 || ctx_len (part of the message/context encoding)
+        state.[:u8 32] = 0;
+        state.[:u8 33] = (8u) ctx_len;
+        state_offset = 34;
+    } else if (SPX_N == 32) {
+        // absorb SK.prf and opt_rand
+        copied_32_bytes = skprf[:u256 0];
+        state.[:u256 0] = copied_32_bytes;
+        copied_32_bytes = optrand[:u256 0];
+        state.[:u256 32] = copied_32_bytes;
+
+        // absorb 0 || ctx_len (part of the message/context encoding)
+        state.[:u8 64] = 0;
+        state.[:u8 65] = (8u) ctx_len;
+        state_offset = 66;
+    }
 
     // absorb context string
     ctx_offset = 0;
@@ -276,8 +305,13 @@ fn PRF_msg(
     state = _keccakf1600_ref1(state);
 
     () = #unspill(out);
-    copied_16_bytes = state.[:u128 0];
-    out.[:u128 0] = copied_16_bytes;
+    if (SPX_N == 16) {
+        copied_16_bytes = state.[:u128 0];
+        out.[:u128 0] = copied_16_bytes;
+    } else if (SPX_N == 32) {
+        copied_32_bytes = state.[:u256 0];
+        out.[:u256 0] = copied_32_bytes;
+    }
     
     return out;
 }
