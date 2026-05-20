@@ -58,3 +58,4 @@ param int SPX_ADRS_TYPE_WOTS_PRF   = 5;
 param int SPX_ADRS_TYPE_FORS_PRF   = 6;
 
 // SHAKE256 parameters
+param int SHAKE256_RATE = 136;
