@@ -6,11 +6,10 @@ from Keccak require "common/keccak1600_generic.jinc"
 from Keccak require "ref/select_bmi1.jinc"
 from Keccak require "ref/keccak1600.jinc"
 
-// import a SHAKE256 implementation in which it is able to manually set 
+// import a SHAKE256 implementation in which it is possible to manually set the state,
+// so we can combine manually writer ptr reg arguments and the variable-sized reg u64
+// message and context strings
 require "shake256/keccak1600.jinc"
-require "shake256/keccakf1600.jinc"
-require "shake256/keccakf1600_globals.jinc"
-require "shake256/keccakf1600_spec.jinc"
 
 // for single bytes
 namespace A_1 {
@@ -108,6 +107,16 @@ fn H_msg(
         state.[:u8 48] = 0;
         state.[:u8 49] = (8u) ctx_len;
         state_offset = 50;
+    } else if (SPX_N == 24) {
+        // absorb R, PK.seed, and PK.root
+        for i=0 to 24 { state[:u8 i + 0 ] = r[i];      }
+        for i=0 to 24 { state[:u8 i + 24] = pkseed[i]; }
+        for i=0 to 24 { state[:u8 i + 48] = pkroot[i]; }
+
+        // absorb 0 || ctx_len (part of the message/context encoding)
+        state.[:u8 72] = 0;
+        state.[:u8 73] = (8u) ctx_len;
+        state_offset = 74;
     } else if (SPX_N == 32) {
         // absorb R, PK.seed, and PK.root
         copied_32_bytes = r[:u256 0];
@@ -229,6 +238,8 @@ fn PRF_msg(
     // stack variables
     stack u64[25] state; // internal state of SHAKE256
 
+    inline int i;
+
     // initialise the SHAKE256 state
     state = __keccak_init_ref1(state);
 
@@ -243,6 +254,15 @@ fn PRF_msg(
         state.[:u8 32] = 0;
         state.[:u8 33] = (8u) ctx_len;
         state_offset = 34;
+    } else if (SPX_N == 24) {
+        // absorb R, PK.seed, and PK.root
+        for i=0 to 24 { state[:u8 i + 0 ] = skprf[i];   }
+        for i=0 to 24 { state[:u8 i + 24] = optrand[i]; }
+
+        // absorb 0 || ctx_len (part of the message/context encoding)
+        state.[:u8 48] = 0;
+        state.[:u8 49] = (8u) ctx_len;
+        state_offset = 50;
     } else if (SPX_N == 32) {
         // absorb SK.prf and opt_rand
         copied_32_bytes = skprf[:u256 0];
@@ -308,6 +328,8 @@ fn PRF_msg(
     if (SPX_N == 16) {
         copied_16_bytes = state.[:u128 0];
         out.[:u128 0] = copied_16_bytes;
+    } else if (SPX_N == 24) {
+        for i=0 to 24 { out[i] = state[:u8 i]; }
     } else if (SPX_N == 32) {
         copied_32_bytes = state.[:u256 0];
         out.[:u256 0] = copied_32_bytes;
