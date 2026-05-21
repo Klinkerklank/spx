@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -125,8 +126,10 @@ int sign(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
     ctx_msg_ptrs[1] = (uint64_t) msg_ptr;
     ctx_msg_lens[0] = (uint64_t) ctx_len;
     ctx_msg_lens[1] = (uint64_t) msg_len;
+
+    bool deterministic = false;
     
-    int r = slh_sign(sig, ctx_msg_ptrs, ctx_msg_lens, sk);
+    int r = slh_sign(sig, ctx_msg_ptrs, ctx_msg_lens, sk, (uint8_t) deterministic);
     assert(r == 0);
     
     mkdir("outputs", 0700); // ensure output directory exists

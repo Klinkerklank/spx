@@ -37,7 +37,7 @@ OUTPUT_FILE_NAME = slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTUR
 # ---------------------------------------------------------------- #
 
 # default behaviour
-all: acvp-kat-test
+all: acvp-kat-test-all
 
 # clean build artifacts
 .PHONY: clean
@@ -105,14 +105,14 @@ $(PARAM_HEADER):
 #  COMPILING                                                       #
 # ---------------------------------------------------------------- #
 
-# # compile SPHINCS+ CLI from Jasmin to assembly
-# $(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
-# 	$(JASMINC) -o $(OUTPUT_FILE_NAME).s $(IMPLEMENTATION)/spx.jazz
-# 	grep -q GNU-stack $(OUTPUT_FILE_NAME).s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME).s
+# compile SPHINCS+ CLI from Jasmin to assembly
+$(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
+	$(JASMINC) -o $(OUTPUT_FILE_NAME).s $(IMPLEMENTATION)/spx.jazz
+	grep -q GNU-stack $(OUTPUT_FILE_NAME).s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME).s
 
-# # compile Jasmin into a CLI executable
-# $(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
-# 	$(CC) $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
+# compile Jasmin into a CLI executable
+$(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
+	$(CC) $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
 
 # ---------------------------------------------------------------- #
 #  KAT TESTING                                                     #
@@ -156,3 +156,4 @@ acvp-kat-test-all:
 		$(MAKE) acvp-kat-test PARAMETER_SET=$$p || exit 1; \
 		rm -rf $(ACTIVE_PARAM_FILE) $(PARAM_HEADER); \
 	done
+	$(MAKE) clean;
