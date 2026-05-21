@@ -1,29 +1,74 @@
 # SPHINCS+ Jasmin Implementation
 
-## Makefile
+## Parameter Sets
 
-To compile the SPHINCS+ implementation for a given parameter set:
+Compiling any specific implementation is done by setting the ```PARAMSET``` option with ```make```. This Jasmin implementation provides support for all NIST-approved (FIPS 205) parameter sets. That is to say, ```PARAMSET``` may have any of the following values.
 
-```make PARAMSET=<option>```
+* SHA2: ```sha2-128s``` | ```sha2-128f``` | ```sha2-192s``` | ```sha2-192f``` | ```sha2-256s``` | ```sha2-256f```
 
-where ```<option>``` = ```sha2-128s``` (default if PARAMSET is not set) | ```sha2-128f```
+* SHAKE256: ```shake-128s``` | ```shake-128f``` | ```shake-192s``` | ```shake-192f``` | ```shake-256s``` | ```shake-256f``` (default)
 
-To be added:
+For example, one can run ```make PARAMSET=sha2-192s```. This produces the assembly file ```slh_dsa_sha2-192s_ref_x86-64.s```.
 
-SHA512 Jasmin implementation to allow for ```sha2-192s```, ```sha2-192f```, ```sha2-256s```, ```sha2-256f```
+## Known-Answer Tests (KATs)
 
-SHAKE Jasmin implementation to allow for ```shake-128s```, ```shake-128f```, ```shake-192s```, ```shake-192f```, ```shake-256s```, ```shake-256f```
+Some scripts are included to run the implementation against a set of NIST-provided ACVP server KATs.
 
-## Command-Line Interface
+Running all KAT tests for all parameter sets can be done with ```make acvp-kat-test-all```.
 
-Key generation writes the secret key and public key to outputs/sk.bin and outputs/pk.bin respectively
+Running the KAT tests only for a specific parameter set instead is done with e.g. ```make acvp-kat-test PARAMSET=sha2-128f```.
 
-```./spx_cli -mode keygen```
+## Command-Line Interface (CLI) ./slh_dsa_cli
 
-Signing takes a file path (through the -msg option) and the secret key in outputs/sk.bin, and produces the signature in outputs/sig.bin
+This implementation comes with a simple CLI to manually sign and verify files. Compile the CLI with a given parameter set, e.g. ```make slh_dsa_cli PARAMSET=sha2-128f```. This produces a runnable file ```slh_dsa_cli```.
 
-```./spx_cli -mode sign -msg <file path>```
+The CLI has a help option (-h or --help both work) that explains how to use the CLI. Running ```./slh_dsa_cli --help``` prints the following information:
 
-Verification takes a file path (through the -msg option) and the public key in outputs/pk.bin, and verifies whether the signature in outputs/sig.bin checks out
+Modes: keygen, sign, and verify
 
-```./spx_cli -mode verify -msg <file path>```
+* _keygen_ generates a pair of secret- and public keys.
+  The secret- and public keys are written to outputs/sk.bin and outputs/pk.bin respectively.
+  * Parameters:  
+    (none)
+  * Example usage:  
+    ```./slh_dsa_cli -mode keygen```
+
+* _sign_ signs a message.
+  Uses the secret- and public keys in outputs/sk.bin and outputs/pk.bin.
+  Signature is written to outputs/sig.bin.
+  * Parameters:  
+    -msg <filepath> = the file path to the file to sign (required)  
+    -ctx "<string>" = the context string (default: "")  
+    -det <bool> = whether to use deterministic additional randomness (default: false)
+  * Example usage:  
+    ```./slh_dsa_cli -mode sign -ctx "context" -msg README.md```  
+    ```./slh_dsa_cli -mode sign -msg slh_dsa_cli.c -det true```
+
+* _verify_ verifies a message.
+  Uses the public key in outputs/pk.bin and signature in outputs/sig.bin.
+  * Parameters:  
+    -msg <filepath> = the file path to the file to sign (required)  
+    -ctx "<string>" = the context string (default: "")
+  * Example usage:  
+    ```./slh_dsa_cli -mode verify -ctx "context" -msg README.md```  
+    ```./slh_dsa_cli -mode verify -msg slh_dsa_cli.c```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
