@@ -36,8 +36,8 @@ OUTPUT_FILE_NAME = slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTUR
 #  STANDARD MAKEFILE STUFF                                         #
 # ---------------------------------------------------------------- #
 
-# default behaviour
-all: acvp-kat-test-all
+# default behaviour: compile command-line interface
+all: $(CLI)
 
 # clean build artifacts
 .PHONY: clean
@@ -110,7 +110,7 @@ $(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz $(ACTIVE_PARAM_FILE) $(PARAM_H
 	$(JASMINC) -o $(OUTPUT_FILE_NAME).s $(IMPLEMENTATION)/spx.jazz
 	grep -q GNU-stack $(OUTPUT_FILE_NAME).s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME).s
 
-# compile Jasmin into a CLI executable
+# compile assembly and C into a CLI executable
 $(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
 	$(CC) $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
 

@@ -13,7 +13,7 @@
 #define ANSI_COLOR_RED    "\x1b[31m"
 #define ANSI_COLOR_GREEN  "\x1b[32m"
 #define ANSI_COLOR_YELLOW "\x1b[33m"
-#define ANSI_COLOR_BLUE   "\x1b[34m"
+#define ANSI_COLOR_CYAN   "\x1b[36m"
 
 // helper functions //
 
@@ -111,7 +111,7 @@ int keygen() {
     return 0;
 }
 
-int sign(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
+int sign(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len, bool deterministic) {
     // read secret key from file
     uint8_t sk[4 * SPX_N];
     read_file_fixed("outputs/sk.bin", sk, sizeof(sk));
@@ -126,8 +126,6 @@ int sign(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
     ctx_msg_ptrs[1] = (uint64_t) msg_ptr;
     ctx_msg_lens[0] = (uint64_t) ctx_len;
     ctx_msg_lens[1] = (uint64_t) msg_len;
-
-    bool deterministic = false;
     
     int r = slh_sign(sig, ctx_msg_ptrs, ctx_msg_lens, sk, (uint8_t) deterministic);
     assert(r == 0);
@@ -169,10 +167,44 @@ int verify(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
     return r;
 }
 
+void help() {
+    printf("\n" ANSI_COLOR_CYAN "SPHINCS+ Command Line Interface ./slh_dsa_cli\n" ANSI_COLOR_RESET);
+    printf("modes: keygen, sign, or verify\n");
+    printf("\n");
+    printf("-> " ANSI_COLOR_CYAN "keygen" ANSI_COLOR_RESET " generates a pair of secret- and public keys.\n");
+    printf("  the secret- and public keys are written to outputs/sk.bin and outputs/pk.bin respectively.\n");
+    printf("  parameters:\n");
+    printf("    (none)\n");
+    printf("  example usage:\n");
+    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode keygen\n" ANSI_COLOR_RESET);
+    printf("\n");
+    printf("-> " ANSI_COLOR_CYAN "sign" ANSI_COLOR_RESET " signs a message.\n");
+    printf("  uses the secret- and public keys in outputs/sk.bin and outputs/pk.bin.\n");
+    printf("  signature is written to outputs/sig.bin.\n");
+    printf("  parameters:\n");
+    printf("    -msg <filepath> = the file path to the file to sign (required)\n");
+    printf("    -ctx \"<string>\" = the context string (default: \"\")\n");
+    printf("    -det <bool> = whether to use deterministic additional randomness (default: false)\n");
+    printf("  example usage:\n");
+    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode sign -ctx \"context\" -msg README.md\n" ANSI_COLOR_RESET);
+    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode sign -msg slh_dsa_cli.c -det true\n" ANSI_COLOR_RESET);
+    printf("\n");
+    printf("-> " ANSI_COLOR_CYAN "verify" ANSI_COLOR_RESET " verifies a message.\n");
+    printf("  uses the public key in outputs/pk.bin and signature in outputs/sig.bin.\n");
+    printf("  parameters:\n");
+    printf("    -msg <filepath> = the file path to the file to sign (required)\n");
+    printf("    -ctx \"<string>\" = the context string (default: \"\")\n");
+    printf("  example usage:\n");
+    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode verify -ctx \"context\" -msg README.md\n" ANSI_COLOR_RESET);
+    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode verify -msg slh_dsa_cli.c\n" ANSI_COLOR_RESET);
+    printf("\n");
+}
+
 int main(int argc, char **argv) {
     char *mode = NULL;
     char *msg_file = NULL;
     char *ctx_ptr = "";
+    bool deterministic = false;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-mode") == 0) {
@@ -181,14 +213,17 @@ int main(int argc, char **argv) {
             msg_file = argv[++i];
         } else if (strcmp(argv[i], "-ctx") == 0) {
             ctx_ptr = argv[++i];
+        } else if (strcmp(argv[i], "-det") == 0) {
+            deterministic = argv[++i];
+        } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            help();
+            return 0;
         }
     }
 
     if (!mode) {
-        printf("Mode not defined. Usage:\n");
-        printf("  -mode keygen\n");
-        printf("  -mode sign   -msg <file>\n");
-        printf("  -mode verify -msg <file>\n");
+        printf(ANSI_COLOR_RED "Mode not defined.\n\n" ANSI_COLOR_RESET);
+        help();
         return 1;
     }
     
@@ -216,7 +251,7 @@ int main(int argc, char **argv) {
         
         size_t ctx_len = strlen(ctx_ptr);
 
-        sign(ctx_ptr, ctx_len, msg_ptr, msg_len);
+        sign(ctx_ptr, ctx_len, msg_ptr, msg_len, deterministic);
 
         free(msg_ptr);
     }
@@ -240,10 +275,6 @@ int main(int argc, char **argv) {
         verify(ctx_ptr, ctx_len, msg_ptr, msg_len);
 
         free(msg_ptr);
-    }
-    else {
-        printf("Unknown mode: %s\n", mode);
-        return 1;
     }
 
     return 0;
