@@ -18,6 +18,17 @@ ACTIVE_PARAM_FILE = x86-64/ref/params/active_params.jinc
 PARAM_HEADER = x86-64/ref/params/params.h
 CLI = slh_dsa_cli
 
+# testing settings
+PARAMETER_SETS = \
+	sha2-128f sha2-128s \
+	sha2-192f sha2-192s \
+	sha2-256f sha2-256s \
+	shake-128f shake-128s \
+	shake-192f shake-192s \
+	shake-256f shake-256s
+GROUPED_JSONS = $(addprefix tests/acvp/grouped/slh_dsa_, \
+	$(addsuffix .json,$(PARAMETER_SETS)))
+
 # file name
 OUTPUT_FILE_NAME = slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)
 
@@ -36,8 +47,7 @@ clean:
 		outputs \
 		$(CLI) \
 		$(ACTIVE_PARAM_FILE) $(PARAM_HEADER) \
-		.pytest_cache tests/__pycache__ tests/pyAES_DRBG/__pycache__/ \
-		tests/cref/json/*.json tests/acvp/grouped/*.json
+		.pytest_cache tests/__pycache__ tests/pyAES_DRBG/__pycache__/
 
 # ---------------------------------------------------------------- #
 #  PARAMETER HANDLING                                              #
@@ -82,11 +92,12 @@ endif
 
 # Make the Jasmin parameter header, with the SPHINCS+ parameters and the hash function implementations
 $(ACTIVE_PARAM_FILE):
-	echo 'require "$(PARAM_FILE)" // SPHINCS+ parameters' >> $(ACTIVE_PARAM_FILE)
+	echo 'require "$(PARAM_FILE)" // SPHINCS+ parameters' > $(ACTIVE_PARAM_FILE)
 	echo 'require "$(HASH_IMPL)" // hash function implementations' >> $(ACTIVE_PARAM_FILE)
 
 # Make the C parameter header
 $(PARAM_HEADER):
+	echo "#pragma once" > $(PARAM_HEADER)
 	echo "#define SPX_N $(SPX_N)" >> $(PARAM_HEADER)
 	echo "#define SPX_SIG_BYTES $(SPX_SIG_BYTES)" >> $(PARAM_HEADER)
 
@@ -122,12 +133,26 @@ ifeq ($(ARCHITECTURE), x86-64)
 	TESTING_WRAPPER = $(OUTPUT_FILE_NAME).so
 endif
 
-# group the test vectors in .json files per parameter set, and run the implementation against the KATs
-.PHONY: acvp-kat-test
-acvp-kat-test: $(TESTING_WRAPPER)
+# group the test vectors in .json files per parameter set
+$(GROUPED_JSONS): tests/acvp/group_json_per_paramset.py
 	python3 tests/acvp/group_json_per_paramset.py
+
+# run one implementation (given a specific parameter set) against the KATs
+.PHONY: acvp-kat-test
+acvp-kat-test: $(TESTING_WRAPPER) $(GROUPED_JSONS)
 	python3 -m pytest \
 		--parameter-set=$(PARAMETER_SET) \
 		--architecture=$(ARCHITECTURE) \
 		--implementation-type=$(IMPLEMENTATION_TYPE) \
 		tests/test_acvp_kats.py
+
+# run all implementations (for all NIST-approved parameter sets) against the KATs
+.PHONY: acvp-kat-test-all
+acvp-kat-test-all:
+	@for p in $(PARAMETER_SETS); do \
+		echo "========================================"; \
+		echo "Testing $$p"; \
+		echo "========================================"; \
+		$(MAKE) acvp-kat-test PARAMETER_SET=$$p || exit 1; \
+		rm -rf $(ACTIVE_PARAM_FILE) $(PARAM_HEADER); \
+	done
