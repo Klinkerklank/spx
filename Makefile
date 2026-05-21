@@ -12,7 +12,7 @@ IMPLEMENTATION_TYPE ?= ref
 IMPLEMENTATION = $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)
 
 # parameter settings
-PARAMETER_SET ?= sha2-128f
+PARAMETER_SET ?= shake-256f
 PARAM_FILE = params-spx-$(PARAMETER_SET).jinc
 ACTIVE_PARAM_FILE = x86-64/ref/params/active_params.jinc
 PARAM_HEADER = x86-64/ref/params/params.h
