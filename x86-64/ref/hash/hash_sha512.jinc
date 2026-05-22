@@ -2,7 +2,7 @@ require "sha256/core_hash_sha256.jinc"
 require "sha512/core_hash_sha512.jinc"
 require "../adrs/adrs.jinc" // ADRS data structure
 
-require "../stdlib/memcpy/memcpy.jinc"
+require "../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
 
 // H_msg(R, PK.seed, PK.root, M) = MGF1-SHA-512(R || PK.seed || SHA-512(R || PK.seed || PK.root || M), m)
 fn H_msg(
@@ -194,8 +194,6 @@ fn PRF(
     stack u8[SHA256_OUT] digest;
 
     inline int i;
-    
-    () = #spill(skseed); // resolves 'conflicting variables pkseed and skseed'
 
     // buf = PK.seed
     buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
@@ -207,7 +205,6 @@ fn PRF(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || SK.seed
-    () = #unspill(skseed);
     buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], skseed);
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
@@ -403,7 +400,9 @@ fn T_len(
     buf[SHA512_IN : 22] = __adrs_compress(buf[SHA512_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_len
-    for i=0 to SPX_LEN*SPX_N { buf[SHA512_IN+22+i] = chains[i]; }
+    for i=0 to SPX_LEN {
+        buf[SHA512_IN+22+i*SPX_N : SPX_N] = copy_nbytes(buf[SHA512_IN+22+i*SPX_N : SPX_N], chains[i*SPX_N : SPX_N]);
+    }
 
     // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_len)
     digest = sha512_compress_wots::__sha512(digest, buf);
@@ -466,7 +465,9 @@ fn T_k(
     buf[SHA512_IN : 22] = __adrs_compress(buf[SHA512_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_k
-    for i=0 to SPX_K*SPX_N { buf[SHA512_IN+22+i] = roots[i]; }
+    for i=0 to SPX_K {
+        buf[SHA512_IN+22+i*SPX_N : SPX_N] = copy_nbytes(buf[SHA512_IN+22+i*SPX_N : SPX_N], roots[i*SPX_N : SPX_N]);
+    }
 
     // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_k)
     digest = sha512_compress_fors::__sha512(digest, buf);

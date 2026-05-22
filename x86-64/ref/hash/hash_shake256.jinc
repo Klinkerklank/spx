@@ -1,5 +1,4 @@
 require "../adrs/adrs.jinc" // ADRS data structure
-require "../stdlib/memcpy/memcpy.jinc"
 
 // import the formosa-keccak SHAKE256 implementation
 from Keccak require "common/keccak1600_generic.jinc"

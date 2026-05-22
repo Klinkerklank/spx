@@ -104,7 +104,7 @@ fn ht_sign(
         adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
         // copy the root of the previous XMSS tree
-        for i=0 to SPX_N { root_prev[i] = root[i]; }
+        root_prev = copy_nbytes(root_prev, root);
 
         // compute the XMSS signature on the previous XMSS tree's root
         sig_xmss = sig_ht[offset : XMSS_SIG]; // get the pointer to the subarray so the full array can be spilled
@@ -176,9 +176,9 @@ fn ht_verify(
     reg ptr u8[XMSS_SIG] sig_xmss; // one XMSS part of the signature
     reg u64 offset;   // byte offset within the hypertree signature
     reg u64 res;      // indicates whether running this function was successful
+    reg u8  res_u8;   // temporary variable for casting purposes
     reg u32 idx_leaf; // leaf index selecting a leaf within an XMSS tree to sign with
     reg u32 j;        // layer iterator
-    reg u8 comp;      // temporary variable for byte comparisons
 
     inline int i;
 
@@ -214,7 +214,7 @@ fn ht_verify(
         adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
         // copy the root of the previous XMSS tree
-        for i=0 to SPX_N { root_prev[i] = root[i]; }
+        root_prev = copy_nbytes(root_prev, root);
 
         // extract the XMSS signature on the previous XMSS tree's root
         sig_xmss = sig_ht[offset : XMSS_SIG]; // get the pointer to the subarray so the full array can be spilled
@@ -233,15 +233,8 @@ fn ht_verify(
     () = #unspill(pkroot);
 
     // compare the computed hypertree root and the claimed PK.root
-    res = 0; // initialise result to 'equal = true'
-    for i=0 to SPX_N {
-        comp = root[i]; // extract a byte from the computed root
-
-        // check whether the computed and claimed bytes are equal
-        if (pkroot[i] != comp) {
-            res = 1; // set result to 'equal = false'
-        }
-    }
+    res_u8 = __memcmp(pkroot, root);
+    res = (64u) res_u8;
 
     return res;
 }

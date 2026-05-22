@@ -146,8 +146,6 @@ fn fors_node(
     reg u64 pow;       // temporary variable for computing powers
     reg u32 exp;       // temporary variable for computing exponents
 
-    inline int j;
-
     layer = 0; // iterate over the layers
     while (layer <= z) {
         () = #spill(z); // free up space in the registers
@@ -213,10 +211,8 @@ fn fors_node(
                 // copy the children to buffers
                 // note: trying to pass the children to H as two reg ptr (to avoid the needless copying),
                 // gives the error that some reg ptr are not disjoint?
-                for j=0 to SPX_N {
-                    buf_l[j] = flat_tree[lnode + j];
-                    buf_r[j] = flat_tree[rnode + j];
-                }
+                buf_l = copy_nbytes(buf_l, flat_tree[lnode : SPX_N]);
+                buf_r = copy_nbytes(buf_r, flat_tree[rnode : SPX_N]);
 
                 // set the correct values in ADRS for tree node hashing
                 // (ADRS type is already SPX_ADRS_TYPE_TREE, which is set
@@ -254,7 +250,7 @@ fn fors_node(
     // write the target node value to the output,
     // and the target node was the last node written to flat_tree,
     // so node_addr is still the correct byte address
-    for j=0 to SPX_N { root[j] = flat_tree[node_addr + j]; }
+    root = copy_nbytes(root, flat_tree[node_addr : SPX_N]);
     return root, adrs;
 }
 
@@ -424,8 +420,6 @@ fn fors_pkfromsig(
     reg u32 idx_leaf;
     reg u32 idx_tree;
 
-    inline int k;
-
     // compute the base-t leaf indices
     indices = baseb_fors::__base_b(indices, md);
 
@@ -437,7 +431,7 @@ fn fors_pkfromsig(
 
         // extract the secret key value from the leaf and copy it to node0
         sk = sig_fors[offset : SPX_N];
-        for k=0 to SPX_N { node0[k] = sk[k]; }
+        node0 = copy_nbytes(node0, sk);
 
         // set the height of the leaf to 0 in ADRS
         height = 0;
@@ -485,10 +479,8 @@ fn fors_pkfromsig(
                 adrs = __adrs_set_tree_index(adrs, idx_tree);
 
                 // buf = node0 || AUTH[i]
-                for k=0 to SPX_N {
-                    buf0[k] = node0[k];
-                    buf1[k] = sig_fors[offset + k];
-                }
+                buf0 = copy_nbytes(buf0, node0);
+                buf1 = copy_nbytes(buf1, sig_fors[offset : SPX_N]);
             } else { // floor(indices[i] / 2^j) is odd
                 // compute the parent node's horizontal index
                 idx_tree = __adrs_get_tree_index(adrs);
@@ -499,10 +491,8 @@ fn fors_pkfromsig(
                 adrs = __adrs_set_tree_index(adrs, idx_tree);
 
                 // buf = AUTH[i] || node0
-                for k=0 to SPX_N {
-                    buf0[k] = sig_fors[offset + k];
-                    buf1[k] = node0[k];
-                }
+                buf0 = copy_nbytes(buf0, sig_fors[offset : SPX_N]);
+                buf1 = copy_nbytes(buf1, node0);
             }
 
             // compute the parent node
@@ -511,7 +501,7 @@ fn fors_pkfromsig(
             () = #unspill(pkseed, adrs, sig_fors, i, offset);
 
             // save the parent node's value to become the next iteration's child node
-            for k=0 to SPX_N { node0[k] = node1[k]; }
+            node0 = copy_nbytes(node0, node1);
 
             () = #unspill(j, idx_auth);
 
@@ -525,7 +515,7 @@ fn fors_pkfromsig(
         () = #unspill(offset_roots);
 
         // copy the last-computed node (the root) to roots
-        for k=0 to SPX_N { roots[offset_roots + k] = node0[k]; }
+        roots[offset_roots : SPX_N] = copy_nbytes(roots[offset_roots : SPX_N], node0);
 
         offset_roots += SPX_N; // one n-byte root has been written
         i += 1; // advance to the next tree

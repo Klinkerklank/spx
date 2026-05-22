@@ -78,7 +78,7 @@ def test_against_cref_kats(slh_dsa, kats):
             )
 
             # Assert output
-            expected = 0 if kat["testPassed"] else 1
+            expected = 0 if kat["testPassed"] else 255
             assert result == expected, print("\nFailure (verification) at tcId number {}".format(kat.get("tcId")))
         
         else:

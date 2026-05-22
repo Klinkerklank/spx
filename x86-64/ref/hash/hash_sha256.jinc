@@ -1,7 +1,7 @@
 require "sha256/core_hash_sha256.jinc"
 require "../adrs/adrs.jinc" // ADRS data structure
 
-require "../stdlib/memcpy/memcpy.jinc"
+require "../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
 
 // H_msg(R, PK.seed, PK.root, M) = MGF1-SHA-256(R || PK.seed || SHA-256(R || PK.seed || PK.root || M), m)
 fn H_msg(
@@ -24,20 +24,16 @@ fn H_msg(
     
     inline int i;
     inline int hash_nr;
-    
-    () = #spill(pkseed, pkroot); // resolves 'conflicting variables r and pkseed and pkroot'
 
     // copy R into both buffers
     buf[0 : SPX_N]  = copy_nbytes(buf[0 : SPX_N],  r);
     seed[0 : SPX_N] = copy_nbytes(seed[0 : SPX_N], r);
 
     // copy PK.seed into both buffers
-    () = #unspill(pkseed);
     buf[SPX_N : SPX_N]  = copy_nbytes(buf[SPX_N : SPX_N],  pkseed);
     seed[SPX_N : SPX_N] = copy_nbytes(seed[SPX_N : SPX_N], pkseed);
 
     // copy PK.root into the inner buffer
-    () = #unspill(pkroot);
     buf[2*SPX_N : SPX_N] = copy_nbytes(buf[2*SPX_N : SPX_N], pkroot);
 
     // compute the inner hash value = sha256(R || PK.seed || PK.root || M)
@@ -109,8 +105,6 @@ fn PRF_msg(
     stack u8[SHA256_OUT] hmac;
     
     inline int i;
-    
-    () = #spill(optrand); // resolves 'conflicting variables skprf and optrand'
 
     // set key = SK.prf || 00..0
     key[0 : SPX_N] = copy_nbytes(key[0 : SPX_N], skprf); // first part of the key is SK.prf
@@ -135,7 +129,6 @@ fn PRF_msg(
 
     // append optrand to ibuf
     // i.e. ibuf = (key xor ipad) || optrand
-    () = #unspill(optrand);
     ibuf[SHA256_IN : SPX_N] = copy_nbytes(ibuf[SHA256_IN : SPX_N], optrand);
 
     // compute inner = sha256((key xor ipad) || optrand || M)
@@ -193,8 +186,6 @@ fn PRF(
     stack u8[SHA256_OUT] digest;
 
     inline int i;
-    
-    () = #spill(skseed); // resolves 'conflicting variables pkseed and skseed'
 
     // buf = PK.seed
     buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
@@ -206,7 +197,6 @@ fn PRF(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || SK.seed
-    () = #unspill(skseed);
     buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], skseed);
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
@@ -245,8 +235,6 @@ fn F(
     reg ptr u32[8] adrs       // ADRS
 ) -> reg ptr u8[SPX_N] // -> out
 {
-    () = #spill(out); // resolves 'conflicting variables out and pkseed'
-    
     // stack buffer that will contain the concatenated inputs
     // buf = PK.seed || toByte(0,64-n) || ADRS^c || M_1
     //     = SPX_N    + (64-SPX_N)      + 22      + SPX_N
@@ -268,7 +256,6 @@ fn F(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_1
-    () = #unspill(out);
     buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], out);
     () = #spill(out); // only needed again at the end of the function
 
@@ -323,8 +310,6 @@ fn H(
 
     inline int i;
 
-    () = #spill(in1, in2); // resolves 'conflicting variables pkseed and in1 and in2'
-
     // buf = PK.seed
     buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
 
@@ -335,9 +320,7 @@ fn H(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_2
-    () = #unspill(in1);
-    buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], in1);
-    () = #unspill(in2);
+    buf[SHA256_IN+22       : SPX_N] = copy_nbytes(buf[SHA256_IN+22       : SPX_N], in1);
     buf[SHA256_IN+22+SPX_N : SPX_N] = copy_nbytes(buf[SHA256_IN+22+SPX_N : SPX_N], in2);
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_2)
@@ -402,7 +385,9 @@ fn T_len(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_len
-    for i=0 to SPX_LEN*SPX_N { buf[SHA256_IN+22+i] = chains[i]; }
+    for i=0 to SPX_LEN {
+        buf[SHA256_IN+22+i*SPX_N : SPX_N] = copy_nbytes(buf[SHA256_IN+22+i*SPX_N : SPX_N], chains[i*SPX_N : SPX_N]);
+    }
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_len)
     digest = sha256_compress_wots::__sha256(digest, buf);
@@ -465,7 +450,9 @@ fn T_k(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_k
-    for i=0 to SPX_K*SPX_N { buf[SHA256_IN+22+i] = roots[i]; }
+    for i=0 to SPX_K {
+        buf[SHA256_IN+22+i*SPX_N : SPX_N] = copy_nbytes(buf[SHA256_IN+22+i*SPX_N : SPX_N], roots[i*SPX_N : SPX_N]);
+    }
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_k)
     digest = sha256_compress_fors::__sha256(digest, buf);

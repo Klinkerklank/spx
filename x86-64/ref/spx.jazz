@@ -1,6 +1,9 @@
 require "params/active_params.jinc" // SPHINCS+ parameters
 // active_params.jinc in turn requires the chosen parameter file with the concrete parameter values
 
+require "stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
+require "stdlib/memcmp/memcmp.jinc" // for comparing SPX_N-byte strings
+
 require "adrs/adrs.jinc" // ADRS data structure
 
 require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS: Winternitz One-Time Signature Plus
@@ -60,11 +63,9 @@ fn slh_sign(
     // stack variables
     stack u8[SPX_N] addrnd; // additional message randomness
 
-    inline int i;
-
     if (deterministic == 0) { // deterministic additional randomness
         //  substitute opt_rand <- PK.seed for the deterministic variant (according to line 2 in algorithm 19 in SLH-DSS)
-        for i=0 to SPX_N { addrnd[i] = sk[3*SPX_N + i]; }
+        addrnd = copy_nbytes(addrnd, sk[2*SPX_N : SPX_N]);
     } else { // non-deterministic additional randomness
         () = #spill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk); // resolves architectural constraints compile error
         addrnd = #randombytes(addrnd);
