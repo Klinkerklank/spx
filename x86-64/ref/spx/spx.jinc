@@ -92,8 +92,7 @@ fn __indices_to_regs(
 | ALGORITHM 18 FROM SLH-DSS (FIPS 205)                         |
 | Generates an SLH-DSA key pair.                               |
 +-------------------------------------------------------------*/
-export // this function is visible to the outside after compilation
-fn slh_keygen_internal(
+fn slh_keygen_internal_(
     reg ptr u8[SPX_SKBYTES] sk, // out: (SK.seed, SK.prf. PK.seed, PK.root)
     reg ptr u8[SPX_PKBYTES] pk, // out: (PK.seed, PK.root)
     reg ptr u8[3*SPX_N] keyrnd  // key randomness
@@ -153,7 +152,28 @@ fn __slh_keygen_internal(
     sk = sk; pk = pk; keyrnd = keyrnd;
 
     reg u64 res;
-    sk, pk, res = slh_keygen_internal(sk, pk, keyrnd);
+    sk, pk, res = slh_keygen_internal_(sk, pk, keyrnd);
+
+    // split live-range of the output parameters into two segments
+    sk = sk; pk = pk; res = res;
+
+    return sk, pk, res;
+}
+
+export // this function is visible to the outside after compilation
+// it's the same as __slh_keygen_internal, but separated to prevent
+// the warning 'warning: export function will be inlined'
+fn slh_keygen_internal(
+    reg ptr u8[SPX_SKBYTES] sk, // out: (SK.seed, SK.prf. PK.seed, PK.root)
+    reg ptr u8[SPX_PKBYTES] pk, // out: (PK.seed, PK.root)
+    reg ptr u8[3*SPX_N] keyrnd  // key randomness
+) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk
+{
+    // split live-range of the input parameters into two segments
+    sk = sk; pk = pk; keyrnd = keyrnd;
+
+    reg u64 res;
+    sk, pk, res = slh_keygen_internal_(sk, pk, keyrnd);
 
     // split live-range of the output parameters into two segments
     sk = sk; pk = pk; res = res;
@@ -165,8 +185,7 @@ fn __slh_keygen_internal(
 | ALGORITHM 19 FROM SLH-DSS (FIPS 205)                         |
 | Generates an SLH-DSA signature.                              |
 +-------------------------------------------------------------*/
-export // this function is visible to the outside after compilation
-fn slh_sign_internal(
+fn slh_sign_internal_(
     reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
@@ -279,7 +298,30 @@ fn __slh_sign_internal(
     sig_slh = sig_slh; ctx_msg_ptrs = ctx_msg_ptrs; ctx_msg_lens = ctx_msg_lens; sk = sk; addrnd = addrnd;
 
     reg u64 res;
-    sig_slh, res = slh_sign_internal(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk, addrnd);
+    sig_slh, res = slh_sign_internal_(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk, addrnd);
+
+    // split live-range of the output parameters into two segments
+    sig_slh = sig_slh; res = res;
+
+    return sig_slh, res;
+}
+
+export // this function is visible to the outside after compilation
+// it's the same as __slh_sign_internal, but separated to prevent
+// the warning 'warning: export function will be inlined'
+fn slh_sign_internal(
+    reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
+    reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
+    reg ptr u64[2] ctx_msg_lens, // context and message lengths
+    reg ptr u8[SPX_SKBYTES] sk,  // secret key
+    reg ptr u8[SPX_N] addrnd     // additional randomness
+) -> reg ptr u8[SPX_SIG], reg u64 // -> sig_slh, res
+{
+    // split live-range of the input parameters into two segments
+    sig_slh = sig_slh; ctx_msg_ptrs = ctx_msg_ptrs; ctx_msg_lens = ctx_msg_lens; sk = sk; addrnd = addrnd;
+
+    reg u64 res;
+    sig_slh, res = slh_sign_internal_(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk, addrnd);
 
     // split live-range of the output parameters into two segments
     sig_slh = sig_slh; res = res;
@@ -291,8 +333,7 @@ fn __slh_sign_internal(
 | ALGORITHM 20 FROM SLH-DSS (FIPS 205)                         |
 | Verifies an SLH-DSA signature.                               |
 +-------------------------------------------------------------*/
-export // this function is visible to the outside after compilation
-fn slh_verify_internal(
+fn slh_verify_internal_(
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
     reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
@@ -377,7 +418,29 @@ fn __slh_verify_internal(
     ctx_msg_ptrs = ctx_msg_ptrs; ctx_msg_lens = ctx_msg_lens; sig_slh = sig_slh; pk = pk;
 
     reg u64 res;
-    res = slh_verify_internal(ctx_msg_ptrs, ctx_msg_lens, sig_slh, pk);
+    res = slh_verify_internal_(ctx_msg_ptrs, ctx_msg_lens, sig_slh, pk);
+
+    // split live-range of the output parameters into two segments
+    res = res;
+
+    return res;
+}
+
+export // this function is visible to the outside after compilation
+// it's the same as __slh_verify_internal, but separated to prevent
+// the warning 'warning: export function will be inlined'
+fn slh_verify_internal(
+    reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
+    reg ptr u64[2] ctx_msg_lens, // context and message lengths
+    reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature
+    reg ptr u8[SPX_PKBYTES] pk   // public key
+) -> reg u64 // -> res
+{
+    // split live-range of the input parameters into two segments
+    ctx_msg_ptrs = ctx_msg_ptrs; ctx_msg_lens = ctx_msg_lens; sig_slh = sig_slh; pk = pk;
+
+    reg u64 res;
+    res = slh_verify_internal_(ctx_msg_ptrs, ctx_msg_lens, sig_slh, pk);
 
     // split live-range of the output parameters into two segments
     res = res;

@@ -2,6 +2,9 @@
 #  SETTINGS                                                        #
 # ---------------------------------------------------------------- #
 
+# prevent extraneous print statements that make the output cluttered
+MAKEFLAGS += --no-print-directory
+
 # compiler settings
 JASMINC ?= jasminc -I Keccak=formosa-keccak/src/amd64
 CC = /usr/bin/gcc
@@ -42,12 +45,7 @@ all: $(CLI)
 # clean build artifacts
 .PHONY: clean
 clean:
-	rm -rf \
-		*.s *.o *.so \
-		outputs \
-		$(CLI) \
-		$(ACTIVE_PARAM_FILE) $(PARAM_HEADER) \
-		.pytest_cache tests/__pycache__ tests/pyAES_DRBG/__pycache__/
+	@rm -rf *.s *.o *.so outputs $(CLI) $(ACTIVE_PARAM_FILE) $(PARAM_HEADER) .pytest_cache tests/__pycache__ tests/pyAES_DRBG/__pycache__/
 
 # ---------------------------------------------------------------- #
 #  PARAMETER HANDLING                                              #
@@ -92,14 +90,14 @@ endif
 
 # Make the Jasmin parameter header, with the SPHINCS+ parameters and the hash function implementations
 $(ACTIVE_PARAM_FILE):
-	echo 'require "$(PARAM_FILE)" // SPHINCS+ parameters' > $(ACTIVE_PARAM_FILE)
-	echo 'require "$(HASH_IMPL)" // hash function implementations' >> $(ACTIVE_PARAM_FILE)
+	@echo 'require "$(PARAM_FILE)" // SPHINCS+ parameters' > $(ACTIVE_PARAM_FILE)
+	@echo 'require "$(HASH_IMPL)" // hash function implementations' >> $(ACTIVE_PARAM_FILE)
 
 # Make the C parameter header
 $(PARAM_HEADER):
-	echo "#pragma once" > $(PARAM_HEADER)
-	echo "#define SPX_N $(SPX_N)" >> $(PARAM_HEADER)
-	echo "#define SPX_SIG_BYTES $(SPX_SIG_BYTES)" >> $(PARAM_HEADER)
+	@echo "#pragma once" > $(PARAM_HEADER)
+	@echo "#define SPX_N $(SPX_N)" >> $(PARAM_HEADER)
+	@echo "#define SPX_SIG_BYTES $(SPX_SIG_BYTES)" >> $(PARAM_HEADER)
 
 # ---------------------------------------------------------------- #
 #  COMPILING                                                       #
@@ -107,12 +105,12 @@ $(PARAM_HEADER):
 
 # compile SPHINCS+ CLI from Jasmin to assembly
 $(OUTPUT_FILE_NAME).s: $(IMPLEMENTATION)/spx.jazz $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
-	$(JASMINC) -o $(OUTPUT_FILE_NAME).s $(IMPLEMENTATION)/spx.jazz
-	grep -q GNU-stack $(OUTPUT_FILE_NAME).s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME).s
+	@$(JASMINC) -o $(OUTPUT_FILE_NAME).s $(IMPLEMENTATION)/spx.jazz
+	@grep -q GNU-stack $(OUTPUT_FILE_NAME).s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME).s
 
 # compile assembly and C into a CLI executable
 $(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
-	$(CC) $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
+	@$(CC) $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
 
 # ---------------------------------------------------------------- #
 #  KAT TESTING                                                     #
@@ -120,12 +118,12 @@ $(CLI): $(OUTPUT_FILE_NAME).s slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
 
 # compile SPHINCS+ API from Jasmin to assembly
 $(OUTPUT_FILE_NAME)_kattest.s: $(IMPLEMENTATION)/spx/spx.jinc $(ACTIVE_PARAM_FILE) $(PARAM_HEADER)
-	$(JASMINC) -o $(OUTPUT_FILE_NAME)_kattest.s $(IMPLEMENTATION)/spx/spx.jinc
-	grep -q GNU-stack $(OUTPUT_FILE_NAME)_kattest.s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME)_kattest.s
+	@$(JASMINC) -o $(OUTPUT_FILE_NAME)_kattest.s $(IMPLEMENTATION)/spx/spx.jinc
+	@grep -q GNU-stack $(OUTPUT_FILE_NAME)_kattest.s || echo '.section .note.GNU-stack,"",@progbits' >> $(OUTPUT_FILE_NAME)_kattest.s
 
 # generate a shared library
 $(OUTPUT_FILE_NAME).so: $(OUTPUT_FILE_NAME)_kattest.s
-	$(CC) $^ -fPIC -shared -o $@
+	@$(CC) $^ -fPIC -shared -o $@
 
 # generate the testing wrapper using the shared library
 TESTING_WRAPPER :=
@@ -135,24 +133,18 @@ endif
 
 # group the test vectors in .json files per parameter set
 $(GROUPED_JSONS): tests/acvp/group_json_per_paramset.py
-	python3 tests/acvp/group_json_per_paramset.py
+	@python3 tests/acvp/group_json_per_paramset.py
 
 # run one implementation (given a specific parameter set) against the KATs
 .PHONY: acvp-kat-test
 acvp-kat-test: $(TESTING_WRAPPER) $(GROUPED_JSONS)
-	python3 -m pytest \
-		--parameter-set=$(PARAMETER_SET) \
-		--architecture=$(ARCHITECTURE) \
-		--implementation-type=$(IMPLEMENTATION_TYPE) \
-		tests/test_acvp_kats.py
+	@python3 -m pytest --parameter-set=$(PARAMETER_SET) --architecture=$(ARCHITECTURE) --implementation-type=$(IMPLEMENTATION_TYPE) tests/test_acvp_kats.py
 
 # run all implementations (for all NIST-approved parameter sets) against the KATs
 .PHONY: acvp-kat-test-all
 acvp-kat-test-all:
 	@for p in $(PARAMETER_SETS); do \
-		echo "========================================"; \
 		echo "Testing $$p"; \
-		echo "========================================"; \
 		$(MAKE) acvp-kat-test PARAMETER_SET=$$p || exit 1; \
 		rm -rf $(ACTIVE_PARAM_FILE) $(PARAM_HEADER); \
 	done
