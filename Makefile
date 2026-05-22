@@ -20,6 +20,7 @@ PARAM_FILE = params-spx-$(PARAMETER_SET).jinc
 ACTIVE_PARAM_FILE = x86-64/ref/params/active_params.jinc
 PARAM_HEADER = x86-64/ref/params/params.h
 CLI = slh_dsa_cli
+BENCH = bench/slh_dsa_bench
 
 # testing settings
 PARAMETER_SETS = \
@@ -149,3 +150,15 @@ acvp-kat-test-all:
 		rm -rf $(ACTIVE_PARAM_FILE) $(PARAM_HEADER); \
 	done
 	$(MAKE) clean;
+
+# ---------------------------------------------------------------- #
+#  BENCHMARKING                                                    #
+# ---------------------------------------------------------------- #
+
+# compile assembly and C into a benchmarking executable
+$(BENCH): $(OUTPUT_FILE_NAME).s bench/bench_slh_dsa.c x86-64/ref/misc/jasmin_syscall.o
+	@$(CC) $(OUTPUT_FILE_NAME).s bench/bench_slh_dsa.c x86-64/ref/misc/jasmin_syscall.o -o $(BENCH) -no-pie
+
+.PHONY: bench
+bench: $(BENCH)
+	./$(BENCH)
