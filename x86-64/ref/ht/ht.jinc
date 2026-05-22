@@ -104,7 +104,7 @@ fn ht_sign(
         adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
         // copy the root of the previous XMSS tree
-        root_prev = copy_nbytes(root_prev, root);
+        root_prev = __copy_nbytes(root_prev, root);
 
         // compute the XMSS signature on the previous XMSS tree's root
         sig_xmss = sig_ht[offset : XMSS_SIG]; // get the pointer to the subarray so the full array can be spilled
@@ -214,7 +214,7 @@ fn ht_verify(
         adrs = __adrs_set_tree_addr(adrs, idx_tree);
 
         // copy the root of the previous XMSS tree
-        root_prev = copy_nbytes(root_prev, root);
+        root_prev = __copy_nbytes(root_prev, root);
 
         // extract the XMSS signature on the previous XMSS tree's root
         sig_xmss = sig_ht[offset : XMSS_SIG]; // get the pointer to the subarray so the full array can be spilled

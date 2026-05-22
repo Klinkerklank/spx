@@ -136,8 +136,8 @@ fn xmss_node(
                 // copy the children to buffers
                 // note: trying to pass the children to H as two reg ptr (to avoid the needless copying),
                 // gives the error that some reg ptr are not disjoint?
-                buf_l = copy_nbytes(buf_l, flat_tree[lnode : SPX_N]);
-                buf_r = copy_nbytes(buf_r, flat_tree[rnode : SPX_N]);
+                buf_l = __copy_nbytes(buf_l, flat_tree[lnode : SPX_N]);
+                buf_r = __copy_nbytes(buf_r, flat_tree[rnode : SPX_N]);
 
                 // set the correct values in ADRS for tree node hashing
                 adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
@@ -174,7 +174,7 @@ fn xmss_node(
     // write the target node value to the output,
     // and the target node was the last node written to flat_tree,
     // so node_addr is still the correct byte address
-    root = copy_nbytes(root, flat_tree[node_addr : SPX_N]);
+    root = __copy_nbytes(root, flat_tree[node_addr : SPX_N]);
     return root, adrs;
 }
 
@@ -365,8 +365,8 @@ fn xmss_pkfromsig(
             adrs = __adrs_set_tree_index(adrs, idx_tree);
 
             // buf = node0 || AUTH[k]
-            buf0 = copy_nbytes(buf0, node0);
-            buf1 = copy_nbytes(buf1, sig_xmss[offset : SPX_N]);
+            buf0 = __copy_nbytes(buf0, node0);
+            buf1 = __copy_nbytes(buf1, sig_xmss[offset : SPX_N]);
         } else { // floor(idx / 2^k) is odd
             // compute the parent node's horizontal index
             idx_tree = __adrs_get_tree_index(adrs);
@@ -377,8 +377,8 @@ fn xmss_pkfromsig(
             adrs = __adrs_set_tree_index(adrs, idx_tree);
 
             // buf = AUTH[k] || node0
-            buf0 = copy_nbytes(buf0, sig_xmss[offset : SPX_N]);
-            buf1 = copy_nbytes(buf1, node0);
+            buf0 = __copy_nbytes(buf0, sig_xmss[offset : SPX_N]);
+            buf1 = __copy_nbytes(buf1, node0);
         }
 
         // compute the parent node
@@ -387,7 +387,7 @@ fn xmss_pkfromsig(
         () = #unspill(pkseed, adrs, idx, sig_xmss, offset);
 
         // save the parent node's value to become the next iteration's child node
-        node0 = copy_nbytes(node0, node1);
+        node0 = __copy_nbytes(node0, node1);
 
         () = #unspill(k, idx_auth);
 
@@ -401,7 +401,7 @@ fn xmss_pkfromsig(
     () = #unspill(pk_xmss);
 
     // the topmost node, now in node0, is the XMSS tree's root
-    pk_xmss = copy_nbytes(pk_xmss, node0);
+    pk_xmss = __copy_nbytes(pk_xmss, node0);
     return pk_xmss, adrs;
 }
 

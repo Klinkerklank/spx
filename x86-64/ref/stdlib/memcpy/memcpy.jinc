@@ -1,5 +1,5 @@
 inline
-fn copy_nbytes (reg ptr u8[SPX_N] out in) -> reg ptr u8[SPX_N] {
+fn __copy_nbytes (reg ptr u8[SPX_N] out in) -> reg ptr u8[SPX_N] {
     inline int i;
 
     if (SPX_N == 16) {

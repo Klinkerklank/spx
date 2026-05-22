@@ -65,7 +65,7 @@ fn slh_sign(
 
     if (deterministic == 0) { // deterministic additional randomness
         //  substitute opt_rand <- PK.seed for the deterministic variant (according to line 2 in algorithm 19 in SLH-DSS)
-        addrnd = copy_nbytes(addrnd, sk[2*SPX_N : SPX_N]);
+        addrnd = __copy_nbytes(addrnd, sk[2*SPX_N : SPX_N]);
     } else { // non-deterministic additional randomness
         () = #spill(sig_slh, ctx_msg_ptrs, ctx_msg_lens, sk); // resolves architectural constraints compile error
         addrnd = #randombytes(addrnd);

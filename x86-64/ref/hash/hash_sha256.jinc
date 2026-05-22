@@ -26,15 +26,15 @@ fn H_msg(
     inline int hash_nr;
 
     // copy R into both buffers
-    buf[0 : SPX_N]  = copy_nbytes(buf[0 : SPX_N],  r);
-    seed[0 : SPX_N] = copy_nbytes(seed[0 : SPX_N], r);
+    buf[0 : SPX_N]  = __copy_nbytes(buf[0 : SPX_N],  r);
+    seed[0 : SPX_N] = __copy_nbytes(seed[0 : SPX_N], r);
 
     // copy PK.seed into both buffers
-    buf[SPX_N : SPX_N]  = copy_nbytes(buf[SPX_N : SPX_N],  pkseed);
-    seed[SPX_N : SPX_N] = copy_nbytes(seed[SPX_N : SPX_N], pkseed);
+    buf[SPX_N : SPX_N]  = __copy_nbytes(buf[SPX_N : SPX_N],  pkseed);
+    seed[SPX_N : SPX_N] = __copy_nbytes(seed[SPX_N : SPX_N], pkseed);
 
     // copy PK.root into the inner buffer
-    buf[2*SPX_N : SPX_N] = copy_nbytes(buf[2*SPX_N : SPX_N], pkroot);
+    buf[2*SPX_N : SPX_N] = __copy_nbytes(buf[2*SPX_N : SPX_N], pkroot);
 
     // compute the inner hash value = sha256(R || PK.seed || PK.root || M)
     seed[2*SPX_N : SHA256_OUT] = sha256_mgf1_msg::__sha256_absorb(seed[2*SPX_N : SHA256_OUT], buf, ctx_ptr, ctx_len, msg_ptr, msg_len);
@@ -107,7 +107,7 @@ fn PRF_msg(
     inline int i;
 
     // set key = SK.prf || 00..0
-    key[0 : SPX_N] = copy_nbytes(key[0 : SPX_N], skprf); // first part of the key is SK.prf
+    key[0 : SPX_N] = __copy_nbytes(key[0 : SPX_N], skprf); // first part of the key is SK.prf
     for i=SPX_N to SHA256_IN { key[i] = 0; } // pad the rest of the key with zeroes
 
     // compute ibuf = (key XOR ipad) eight bytes at a time
@@ -129,7 +129,7 @@ fn PRF_msg(
 
     // append optrand to ibuf
     // i.e. ibuf = (key xor ipad) || optrand
-    ibuf[SHA256_IN : SPX_N] = copy_nbytes(ibuf[SHA256_IN : SPX_N], optrand);
+    ibuf[SHA256_IN : SPX_N] = __copy_nbytes(ibuf[SHA256_IN : SPX_N], optrand);
 
     // compute inner = sha256((key xor ipad) || optrand || M)
     obuf[SHA256_IN : SHA256_OUT] = sha256_hmac_inner::__sha256_absorb(obuf[SHA256_IN : SHA256_OUT], ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
@@ -140,7 +140,7 @@ fn PRF_msg(
     () = #unspill(out);
 
     // truncate hmac to the correct length by copying only the first SPX_N bytes
-    out = copy_nbytes(out, hmac[0 : SPX_N]);
+    out = __copy_nbytes(out, hmac[0 : SPX_N]);
     return out;
 }
 
@@ -188,7 +188,7 @@ fn PRF(
     inline int i;
 
     // buf = PK.seed
-    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+    buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHA256_IN { buf[i] = 0; } 
@@ -197,7 +197,7 @@ fn PRF(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || SK.seed
-    buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], skseed);
+    buf[SHA256_IN+22 : SPX_N] = __copy_nbytes(buf[SHA256_IN+22 : SPX_N], skseed);
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
     digest = sha256_tl_1n::__sha256(digest, buf);
@@ -205,7 +205,7 @@ fn PRF(
     () = #unspill(out);
 
     // truncate the digest to the correct length by copying only the first SPX_N bytes
-    out = copy_nbytes(out, digest[0 : SPX_N]);
+    out = __copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
@@ -247,7 +247,7 @@ fn F(
     inline int i;
 
     // buf = PK.seed
-    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+    buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHA256_IN { buf[i] = 0; }
@@ -256,7 +256,7 @@ fn F(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_1
-    buf[SHA256_IN+22 : SPX_N] = copy_nbytes(buf[SHA256_IN+22 : SPX_N], out);
+    buf[SHA256_IN+22 : SPX_N] = __copy_nbytes(buf[SHA256_IN+22 : SPX_N], out);
     () = #spill(out); // only needed again at the end of the function
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_1)
@@ -265,7 +265,7 @@ fn F(
     () = #unspill(out);
 
     // truncate the digest to the correct length by copying only the first SPX_N bytes
-    out = copy_nbytes(out, digest[0 : SPX_N]);
+    out = __copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
@@ -311,7 +311,7 @@ fn H(
     inline int i;
 
     // buf = PK.seed
-    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+    buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHA256_IN { buf[i] = 0; } 
@@ -320,8 +320,8 @@ fn H(
     buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
 
     // buf = PK.seed || zero-padding || ADRS^c || M_2
-    buf[SHA256_IN+22       : SPX_N] = copy_nbytes(buf[SHA256_IN+22       : SPX_N], in1);
-    buf[SHA256_IN+22+SPX_N : SPX_N] = copy_nbytes(buf[SHA256_IN+22+SPX_N : SPX_N], in2);
+    buf[SHA256_IN+22       : SPX_N] = __copy_nbytes(buf[SHA256_IN+22       : SPX_N], in1);
+    buf[SHA256_IN+22+SPX_N : SPX_N] = __copy_nbytes(buf[SHA256_IN+22+SPX_N : SPX_N], in2);
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_2)
     digest = sha256_tl_2n::__sha256(digest, buf);
@@ -329,7 +329,7 @@ fn H(
     () = #unspill(out);
 
     // truncate the digest to the correct length by copying only the first SPX_N bytes
-    out = copy_nbytes(out, digest[0 : SPX_N]);
+    out = __copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
@@ -376,7 +376,7 @@ fn T_len(
     inline int i;
 
     // buf = PK.seed
-    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+    buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHA256_IN { buf[i] = 0; } 
@@ -386,7 +386,7 @@ fn T_len(
 
     // buf = PK.seed || zero-padding || ADRS^c || M_len
     for i=0 to SPX_LEN {
-        buf[SHA256_IN+22+i*SPX_N : SPX_N] = copy_nbytes(buf[SHA256_IN+22+i*SPX_N : SPX_N], chains[i*SPX_N : SPX_N]);
+        buf[SHA256_IN+22+i*SPX_N : SPX_N] = __copy_nbytes(buf[SHA256_IN+22+i*SPX_N : SPX_N], chains[i*SPX_N : SPX_N]);
     }
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_len)
@@ -395,7 +395,7 @@ fn T_len(
     () = #unspill(out);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
-    out = copy_nbytes(out, digest[0 : SPX_N]);
+    out = __copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
@@ -441,7 +441,7 @@ fn T_k(
     inline int i;
 
     // buf = PK.seed
-    buf[0 : SPX_N] = copy_nbytes(buf[0 : SPX_N], pkseed);
+    buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], pkseed);
 
     // buf = PK.seed || zero-padding
     for i=SPX_N to SHA256_IN { buf[i] = 0; } 
@@ -451,7 +451,7 @@ fn T_k(
 
     // buf = PK.seed || zero-padding || ADRS^c || M_k
     for i=0 to SPX_K {
-        buf[SHA256_IN+22+i*SPX_N : SPX_N] = copy_nbytes(buf[SHA256_IN+22+i*SPX_N : SPX_N], roots[i*SPX_N : SPX_N]);
+        buf[SHA256_IN+22+i*SPX_N : SPX_N] = __copy_nbytes(buf[SHA256_IN+22+i*SPX_N : SPX_N], roots[i*SPX_N : SPX_N]);
     }
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_k)
@@ -460,7 +460,7 @@ fn T_k(
     () = #unspill(out);
 
     // truncate the message digest to the correct length by copying only the first SPX_N bytes
-    out = copy_nbytes(out, digest[0 : SPX_N]);
+    out = __copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 

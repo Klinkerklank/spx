@@ -109,10 +109,10 @@ fn slh_keygen_internal(
     reg u32 z;     // height of the XMSS tree root
     reg u64 res;   // indicates whether running this function was successful
 
-    sk[0*SPX_N : SPX_N] = copy_nbytes(sk[0*SPX_N : SPX_N], keyrnd[0*SPX_N : SPX_N]); // copy SK.seed to SK
-    sk[1*SPX_N : SPX_N] = copy_nbytes(sk[1*SPX_N : SPX_N], keyrnd[1*SPX_N : SPX_N]); // copy SK.prf  to SK
-    sk[2*SPX_N : SPX_N] = copy_nbytes(sk[2*SPX_N : SPX_N], keyrnd[2*SPX_N : SPX_N]); // copy PK.seed to SK
-    pk[0*SPX_N : SPX_N] = copy_nbytes(pk[0*SPX_N : SPX_N], keyrnd[2*SPX_N : SPX_N]); // copy PK.seed to PK
+    sk[0*SPX_N : SPX_N] = __copy_nbytes(sk[0*SPX_N : SPX_N], keyrnd[0*SPX_N : SPX_N]); // copy SK.seed to SK
+    sk[1*SPX_N : SPX_N] = __copy_nbytes(sk[1*SPX_N : SPX_N], keyrnd[1*SPX_N : SPX_N]); // copy SK.prf  to SK
+    sk[2*SPX_N : SPX_N] = __copy_nbytes(sk[2*SPX_N : SPX_N], keyrnd[2*SPX_N : SPX_N]); // copy PK.seed to SK
+    pk[0*SPX_N : SPX_N] = __copy_nbytes(pk[0*SPX_N : SPX_N], keyrnd[2*SPX_N : SPX_N]); // copy PK.seed to PK
 
     // get the pointers to the individual parts of sk and pk
     skseed = sk[0*SPX_N : SPX_N];
@@ -136,7 +136,7 @@ fn slh_keygen_internal(
     () = #unspill(sk, pk);
     sk[3*SPX_N : SPX_N] = pkroot; // redesignate the pointer so the region of the full array is not partial
 
-    pk[SPX_N : SPX_N] = copy_nbytes(pk[SPX_N : SPX_N], pkroot[0 : SPX_N]); // copy PK.root to PK
+    pk[SPX_N : SPX_N] = __copy_nbytes(pk[SPX_N : SPX_N], pkroot[0 : SPX_N]); // copy PK.root to PK
 
     res = 0; // set return value to 0 (successful)
     return sk, pk, res;
