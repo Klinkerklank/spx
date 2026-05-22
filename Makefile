@@ -144,7 +144,7 @@ acvp-kat-test: $(TESTING_WRAPPER) $(GROUPED_JSONS)
 .PHONY: acvp-kat-test-all
 acvp-kat-test-all:
 	@for p in $(PARAMETER_SETS); do \
-		echo "Testing $$p"; \
+		printf "\033[33mTesting %s\033[0m\n" "$$p"; \
 		$(MAKE) acvp-kat-test PARAMETER_SET=$$p || exit 1; \
 		rm -rf $(ACTIVE_PARAM_FILE) $(PARAM_HEADER); \
 	done
