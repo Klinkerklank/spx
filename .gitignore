@@ -2,7 +2,6 @@ slh_dsa_cli
 *.s
 *.so
 *.o
-log.txt
 x86-64/ref/params/params.h
 x86-64/ref/params/active_params.jinc
 outputs
@@ -11,3 +10,4 @@ tests/__pycache__
 tests/pyAES_DRBG/__pycache__/
 tests/cref/json/*.json
 tests/acvp/grouped/*.json
+bench/slh_dsa_bench
