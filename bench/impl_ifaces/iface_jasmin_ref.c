@@ -42,16 +42,16 @@ static int jasmin_ref_verify(
     const uint8_t *pk
 )
 {
-    uint64_t ptrs[2];
-    uint64_t lens[2];
+    uint64_t ctx_msg_ptrs[2];
+    uint64_t ctx_msg_lens[2];
 
-    ptrs[0] = (uint64_t)ctx;
-    ptrs[1] = (uint64_t)msg;
+    ctx_msg_ptrs[0] = (uint64_t)ctx;
+    ctx_msg_ptrs[1] = (uint64_t)msg;
 
-    lens[0] = ctx_len;
-    lens[1] = msg_len;
+    ctx_msg_lens[0] = ctx_len;
+    ctx_msg_lens[1] = msg_len;
 
-    return slh_verify_internal(ptrs, lens, sig, pk);
+    return slh_verify_internal(ctx_msg_ptrs, ctx_msg_lens, sig, pk);
 }
 
 slh_dsa_impl jasmin_ref_impl = {
