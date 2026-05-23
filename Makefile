@@ -196,7 +196,7 @@ SPHINCSPLUS_SOURCES += \
 SPHINCSPLUS_OBJS = $(SPHINCSPLUS_SOURCES:.c=.o)
 
 # C reference impl: define C compiler flags
-CFLAGS=-Wall -Wextra -Wpedantic -O3 -std=c99 -Wconversion -Wmissing-prototypes -DPARAMS=$(PARAMETER_SET)
+CFLAGS = -Wall -Wextra -Wpedantic -O3 -std=c99 -Wconversion -Wmissing-prototypes -DPARAMS=sphincs-$(PARAMETER_SET)
 
 # C reference impl: compile object files
 $(SPHINCSPLUS_REF_DIR)/%.o: $(SPHINCSPLUS_REF_DIR)/%.c
@@ -218,6 +218,7 @@ $(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impls
 		bench/impls/impl_c_ref.a \
 		-o $(BENCH) \
 		-no-pie
+	@rm -rf sphincsplus/ref/*.o
 
 # execute the benchmarking
 .PHONY: bench
