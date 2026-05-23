@@ -1,3 +1,6 @@
 [submodule "formosa-keccak"]
 	path = formosa-keccak
 	url = https://github.com/formosa-crypto/formosa-keccak.git
+[submodule "bench/sphincsplus"]
+	path = bench/sphincsplus
+	url = https://github.com/sphincs/sphincsplus.git
