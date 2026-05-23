@@ -6,7 +6,7 @@
 MAKEFLAGS += --no-print-directory
 
 # compiler settings
-JASMINC ?= jasminc -I Keccak=formosa-keccak/src/amd64
+JASMINC = jasminc -I Keccak=formosa-keccak/src/amd64
 CC = /usr/bin/gcc
 
 # implementation settings
@@ -156,9 +156,16 @@ acvp-kat-test-all:
 # ---------------------------------------------------------------- #
 
 # compile assembly and C into a benchmarking executable
-$(BENCH): $(OUTPUT_FILE_NAME).s bench/bench_slh_dsa.c x86-64/ref/misc/jasmin_syscall.o
-	@$(CC) $(OUTPUT_FILE_NAME).s bench/bench_slh_dsa.c x86-64/ref/misc/jasmin_syscall.o -o $(BENCH) -no-pie
+$(BENCH): bench/bench_slh_dsa.c $(OUTPUT_FILE_NAME).s x86-64/ref/misc/jasmin_syscall.o 
+	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
+	@$(CC) \
+		bench/bench_slh_dsa.c \
+    	bench/impl_ifaces/iface_jasmin_ref.c \
+		$(OUTPUT_FILE_NAME).s \
+		x86-64/ref/misc/jasmin_syscall.o \
+		-o $(BENCH) \
+		-no-pie
 
 .PHONY: bench
 bench: $(BENCH)
-	./$(BENCH)
+	@./$(BENCH)
