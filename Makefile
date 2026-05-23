@@ -166,6 +166,7 @@ acvp-kat-test-all:
 
 # create a static archive
 bench/impls/impl_jasmin_ref.a: $(OUTPUT_FILE_NAME).o x86-64/ref/misc/jasmin_syscall.o
+	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
 # compile assembly and C into a benchmarking executable
