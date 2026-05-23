@@ -15,9 +15,9 @@ typedef struct {
 
     int (*sign)(
         uint8_t *sig,
-        const uint8_t *msg,
+        const uint8_t *msg_ptr,
         size_t msg_len,
-        const uint8_t *ctx,
+        const uint8_t *ctx_ptr,
         size_t ctx_len,
         const uint8_t *sk,
         const uint8_t *addrnd
@@ -25,9 +25,9 @@ typedef struct {
 
     int (*verify)(
         const uint8_t *sig,
-        const uint8_t *msg,
+        const uint8_t *msg_ptr,
         size_t msg_len,
-        const uint8_t *ctx,
+        const uint8_t *ctx_ptr,
         size_t ctx_len,
         const uint8_t *pk
     );

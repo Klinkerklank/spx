@@ -170,13 +170,51 @@ bench/impls/impl_jasmin_ref.a: $(OUTPUT_FILE_NAME).o x86-64/ref/misc/jasmin_sysc
 	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
+# C reference impl: define directory
+SPHINCSPLUS_REF_DIR = sphincsplus/ref
+
+# C reference impl: define source files
+SPHINCSPLUS_SOURCES = \
+	$(SPHINCSPLUS_REF_DIR)/address.c \
+	$(SPHINCSPLUS_REF_DIR)/randombytes.c \
+	$(SPHINCSPLUS_REF_DIR)/merkle.c \
+	$(SPHINCSPLUS_REF_DIR)/wots.c \
+	$(SPHINCSPLUS_REF_DIR)/wotsx1.c \
+	$(SPHINCSPLUS_REF_DIR)/utils.c \
+	$(SPHINCSPLUS_REF_DIR)/utilsx1.c \
+	$(SPHINCSPLUS_REF_DIR)/fors.c \
+	$(SPHINCSPLUS_REF_DIR)/sign.c
+
+# C reference impl: add hash sources
+SPHINCSPLUS_SOURCES += \
+	$(SPHINCSPLUS_REF_DIR)/fips202.c \
+	$(SPHINCSPLUS_REF_DIR)/hash_shake.c \
+	$(SPHINCSPLUS_REF_DIR)/thash_shake_simple.c
+
+# C reference impl: define object files
+SPHINCSPLUS_OBJS = $(SPHINCSPLUS_SOURCES:.c=.o)
+
+# C reference impl: define C compiler flags
+CFLAGS=-Wall -Wextra -Wpedantic -O3 -std=c99 -Wconversion -Wmissing-prototypes -DPARAMS=$(PARAMETER_SET)
+
+# C reference impl: compile object files
+$(SPHINCSPLUS_REF_DIR)/%.o: $(SPHINCSPLUS_REF_DIR)/%.c
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+# C reference impl: create a static archive
+bench/impls/impl_c_ref.a: $(SPHINCSPLUS_OBJS)
+	@mkdir -p bench/impls
+	@ar rcs $@ $^
+
 # compile a benchmarking executable
-$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impls/impl_jasmin_ref.a
+$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impls/impl_jasmin_ref.a bench/impls/impl_c_ref.a
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
 	@$(CC) \
 		bench/bench_slh_dsa.c \
     	bench/impl_ifaces/iface_jasmin_ref.c \
+    	bench/impl_ifaces/iface_c_ref.c \
 		bench/impls/impl_jasmin_ref.a \
+		bench/impls/impl_c_ref.a \
 		-o $(BENCH) \
 		-no-pie
 

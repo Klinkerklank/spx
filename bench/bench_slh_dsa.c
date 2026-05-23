@@ -10,13 +10,13 @@
 
 // declare implementation interfaces
 extern slh_dsa_impl jasmin_ref_impl;
-// extern slh_dsa_impl c_ref_impl;
+extern slh_dsa_impl c_ref_impl;
 
-#define TIMINGS 10
+#define TIMINGS 100
 #define SPX_MSG_LEN 32
 #define SPX_CTX_LEN 32
 
-void benchmark_impl(slh_dsa_impl *impl)
+void benchmark_impls(slh_dsa_impl *impl_jasmin_ref, slh_dsa_impl *impl_c_ref)
 {
     uint8_t sk[4*SPX_N]; // secret key
     uint8_t pk[2*SPX_N]; // public key
@@ -26,7 +26,10 @@ void benchmark_impl(slh_dsa_impl *impl)
     randombytes(keyrnd, 3*SPX_N);
 
     // benchmark the Jasmin reference implementation
-    BENCHMARK_N_TIMES(TIMINGS, "bench/results/jasmin_ref_keygen.txt", impl->keygen(sk, pk, keyrnd));
+    BENCHMARK_N_TIMES(TIMINGS, "bench/results/jasmin_ref_keygen.txt", impl_jasmin_ref->keygen(sk, pk, keyrnd));
+
+    // benchmark the C reference implementation
+    BENCHMARK_N_TIMES(TIMINGS, "bench/results/c_ref_keygen.txt", impl_c_ref->keygen(sk, pk, keyrnd));
 
     // generate random message and context
     size_t ctx_len = SPX_CTX_LEN; // context length
@@ -47,14 +50,20 @@ void benchmark_impl(slh_dsa_impl *impl)
     uint8_t sig[SPX_SIG_BYTES]; // signature buffer
 
     // benchmark the Jasmin reference implementation
-    BENCHMARK_N_TIMES(TIMINGS, "bench/results/jasmin_ref_sign.txt", impl->sign(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, sk, addrnd));
+    BENCHMARK_N_TIMES(TIMINGS, "bench/results/jasmin_ref_sign.txt", impl_jasmin_ref->sign(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, sk, addrnd));
+
+    // benchmark the C reference implementation
+    BENCHMARK_N_TIMES(TIMINGS, "bench/results/c_ref_sign.txt", impl_c_ref->sign(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, sk, addrnd));
 
     // benchmark the Jasmin reference implementation
-    BENCHMARK_N_TIMES(TIMINGS, "bench/results/jasmin_ref_verify.txt", impl->verify(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, pk));
+    BENCHMARK_N_TIMES(TIMINGS, "bench/results/jasmin_ref_verify.txt", impl_jasmin_ref->verify(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, pk));
+
+    // benchmark the C reference implementation
+    BENCHMARK_N_TIMES(TIMINGS, "bench/results/c_ref_verify.txt", impl_c_ref->verify(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, pk));
 }
 
 int main(void) {
-    benchmark_impl(&jasmin_ref_impl);
+    benchmark_impls(&jasmin_ref_impl, &c_ref_impl);
     
     return EXIT_SUCCESS;
 }

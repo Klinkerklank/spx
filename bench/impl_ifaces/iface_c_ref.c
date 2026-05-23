@@ -1,5 +1,12 @@
-// INCLUDES?
+// #include "../../sphincsplus/ref/api.h" // declare the function signatures
 #include "slh_dsa_iface.h" // contains the abstract interface wrapper
+
+#include "../../x86-64/ref/params/params.h" // contains SPX_N and SPX_SIG_BYTES
+#define SPX_SIG_LEN SPX_SIG_BYTES
+
+int crypto_sign_seed_keypair(unsigned char *pk, unsigned char *sk, const unsigned char *seed);
+int crypto_sign_signature(uint8_t *sig, size_t *siglen, const uint8_t *m, size_t mlen, const uint8_t *sk);
+int crypto_sign_verify(const uint8_t *sig, size_t siglen, const uint8_t *m, size_t mlen, const uint8_t *pk);
 
 static int c_ref_keygen(
     uint8_t *sk,
@@ -12,27 +19,28 @@ static int c_ref_keygen(
 
 static int c_ref_sign(
     uint8_t *sig,
-    const uint8_t *msg,
+    const uint8_t *msg_ptr,
     size_t msg_len,
-    const uint8_t *ctx,
+    const uint8_t *ctx_ptr,
     size_t ctx_len,
     const uint8_t *sk,
     const uint8_t *addrnd
 )
 {
-    return crypto_sign_signature(sig, SPX_SIG_BYTES, msg_ptr, msg_len, sk);
+    size_t siglen;
+    return crypto_sign_signature(sig, &siglen, msg_ptr, msg_len, sk);
 }
 
 static int c_ref_verify(
     const uint8_t *sig,
-    const uint8_t *msg,
+    const uint8_t *msg_ptr,
     size_t msg_len,
-    const uint8_t *ctx,
+    const uint8_t *ctx_ptr,
     size_t ctx_len,
     const uint8_t *pk
 )
 {
-    return crypto_sign_verify(sig, SPX_SIG_BYTES, msg_ptr, msg_len, pk);
+    return crypto_sign_verify(sig, SPX_SIG_LEN, msg_ptr, msg_len, pk);
 }
 
 slh_dsa_impl c_ref_impl = {

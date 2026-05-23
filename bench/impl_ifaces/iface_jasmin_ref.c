@@ -13,9 +13,9 @@ static int jasmin_ref_keygen(
 
 static int jasmin_ref_sign(
     uint8_t *sig,
-    const uint8_t *msg,
+    const uint8_t *msg_ptr,
     size_t msg_len,
-    const uint8_t *ctx,
+    const uint8_t *ctx_ptr,
     size_t ctx_len,
     const uint8_t *sk,
     const uint8_t *addrnd
@@ -24,8 +24,8 @@ static int jasmin_ref_sign(
     uint64_t ctx_msg_ptrs[2];
     uint64_t ctx_msg_lens[2];
 
-    ctx_msg_ptrs[0] = (uint64_t)ctx;
-    ctx_msg_ptrs[1] = (uint64_t)msg;
+    ctx_msg_ptrs[0] = (uint64_t)ctx_ptr;
+    ctx_msg_ptrs[1] = (uint64_t)msg_ptr;
 
     ctx_msg_lens[0] = ctx_len;
     ctx_msg_lens[1] = msg_len;
@@ -35,9 +35,9 @@ static int jasmin_ref_sign(
 
 static int jasmin_ref_verify(
     const uint8_t *sig,
-    const uint8_t *msg,
+    const uint8_t *msg_ptr,
     size_t msg_len,
-    const uint8_t *ctx,
+    const uint8_t *ctx_ptr,
     size_t ctx_len,
     const uint8_t *pk
 )
@@ -45,8 +45,8 @@ static int jasmin_ref_verify(
     uint64_t ctx_msg_ptrs[2];
     uint64_t ctx_msg_lens[2];
 
-    ctx_msg_ptrs[0] = (uint64_t)ctx;
-    ctx_msg_ptrs[1] = (uint64_t)msg;
+    ctx_msg_ptrs[0] = (uint64_t)ctx_ptr;
+    ctx_msg_ptrs[1] = (uint64_t)msg_ptr;
 
     ctx_msg_lens[0] = ctx_len;
     ctx_msg_lens[1] = msg_len;
