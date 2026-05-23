@@ -13,3 +13,4 @@ tests/acvp/grouped/*.json
 bench/slh_dsa_bench
 bench/impls
 bench/results
+sphincsplus/ref/*.o

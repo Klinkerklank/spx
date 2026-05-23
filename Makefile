@@ -52,7 +52,8 @@ clean:
 		.pytest_cache tests/__pycache__ tests/pyAES_DRBG/__pycache__/ \
 		bench/slh_dsa_bench \
 		bench/impls \
-		bench/results
+		bench/results \
+		sphincsplus/ref/*.o
 
 # ---------------------------------------------------------------- #
 #  PARAMETER HANDLING                                              #
