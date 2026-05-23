@@ -123,6 +123,11 @@ static inline void cleanup_fclose(FILE **fpp) {
 
 #define BENCHMARK_N_TIMES(N, filename, func_call)                                            \
     do {                                                                                     \
+        /* ensure output directory exists */                                                 \
+        char _cmd[256];                                                                      \
+        snprintf(_cmd, sizeof(_cmd), "mkdir -p $(dirname %s)", filename);                    \
+        system(_cmd);                                                                        \
+                                                                                             \
         FILE *fp __attribute__((cleanup(cleanup_fclose))) = fopen(filename, "w");            \
         if (fp == NULL) {                                                                    \
             fprintf(stderr, "Failed to open file for benchmarking results: %s: ", filename); \

@@ -51,7 +51,8 @@ clean:
 		$(CLI) outputs \
 		.pytest_cache tests/__pycache__ tests/pyAES_DRBG/__pycache__/ \
 		bench/slh_dsa_bench \
-		bench/impls
+		bench/impls \
+		bench/results
 
 # ---------------------------------------------------------------- #
 #  PARAMETER HANDLING                                              #
