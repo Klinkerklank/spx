@@ -165,12 +165,12 @@ acvp-kat-test-all:
 #  BENCHMARKING                                                    #
 # ---------------------------------------------------------------- #
 
-# create a static archive
+# Jasmin impl: create a static archive
 bench/impls/impl_jasmin_ref.a: $(OUTPUT_FILE_NAME).o x86-64/ref/misc/jasmin_syscall.o
 	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
-# compile assembly and C into a benchmarking executable
+# compile a benchmarking executable
 $(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impls/impl_jasmin_ref.a
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
 	@$(CC) \
@@ -180,6 +180,7 @@ $(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impls
 		-o $(BENCH) \
 		-no-pie
 
+# execute the benchmarking
 .PHONY: bench
 bench: $(BENCH)
 	@./$(BENCH)
