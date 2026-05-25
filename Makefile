@@ -206,28 +206,37 @@ endif
 SPHINCSPLUS_OBJS = $(SPHINCSPLUS_SOURCES:.c=.o)
 
 # C reference impl: define C compiler flags
-CFLAGS = -Wall -Wextra -Wpedantic -O3 -std=c99 -Wmissing-prototypes -DPARAMS=sphincs-$(PARAMETER_SET)
+CFLAGS = -Wall -Wextra -Wpedantic -O3 -std=c99 -Wmissing-prototypes
 
 # C reference impl: compile object files
 $(SPHINCSPLUS_REF_DIR)/%.o: $(SPHINCSPLUS_REF_DIR)/%.c
-	@$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CFLAGS) -DPARAMS=sphincs-$(PARAMETER_SET) -c $< -o $@
 
 # C reference impl: create a static archive
 bench/impls/impl_c_ref.a: $(SPHINCSPLUS_OBJS)
 	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
+# OpenSSL impl: compile flags
+OPENSSL_DIR := $(HOME)/openssl-3.5
+LDFLAGS += -L$(OPENSSL_DIR)/lib
+LDLIBS  += -lcrypto -lssl
+LDFLAGS += -Wl,-rpath,$(OPENSSL_DIR)/lib
+
 # compile a benchmarking executable
-$(BENCH): bench/bench_slh_dsa.c bench/impls/impl_jasmin_ref.a bench/impls/impl_c_ref.a
+$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impl_ifaces/iface_c_ref.c bench/impl_ifaces/iface_openssl.c bench/impls/impl_jasmin_ref.a bench/impls/impl_c_ref.a
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
 	@$(CC) \
 		bench/bench_slh_dsa.c \
     	bench/impl_ifaces/iface_jasmin_ref.c \
     	bench/impl_ifaces/iface_c_ref.c \
+    	bench/impl_ifaces/iface_openssl.c \
 		bench/impls/impl_jasmin_ref.a \
 		bench/impls/impl_c_ref.a \
 		-o $(BENCH) \
-		-no-pie
+		-no-pie \
+		$(LDFLAGS) $(LDLIBS) \
+		-DOPENSSL_PARAMSET=\"SLH-DSA-$(subst sha2,SHA2,$(subst shake,SHAKE,$(PARAMETER_SET)))\"
 	@rm -rf sphincsplus/ref/*.o
 
 # execute the benchmarking

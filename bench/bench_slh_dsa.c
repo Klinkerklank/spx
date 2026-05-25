@@ -11,12 +11,18 @@
 // declare implementation interfaces
 extern slh_dsa_impl jasmin_ref_impl;
 extern slh_dsa_impl c_ref_impl;
+extern slh_dsa_impl openssl_impl;
 
-#define TIMINGS 100
+#define TIMINGS 10
 #define SPX_MSG_LEN 32
 #define SPX_CTX_LEN 32
 
-void benchmark_impls(const char *paramset, slh_dsa_impl *impl_jasmin_ref, slh_dsa_impl *impl_c_ref)
+void benchmark_impls(
+    const char *paramset,
+    slh_dsa_impl *impl_jasmin_ref,
+    slh_dsa_impl *impl_c_ref,
+    slh_dsa_impl *impl_openssl
+)
 {
     char filename[256];
 
@@ -27,13 +33,17 @@ void benchmark_impls(const char *paramset, slh_dsa_impl *impl_jasmin_ref, slh_ds
     uint8_t keyrnd[3*SPX_N]; // key randomness
     randombytes(keyrnd, 3*SPX_N);
 
-    // benchmark the Jasmin reference implementation
+    // keygen: benchmark the Jasmin reference implementation
     snprintf(filename, sizeof(filename), "bench/results/jasmin_ref_%s_keygen.txt", paramset);
     BENCHMARK_N_TIMES(TIMINGS, filename, impl_jasmin_ref->keygen(sk, pk, keyrnd));
 
-    // benchmark the C reference implementation
+    // keygen: benchmark the C reference implementation
     snprintf(filename, sizeof(filename), "bench/results/c_ref_%s_keygen.txt", paramset);
     BENCHMARK_N_TIMES(TIMINGS, filename, impl_c_ref->keygen(sk, pk, keyrnd));
+
+    // keygen: benchmark the OpenSSL implementation
+    snprintf(filename, sizeof(filename), "bench/results/openssl_%s_keygen.txt", paramset);
+    BENCHMARK_N_TIMES(TIMINGS, filename, impl_openssl->keygen(sk, pk, keyrnd));
 
     // generate random message and context
     size_t ctx_len = SPX_CTX_LEN; // context length
@@ -53,28 +63,36 @@ void benchmark_impls(const char *paramset, slh_dsa_impl *impl_jasmin_ref, slh_ds
     
     uint8_t sig[SPX_SIG_BYTES]; // signature buffer
 
-    // benchmark the Jasmin reference implementation
+    // sign: benchmark the Jasmin reference implementation
     snprintf(filename, sizeof(filename), "bench/results/jasmin_ref_%s_sign.txt", paramset);
     BENCHMARK_N_TIMES(TIMINGS, filename, impl_jasmin_ref->sign(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, sk, addrnd));
 
-    // benchmark the C reference implementation
+    // sign: benchmark the C reference implementation
     snprintf(filename, sizeof(filename), "bench/results/c_ref_%s_sign.txt", paramset);
     BENCHMARK_N_TIMES(TIMINGS, filename, impl_c_ref->sign(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, sk, addrnd));
 
-    // benchmark the Jasmin reference implementation
+    // sign: benchmark the OpenSSL implementation
+    snprintf(filename, sizeof(filename), "bench/results/openssl_%s_sign.txt", paramset);
+    BENCHMARK_N_TIMES(TIMINGS, filename, impl_openssl->sign(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, sk, addrnd));
+
+    // verify: benchmark the Jasmin reference implementation
     snprintf(filename, sizeof(filename), "bench/results/jasmin_ref_%s_verify.txt", paramset);
     BENCHMARK_N_TIMES(TIMINGS, filename, impl_jasmin_ref->verify(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, pk));
 
-    // benchmark the C reference implementation
+    // verify: benchmark the C reference implementation
     snprintf(filename, sizeof(filename), "bench/results/c_ref_%s_verify.txt", paramset);
     BENCHMARK_N_TIMES(TIMINGS, filename, impl_c_ref->verify(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, pk));
+
+    // verify: benchmark the OpenSSL implementation
+    snprintf(filename, sizeof(filename), "bench/results/openssl_%s_verify.txt", paramset);
+    BENCHMARK_N_TIMES(TIMINGS, filename, impl_openssl->verify(sig, msg_ptr, msg_len, ctx_ptr, ctx_len, pk));
 }
 
 int main(int argc, char **argv) {
     // get parameter set name
     const char *paramset = (argc > 1) ? argv[1] : "unknown";
 
-    benchmark_impls(paramset, &jasmin_ref_impl, &c_ref_impl);
+    benchmark_impls(paramset, &jasmin_ref_impl, &c_ref_impl, &openssl_impl);
     
     return EXIT_SUCCESS;
 }
