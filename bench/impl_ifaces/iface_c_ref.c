@@ -1,4 +1,3 @@
-// #include "../../sphincsplus/ref/api.h" // declare the function signatures
 #include "slh_dsa_iface.h" // contains the abstract interface wrapper
 
 #include "../../x86-64/ref/params/params.h" // contains SPX_N and SPX_SIG_BYTES
@@ -27,7 +26,7 @@ static int c_ref_sign(
     const uint8_t *addrnd
 )
 {
-    size_t siglen;
+    size_t siglen; // length variable that the C reference implementation writes the signature length to
     return crypto_sign_signature(sig, &siglen, msg_ptr, msg_len, sk);
 }
 

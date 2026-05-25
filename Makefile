@@ -186,11 +186,21 @@ SPHINCSPLUS_SOURCES = \
 	$(SPHINCSPLUS_REF_DIR)/fors.c \
 	$(SPHINCSPLUS_REF_DIR)/sign.c
 
-# C reference impl: add hash sources
+# C reference impl: add SHAKE sources
+ifneq (,$(findstring shake,$(PARAMETER_SET)))
 SPHINCSPLUS_SOURCES += \
 	$(SPHINCSPLUS_REF_DIR)/fips202.c \
 	$(SPHINCSPLUS_REF_DIR)/hash_shake.c \
 	$(SPHINCSPLUS_REF_DIR)/thash_shake_simple.c
+endif
+
+# C reference impl: add SHA2 sources
+ifneq (,$(findstring sha2,$(PARAMETER_SET)))
+SPHINCSPLUS_SOURCES += \
+	$(SPHINCSPLUS_REF_DIR)/sha2.c \
+	$(SPHINCSPLUS_REF_DIR)/hash_sha2.c \
+	$(SPHINCSPLUS_REF_DIR)/thash_sha2_simple.c
+endif
 
 # C reference impl: define object files
 SPHINCSPLUS_OBJS = $(SPHINCSPLUS_SOURCES:.c=.o)
@@ -208,7 +218,7 @@ bench/impls/impl_c_ref.a: $(SPHINCSPLUS_OBJS)
 	@ar rcs $@ $^
 
 # compile a benchmarking executable
-$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impls/impl_jasmin_ref.a bench/impls/impl_c_ref.a
+$(BENCH): bench/bench_slh_dsa.c bench/impls/impl_jasmin_ref.a bench/impls/impl_c_ref.a
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
 	@$(CC) \
 		bench/bench_slh_dsa.c \
