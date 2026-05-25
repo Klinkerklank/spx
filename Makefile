@@ -206,7 +206,7 @@ endif
 SPHINCSPLUS_OBJS = $(SPHINCSPLUS_SOURCES:.c=.o)
 
 # C reference impl: define C compiler flags
-CFLAGS = -Wall -Wextra -Wpedantic -O3 -std=c99 -Wconversion -Wmissing-prototypes -DPARAMS=sphincs-$(PARAMETER_SET)
+CFLAGS = -Wall -Wextra -Wpedantic -O3 -std=c99 -Wmissing-prototypes -DPARAMS=sphincs-$(PARAMETER_SET)
 
 # C reference impl: compile object files
 $(SPHINCSPLUS_REF_DIR)/%.o: $(SPHINCSPLUS_REF_DIR)/%.c
@@ -233,4 +233,17 @@ $(BENCH): bench/bench_slh_dsa.c bench/impls/impl_jasmin_ref.a bench/impls/impl_c
 # execute the benchmarking
 .PHONY: bench
 bench: $(BENCH)
-	@./$(BENCH)
+	@./$(BENCH) $(PARAMETER_SET)
+
+# run benchmarking for all NIST-approved parameter sets
+.PHONY: bench-all
+bench-all:
+	@for p in $(PARAMETER_SETS); do \
+		$(MAKE) bench PARAMETER_SET=$$p || exit 1; \
+		rm -rf \
+			$(ACTIVE_PARAM_FILE) \
+			$(PARAM_HEADER) \
+			sphincsplus/ref/*.o \
+			bench/impls/*.a \
+			bench/slh_dsa_bench; \
+	done

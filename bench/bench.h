@@ -124,7 +124,7 @@ static inline void cleanup_fclose(FILE **fpp) {
 #define BENCHMARK_N_TIMES(N, filename, func_call)                                            \
     do {                                                                                     \
         /* ensure output directory exists */                                                 \
-        char _cmd[256];                                                                      \
+        char _cmd[512];                                                                      \
         snprintf(_cmd, sizeof(_cmd), "mkdir -p $(dirname %s)", filename);                    \
         system(_cmd);                                                                        \
                                                                                              \
