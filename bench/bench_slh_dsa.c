@@ -12,7 +12,7 @@
 extern slh_dsa_impl jasmin_ref_impl;
 extern slh_dsa_impl c_ref_impl;
 
-#define TIMINGS 2
+#define TIMINGS 100
 #define SPX_MSG_LEN 32
 #define SPX_CTX_LEN 32
 
