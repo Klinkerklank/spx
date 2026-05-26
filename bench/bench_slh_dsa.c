@@ -92,7 +92,13 @@ int main(int argc, char **argv) {
     // get parameter set name
     const char *paramset = (argc > 1) ? argv[1] : "unknown";
 
+    // initialise the persistent objects that the OpenSSL impl uses
+    openssl_impl.init();
+
     benchmark_impls(paramset, &jasmin_ref_impl, &c_ref_impl, &openssl_impl);
+
+    // free the memory that OpenSSL has used
+    openssl_impl.cleanup();
     
     return EXIT_SUCCESS;
 }

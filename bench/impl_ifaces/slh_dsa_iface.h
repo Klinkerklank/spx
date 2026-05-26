@@ -7,6 +7,9 @@
 typedef struct {
     const char *name;
 
+    int (*init)(void);
+    void (*cleanup)(void);
+
     int (*keygen)(
         uint8_t *sk,
         uint8_t *pk,

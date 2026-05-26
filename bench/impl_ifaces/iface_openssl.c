@@ -9,8 +9,77 @@
 
 #include "../../x86-64/ref/params/params.h" // contains SPX_N and SPX_SIG_BYTES
 
-// persistent OpenSSL key objects
+// persistent OpenSSL key pair
 static EVP_PKEY *openssl_pkey = NULL;
+
+// persistent OpenSSL parameter set context
+static EVP_PKEY_CTX *pk_ctx = NULL;
+
+// persistent OpenSSL message digest contexts
+static EVP_MD_CTX *sign_md_ctx = NULL;
+static EVP_MD_CTX *verify_md_ctx = NULL;
+
+void openssl_cleanup(void)
+{
+    EVP_PKEY_free(openssl_pkey);
+    EVP_PKEY_CTX_free(pk_ctx);
+    EVP_MD_CTX_free(sign_md_ctx);
+    EVP_MD_CTX_free(verify_md_ctx);
+    openssl_pkey = NULL;
+    pk_ctx = NULL;
+    sign_md_ctx = NULL;
+    verify_md_ctx = NULL;
+}
+
+int openssl_init(void)
+{
+    const char *paramset = OPENSSL_PARAMSET;
+    
+    if (!paramset) {
+        printf("ERROR: unsupported paramset: %s\n", OPENSSL_PARAMSET);
+        goto err;
+    }
+
+    pk_ctx = EVP_PKEY_CTX_new_from_name(NULL, paramset, NULL);
+    if (!pk_ctx) {
+        printf("ERROR: EVP_PKEY_CTX_new_from_name: %s\n", paramset);
+        goto err;
+    }
+
+    if (EVP_PKEY_keygen_init(pk_ctx) <= 0) {
+        printf("ERROR: EVP_PKEY_keygen_init\n");
+        goto err;
+    }
+
+    if (EVP_PKEY_CTX_set_group_name(pk_ctx, paramset) <= 0) {
+        printf("ERROR: EVP_PKEY_CTX_set_group_name: %s\n", paramset);
+        goto err;
+    }
+
+    // ensure there is a valid key in pk_ctx, in case keygen is not run before sign or verify
+    if (EVP_PKEY_keygen(pk_ctx, &openssl_pkey) <= 0) {
+        printf("ERROR: initial EVP_PKEY_keygen\n");
+        goto err;
+    }
+
+    sign_md_ctx = EVP_MD_CTX_new();
+    if (!sign_md_ctx) {
+        printf("ERROR: EVP_MD_CTX_new\n");
+        goto err;
+    }
+
+    verify_md_ctx = EVP_MD_CTX_new();
+    if (!verify_md_ctx) {
+        printf("ERROR: EVP_MD_CTX_new\n");
+        goto err;
+    }
+
+    return 0;
+
+err:
+    openssl_cleanup();
+    return -1;
+}
 
 static int openssl_keygen(
     uint8_t *sk,
@@ -18,48 +87,20 @@ static int openssl_keygen(
     const uint8_t *keyrnd
 )
 {
-    (void)sk;
-    (void)pk;
-    (void)keyrnd;
+    EVP_PKEY *tmp_pkey = NULL;
 
-    EVP_PKEY_CTX *ctx = NULL;
-
-    // free previous key if benchmark reruns
-    EVP_PKEY_free(openssl_pkey);
-    openssl_pkey = NULL;
-
-    const char *alg = OPENSSL_PARAMSET;
-    if (!alg) {
-        printf("ERROR: unsupported paramset %s\n", OPENSSL_PARAMSET);
-        goto err;
-    }
-
-    ctx = EVP_PKEY_CTX_new_from_name(NULL, alg, NULL);
-
-    if (!ctx) {
-        printf("ERROR: EVP_PKEY_CTX_new_from_name\n");
-        goto err;
-    }
-
-    if (EVP_PKEY_keygen_init(ctx) <= 0) {
-        printf("ERROR: EVP_PKEY_keygen_init\n");
-        goto err;
-    }
-
-    if (EVP_PKEY_keygen(ctx, &openssl_pkey) <= 0) {
+    if (EVP_PKEY_keygen(pk_ctx, &tmp_pkey) <= 0) {
         printf("ERROR: EVP_PKEY_keygen\n");
         goto err;
     }
 
-    EVP_PKEY_CTX_free(ctx);
+    EVP_PKEY_free(tmp_pkey);
 
     return 0;
 
 err:
-    EVP_PKEY_CTX_free(ctx);
-    EVP_PKEY_free(openssl_pkey);
-    openssl_pkey = NULL;
-
+    EVP_PKEY_free(tmp_pkey);
+    openssl_cleanup();
     return -1;
 }
 
@@ -73,28 +114,13 @@ static int openssl_sign(
     const uint8_t *addrnd
 )
 {
-    (void)sk;
-    (void)addrnd;
+    size_t siglen = SPX_SIG_BYTES;
 
-    EVP_MD_CTX *mdctx = NULL;
-    EVP_PKEY_CTX *pctx = NULL;
-
-    size_t siglen = 0;
-
-    if (!openssl_pkey) {
-        printf("ERROR: no OpenSSL key loaded\n");
-        return -1;
-    }
-
-    mdctx = EVP_MD_CTX_new();
-    if (!mdctx) {
-        printf("ERROR: EVP_MD_CTX_new\n");
-        goto err;
-    }
+    EVP_MD_CTX_reset(sign_md_ctx);
 
     if (EVP_DigestSignInit_ex(
-            mdctx,
-            &pctx,
+            sign_md_ctx,
+            NULL,
             NULL,
             NULL,
             NULL,
@@ -104,20 +130,8 @@ static int openssl_sign(
         goto err;
     }
 
-    // query signature length
     if (EVP_DigestSign(
-            mdctx,
-            NULL,
-            &siglen,
-            msg_ptr,
-            msg_len) <= 0) {
-        printf("ERROR: EVP_DigestSign(size query)\n");
-        goto err;
-    }
-
-    // actual signing
-    if (EVP_DigestSign(
-            mdctx,
+            sign_md_ctx,
             sig,
             &siglen,
             msg_ptr,
@@ -126,12 +140,10 @@ static int openssl_sign(
         goto err;
     }
 
-    EVP_MD_CTX_free(mdctx);
-
     return 0;
 
 err:
-    EVP_MD_CTX_free(mdctx);
+    openssl_cleanup();
     return -1;
 }
 
@@ -144,25 +156,11 @@ static int openssl_verify(
     const uint8_t *pk
 )
 {
-    (void)pk;
-
-    EVP_MD_CTX *mdctx = NULL;
-    EVP_PKEY_CTX *pctx = NULL;
-
-    if (!openssl_pkey) {
-        printf("ERROR: no OpenSSL key loaded\n");
-        return -1;
-    }
-
-    mdctx = EVP_MD_CTX_new();
-    if (!mdctx) {
-        printf("ERROR: EVP_MD_CTX_new\n");
-        goto err;
-    }
+    EVP_MD_CTX_reset(verify_md_ctx);
 
     if (EVP_DigestVerifyInit_ex(
-            mdctx,
-            &pctx,
+            verify_md_ctx,
+            NULL,
             NULL,
             NULL,
             NULL,
@@ -173,28 +171,24 @@ static int openssl_verify(
     }
 
     int ret = EVP_DigestVerify(
-        mdctx,
+        verify_md_ctx,
         sig,
         SPX_SIG_BYTES,
         msg_ptr,
         msg_len
     );
 
-    EVP_MD_CTX_free(mdctx);
-
-    if (ret == 1) {
-        return 0;
-    }
-
-    return -1;
+    return (ret == 1) ? 0 : -1;
 
 err:
-    EVP_MD_CTX_free(mdctx);
+    openssl_cleanup();
     return -1;
 }
 
 slh_dsa_impl openssl_impl = {
     .name = "openssl",
+    .init = openssl_init,
+    .cleanup = openssl_cleanup,
     .keygen = openssl_keygen,
     .sign = openssl_sign,
     .verify = openssl_verify
