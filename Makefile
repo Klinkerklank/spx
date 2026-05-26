@@ -17,8 +17,8 @@ IMPLEMENTATION = $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)
 # parameter settings
 PARAMETER_SET ?= shake-256f
 PARAM_FILE = params-spx-$(PARAMETER_SET).jinc
-ACTIVE_PARAM_FILE = x86-64/ref/params/active_params.jinc
-PARAM_HEADER = x86-64/ref/params/params.h
+ACTIVE_PARAM_FILE = $(IMPLEMENTATION)/params/active_params.jinc
+PARAM_HEADER = $(IMPLEMENTATION)/params/params.h
 CLI = slh_dsa_cli
 BENCH = bench/slh_dsa_bench
 
@@ -121,8 +121,8 @@ $(OUTPUT_FILE_NAME).o: $(OUTPUT_FILE_NAME).s
 	@$(CC) -c $< -o $@ -no-pie
 
 # compile assembly and C into a CLI executable
-$(CLI): $(OUTPUT_FILE_NAME).o slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o
-	@$(CC) $(OUTPUT_FILE_NAME).o slh_dsa_cli.c x86-64/ref/misc/jasmin_syscall.o -o $(CLI) -no-pie
+$(CLI): $(OUTPUT_FILE_NAME).o slh_dsa_cli.c $(IMPLEMENTATION)/misc/jasmin_syscall.o
+	@$(CC) $(OUTPUT_FILE_NAME).o slh_dsa_cli.c $(IMPLEMENTATION)/misc/jasmin_syscall.o -o $(CLI) -no-pie
 
 # ---------------------------------------------------------------- #
 #  KAT TESTING                                                     #
@@ -167,7 +167,7 @@ acvp-kat-test-all:
 # ---------------------------------------------------------------- #
 
 # Jasmin impl: create a static archive
-bench/impls/impl_jasmin_ref.a: $(OUTPUT_FILE_NAME).o x86-64/ref/misc/jasmin_syscall.o
+bench/impls/impl_jasmin_ref.a: $(OUTPUT_FILE_NAME).o $(IMPLEMENTATION)/misc/jasmin_syscall.o
 	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
