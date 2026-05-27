@@ -4,7 +4,8 @@ slh_dsa_cli
 *.o
 *.a
 params/params.h
-*/active_params.jinc
+x86-64/ref/active_params.jinc
+x86-64/avx2/active_params.jinc
 outputs
 .pytest_cache
 tests/__pycache__
