@@ -1,4 +1,4 @@
-require "../params/active_params.jinc" // SPHINCS+ parameters
+require "../active_params.jinc" // SPHINCS+ parameters
 // active_params.jinc in turn requires the chosen parameter file with the concrete parameter values
 
 require "../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings

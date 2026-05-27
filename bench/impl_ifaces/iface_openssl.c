@@ -7,7 +7,7 @@
 
 #include "slh_dsa_iface.h" // contains the abstract interface wrapper
 
-#include "../../params.h" // contains SPX_N and SPX_SIG_BYTES
+#include "../../params/params.h" // contains SPX_N and SPX_SIG_BYTES
 
 // persistent OpenSSL key pair
 static EVP_PKEY *openssl_pkey = NULL;

@@ -1,6 +1,6 @@
-#include "../../params.h"      // contains SPX_N and SPX_SIG_BYTES
-#include "../../slh_dsa_cli.h" // declare the Jasmin export function signatures in spx.jazz
-#include "slh_dsa_iface.h"     // contains the abstract interface wrapper
+#include "../../params/params.h" // contains SPX_N and SPX_SIG_BYTES
+#include "../../slh_dsa_cli.h"   // declare the Jasmin export function signatures in spx.jazz
+#include "slh_dsa_iface.h"       // contains the abstract interface wrapper
 
 static int jasmin_ref_keygen(
     uint8_t *sk,

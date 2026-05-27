@@ -1,6 +1,6 @@
 #include "slh_dsa_iface.h" // contains the abstract interface wrapper
 
-#include "../../params.h" // contains SPX_N and SPX_SIG_BYTES
+#include "../../params/params.h" // contains SPX_N and SPX_SIG_BYTES
 
 int crypto_sign_seed_keypair(unsigned char *pk, unsigned char *sk, const unsigned char *seed);
 int crypto_sign_signature(uint8_t *sig, size_t *siglen, const uint8_t *m, size_t mlen, const uint8_t *sk);

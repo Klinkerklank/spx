@@ -6,7 +6,7 @@
 #include "bench.h"
 #include "randombytes.h"
 #include "impl_ifaces/slh_dsa_iface.h"
-#include "../params.h" // contains SPX_N and SPX_SIG_BYTES
+#include "../params/params.h" // contains SPX_N and SPX_SIG_BYTES
 
 // declare implementation interfaces
 extern slh_dsa_impl jasmin_ref_impl;  // Jasmin reference implementation
