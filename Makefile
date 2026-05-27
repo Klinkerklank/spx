@@ -18,7 +18,7 @@ IMPLEMENTATION = $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)
 PARAMETER_SET ?= shake-256f
 PARAM_FILE = params-spx-$(PARAMETER_SET).jinc
 ACTIVE_PARAM_FILE = $(IMPLEMENTATION)/params/active_params.jinc
-PARAM_HEADER = $(IMPLEMENTATION)/params/params.h
+PARAM_HEADER = params.h
 CLI = slh_dsa_cli
 BENCH = bench/slh_dsa_bench
 
@@ -166,8 +166,13 @@ acvp-kat-test-all:
 #  BENCHMARKING                                                    #
 # ---------------------------------------------------------------- #
 
-# Jasmin impl: create a static archive
+# Jasmin reference impl: create a static archive
 bench/impls/impl_jasmin_ref.a: $(OUTPUT_FILE_NAME).o $(IMPLEMENTATION)/misc/jasmin_syscall.o
+	@mkdir -p bench/impls
+	@ar rcs $@ $^
+
+# Jasmin AVX2 impl: create a static archive
+bench/impls/impl_jasmin_avx2.a: $(OUTPUT_FILE_NAME).o $(IMPLEMENTATION)/misc/jasmin_syscall.o
 	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
@@ -224,14 +229,16 @@ LDLIBS  += -lcrypto -lssl
 LDFLAGS += -Wl,-rpath,$(OPENSSL_DIR)/lib
 
 # compile a benchmarking executable
-$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impl_ifaces/iface_c_ref.c bench/impl_ifaces/iface_openssl.c bench/impls/impl_jasmin_ref.a bench/impls/impl_c_ref.a
+$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impl_ifaces/iface_jasmin_avx2.c bench/impl_ifaces/iface_c_ref.c bench/impl_ifaces/iface_openssl.c bench/impls/impl_jasmin_ref.a bench/impls/impl_jasmin_avx2.a bench/impls/impl_c_ref.a
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
 	@$(CC) \
 		bench/bench_slh_dsa.c \
     	bench/impl_ifaces/iface_jasmin_ref.c \
+    	bench/impl_ifaces/iface_jasmin_avx2.c \
     	bench/impl_ifaces/iface_c_ref.c \
     	bench/impl_ifaces/iface_openssl.c \
 		bench/impls/impl_jasmin_ref.a \
+		bench/impls/impl_jasmin_avx2.a \
 		bench/impls/impl_c_ref.a \
 		-o $(BENCH) \
 		-no-pie \
