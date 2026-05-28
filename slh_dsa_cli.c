@@ -6,8 +6,8 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-#include "params.h"      // contains SPX_N and SPX_SIG_BYTES
-#include "slh_dsa_cli.h" // declare the Jasmin export function signatures in spx.jazz
+#include "params/params.h" // contains SPX_N and SPX_SIG_BYTES
+#include "slh_dsa_cli.h"   // declare the Jasmin export function signatures in spx.jazz
 
 #define ANSI_COLOR_RESET  "\x1b[0m"
 #define ANSI_COLOR_RED    "\x1b[31m"
@@ -168,15 +168,15 @@ int verify(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len) {
 }
 
 void help() {
-    printf("\n" ANSI_COLOR_CYAN "SPHINCS+ Command Line Interface ./slh_dsa_cli\n" ANSI_COLOR_RESET);
-    printf("modes: keygen, sign, or verify\n");
+    printf(ANSI_COLOR_CYAN "SPHINCS+ Command-Line Interface ./cli\n" ANSI_COLOR_RESET);
+    printf("modes: keygen, sign, and verify\n");
     printf("\n");
     printf("-> " ANSI_COLOR_CYAN "keygen" ANSI_COLOR_RESET " generates a pair of secret- and public keys.\n");
     printf("  the secret- and public keys are written to outputs/sk.bin and outputs/pk.bin respectively.\n");
     printf("  parameters:\n");
     printf("    (none)\n");
     printf("  example usage:\n");
-    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode keygen\n" ANSI_COLOR_RESET);
+    printf("    " ANSI_COLOR_YELLOW "./cli -mode keygen\n" ANSI_COLOR_RESET);
     printf("\n");
     printf("-> " ANSI_COLOR_CYAN "sign" ANSI_COLOR_RESET " signs a message.\n");
     printf("  uses the secret- and public keys in outputs/sk.bin and outputs/pk.bin.\n");
@@ -186,8 +186,8 @@ void help() {
     printf("    -ctx \"<string>\" = the context string (default: \"\")\n");
     printf("    -det <bool> = whether to use deterministic additional randomness (default: false)\n");
     printf("  example usage:\n");
-    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode sign -ctx \"context\" -msg README.md\n" ANSI_COLOR_RESET);
-    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode sign -msg slh_dsa_cli.c -det true\n" ANSI_COLOR_RESET);
+    printf("    " ANSI_COLOR_YELLOW "./cli -mode sign -ctx \"context\" -msg README.md\n" ANSI_COLOR_RESET);
+    printf("    " ANSI_COLOR_YELLOW "./cli -mode sign -msg slh_dsa_cli.c -det true\n" ANSI_COLOR_RESET);
     printf("\n");
     printf("-> " ANSI_COLOR_CYAN "verify" ANSI_COLOR_RESET " verifies a message.\n");
     printf("  uses the public key in outputs/pk.bin and signature in outputs/sig.bin.\n");
@@ -195,8 +195,8 @@ void help() {
     printf("    -msg <filepath> = the file path to the file to sign (required)\n");
     printf("    -ctx \"<string>\" = the context string (default: \"\")\n");
     printf("  example usage:\n");
-    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode verify -ctx \"context\" -msg README.md\n" ANSI_COLOR_RESET);
-    printf("    " ANSI_COLOR_YELLOW "./slh_dsa_cli -mode verify -msg slh_dsa_cli.c\n" ANSI_COLOR_RESET);
+    printf("    " ANSI_COLOR_YELLOW "./cli -mode verify -ctx \"context\" -msg README.md\n" ANSI_COLOR_RESET);
+    printf("    " ANSI_COLOR_YELLOW "./cli -mode verify -msg slh_dsa_cli.c\n" ANSI_COLOR_RESET);
     printf("\n");
 }
 
@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
     }
 
     if (!mode) {
-        printf(ANSI_COLOR_RED "Mode not defined.\n\n" ANSI_COLOR_RESET);
+        printf(ANSI_COLOR_RED "Mode not defined.\n" ANSI_COLOR_RESET);
         help();
         return 1;
     }

@@ -16,7 +16,7 @@ PARAMETER_SET ?= shake-256f
 
 # fixed-location files
 PARAM_HEADER = params/params.h
-CLI = slh_dsa_cli
+CLI = cli
 BENCH = bench/slh_dsa_bench
 
 # parameter settings
@@ -134,9 +134,14 @@ slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).o: slh_dsa_$(PARAMETER_SET)_ref_$(A
 slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).o: slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).s
 	@$(CC) -c $< -o $@ -no-pie
 
+# ---------------------------------------------------------------- #
+#  COMMAND-LINE INTERFACE                                          #
+# ---------------------------------------------------------------- #
+
 # compile assembly and C into a CLI executable
 $(CLI): slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o
 	@$(CC) slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o -o $(CLI) -no-pie
+	@printf "\033[33mCommand-Line Interface compiled, see ./cli --help for usage instructions\033[0m\n"
 
 # ---------------------------------------------------------------- #
 #  KAT TESTING                                                     #

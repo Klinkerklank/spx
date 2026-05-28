@@ -1,4 +1,4 @@
-slh_dsa_cli
+cli
 *.s
 *.so
 *.o
