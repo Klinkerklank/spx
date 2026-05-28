@@ -1,7 +1,8 @@
 cli
-*.s
 *.so
-*.o
+slh_dsa_*.s
+slh_dsa_*.o
+sphincsplus
 *.a
 params/params.h
 x86-64/ref/active_params.jinc
@@ -14,4 +15,3 @@ tests/acvp/grouped/*.json
 bench/slh_dsa_bench
 bench/impls
 bench/results
-sphincsplus/ref/*.o
