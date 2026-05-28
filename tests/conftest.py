@@ -23,7 +23,7 @@ def pytest_addoption(parser):
         action="store",
         default="ref",
         help="Implementation type: ref",
-        choices=("ref"),
+        choices=("ref", "avx2"),
     )
 
 

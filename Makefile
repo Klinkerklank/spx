@@ -19,7 +19,8 @@ PARAM_HEADER = params/params.h
 CLI = slh_dsa_cli
 BENCH = bench/slh_dsa_bench
 
-# testing settings
+# parameter settings
+IMPLEMENTATIONS = avx2 ref
 PARAMETER_SETS = \
 	sha2-128f sha2-128s \
 	sha2-192f sha2-192s \
@@ -27,6 +28,8 @@ PARAMETER_SETS = \
 	shake-128f shake-128s \
 	shake-192f shake-192s \
 	shake-256f shake-256s
+
+# testing settings
 GROUPED_JSONS = $(addprefix tests/acvp/grouped/slh_dsa_, \
 	$(addsuffix .json,$(PARAMETER_SETS)))
 
@@ -35,7 +38,7 @@ GROUPED_JSONS = $(addprefix tests/acvp/grouped/slh_dsa_, \
 # ---------------------------------------------------------------- #
 
 # default behaviour: compile command-line interface
-all: $(CLI)
+all: acvp-kat-test-all
 
 # clean build artifacts
 .PHONY: clean
@@ -132,16 +135,20 @@ slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).o: slh_dsa_$(PARAMETER_SET)_avx2_$
 	@$(CC) -c $< -o $@ -no-pie
 
 # compile assembly and C into a CLI executable
-$(CLI): slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(IMPLEMENTATION)/misc/jasmin_syscall.o
-	@$(CC) slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(IMPLEMENTATION)/misc/jasmin_syscall.o -o $(CLI) -no-pie
+$(CLI): slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o
+	@$(CC) slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o -o $(CLI) -no-pie
 
 # ---------------------------------------------------------------- #
 #  KAT TESTING                                                     #
 # ---------------------------------------------------------------- #
 
+# group the test vectors in .json files per parameter set
+$(GROUPED_JSONS): tests/acvp/group_json_per_paramset.py
+	@python3 tests/acvp/group_json_per_paramset.py
+
 # compile SPHINCS+ API from Jasmin to assembly
-slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s: $(IMPLEMENTATION)/spx/spx.jinc $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/active_params.jinc $(PARAM_HEADER)
-	@$(JASMINC) -o slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s $(IMPLEMENTATION)/spx/spx.jinc
+slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s: $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/spx/spx.jinc $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/active_params.jinc $(PARAM_HEADER)
+	@$(JASMINC) -o slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/spx/spx.jinc
 	@grep -q GNU-stack slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s || echo '.section .note.GNU-stack,"",@progbits' >> slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s
 
 # generate a shared library
@@ -154,24 +161,25 @@ ifeq ($(ARCHITECTURE), x86-64)
 	TESTING_WRAPPER = slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).so
 endif
 
-# group the test vectors in .json files per parameter set
-$(GROUPED_JSONS): tests/acvp/group_json_per_paramset.py
-	@python3 tests/acvp/group_json_per_paramset.py
-
 # run one implementation (given a specific parameter set) against the KATs
 .PHONY: acvp-kat-test
 acvp-kat-test: $(TESTING_WRAPPER) $(GROUPED_JSONS)
 	@python3 -m pytest --parameter-set=$(PARAMETER_SET) --architecture=$(ARCHITECTURE) --implementation-type=$(IMPLEMENTATION_TYPE) tests/test_acvp_kats.py
+	@$(MAKE) clean
 
 # run all implementations (for all NIST-approved parameter sets) against the KATs
 .PHONY: acvp-kat-test-all
 acvp-kat-test-all:
-	@for p in $(PARAMETER_SETS); do \
-		printf "\033[33mTesting %s\033[0m\n" "$$p"; \
-		$(MAKE) acvp-kat-test PARAMETER_SET=$$p || exit 1; \
-		rm -rf $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/active_params.jinc $(PARAM_HEADER); \
+	@$(MAKE) clean
+	@for i in $(IMPLEMENTATIONS); do \
+		for p in $(PARAMETER_SETS); do \
+			printf "\033[33mTesting %s (%s implementation)\033[0m\n" "$$p" "$$i"; \
+			$(MAKE) acvp-kat-test \
+				IMPLEMENTATION_TYPE=$$i \
+				PARAMETER_SET=$$p \
+				|| exit 1; \
+		done; \
 	done
-	$(MAKE) clean;
 
 # ---------------------------------------------------------------- #
 #  BENCHMARKING                                                    #
@@ -261,10 +269,12 @@ $(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impl_
 .PHONY: bench
 bench: $(BENCH)
 	@./$(BENCH) $(PARAMETER_SET)
+	@$(MAKE) clean
 
 # run benchmarking for all NIST-approved parameter sets
 .PHONY: bench-all
 bench-all:
+	@$(MAKE) clean
 	@for p in $(PARAMETER_SETS); do \
 		$(MAKE) bench PARAMETER_SET=$$p || exit 1; \
 		rm -rf \
@@ -272,6 +282,6 @@ bench-all:
 			$(ARCHITECTURE)/avx2/active_params.jinc \
 			$(PARAM_HEADER) \
 			sphincsplus/ref/*.o \
-			bench/impls/*.a \
+			bench/impls \
 			bench/slh_dsa_bench; \
 	done
