@@ -6,7 +6,7 @@
 MAKEFLAGS += --no-print-directory
 
 # compiler settings
-JASMINC = jasminc -I Keccak=formosa-keccak/src/amd64
+JASMINC = jasmin/compiler/jasminc -I Keccak=formosa-keccak/src/amd64
 CC = /usr/bin/gcc
 
 # command line options to provide
@@ -37,7 +37,7 @@ GROUPED_JSONS = $(addprefix tests/acvp/grouped/slh_dsa_, \
 #  STANDARD MAKEFILE STUFF                                         #
 # ---------------------------------------------------------------- #
 
-# default behaviour: compile command-line interface
+# default behaviour
 all: acvp-kat-test-all
 
 # clean build artifacts

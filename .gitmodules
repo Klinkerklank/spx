@@ -4,6 +4,3 @@
 [submodule "sphincsplus"]
 	path = sphincsplus
 	url = https://github.com/sphincs/sphincsplus.git
-[submodule "jasmin"]
-	path = jasmin
-	url = https://github.com/jasmin-lang/jasmin.git
