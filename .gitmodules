@@ -4,3 +4,6 @@
 [submodule "sphincsplus"]
 	path = sphincsplus
 	url = https://github.com/sphincs/sphincsplus.git
+[submodule "openssl"]
+	path = openssl
+	url = https://github.com/openssl/openssl.git

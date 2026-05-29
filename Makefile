@@ -51,7 +51,7 @@ clean:
 		cli outputs \
 		.pytest_cache tests/__pycache__ \
 		bench/slh_dsa_bench \
-		bench/impls \
+		bench/impls/*.a \
 		bench/results \
 		sphincsplus/ref/*.o
 
@@ -188,6 +188,31 @@ acvp-kat-test-all:
 	done
 
 # ---------------------------------------------------------------- #
+#  OPENSSL COMPILING                                               #
+# ---------------------------------------------------------------- #
+
+OPENSSL_BUILD := $(CURDIR)/bench/impls/openssl
+OPENSSL_SRC   := $(CURDIR)/openssl
+
+CFLAGS += -I$(OPENSSL_BUILD)/include
+
+LDFLAGS += \
+    -L$(OPENSSL_BUILD)/lib64 \
+    -Wl,-rpath,$(OPENSSL_BUILD)/lib64
+
+LDLIBS += -lcrypto
+
+$(OPENSSL_BUILD)/lib64/libcrypto.so:
+	@printf "\033[33mInstalling OpenSSL (this may take a while)\033[0m\n"
+	@cd $(OPENSSL_SRC) && \
+	./Configure linux-x86_64 \
+	    --prefix=$(OPENSSL_BUILD) \
+	    -O3 -march=native no-tests > /tmp/openssl_config.log 2>&1 && \
+	make -j2 -s > /tmp/openssl_build.log 2>&1 && \
+	make install_sw -s > /tmp/openssl_install.log && \
+	printf "\033[33mOpenSSL installed\033[0m\n"
+
+# ---------------------------------------------------------------- #
 #  BENCHMARKING                                                    #
 # ---------------------------------------------------------------- #
 
@@ -236,7 +261,7 @@ endif
 SPHINCSPLUS_OBJS = $(SPHINCSPLUS_SOURCES:.c=.o)
 
 # C reference impl: define C compiler flags
-CFLAGS = -Wall -Wextra -Wpedantic -O3 -std=c99 -Wmissing-prototypes
+CFLAGS += -Wall -Wextra -Wpedantic -O3 -std=c99 -Wmissing-prototypes
 
 # C reference impl: compile object files
 $(SPHINCSPLUS_REF_DIR)/%.o: $(SPHINCSPLUS_REF_DIR)/%.c
@@ -247,14 +272,8 @@ bench/impls/impl_c_ref.a: $(SPHINCSPLUS_OBJS)
 	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
-# OpenSSL impl: compile flags
-OPENSSL_DIR := $(HOME)/openssl-3.5
-LDFLAGS += -L$(OPENSSL_DIR)/lib
-LDLIBS  += -lcrypto -lssl
-LDFLAGS += -Wl,-rpath,$(OPENSSL_DIR)/lib
-
 # compile a benchmarking executable
-$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impl_ifaces/iface_jasmin_avx2.c bench/impl_ifaces/iface_c_ref.c bench/impl_ifaces/iface_openssl.c bench/impls/impl_jasmin_ref.a bench/impls/impl_jasmin_avx2.a bench/impls/impl_c_ref.a
+$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impl_ifaces/iface_jasmin_avx2.c bench/impl_ifaces/iface_c_ref.c bench/impl_ifaces/iface_openssl.c bench/impls/impl_jasmin_ref.a bench/impls/impl_jasmin_avx2.a bench/impls/impl_c_ref.a $(OPENSSL_BUILD)/lib64/libcrypto.so
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
 	@$(CC) \
 		bench/bench_slh_dsa.c \
@@ -275,12 +294,10 @@ $(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impl_
 .PHONY: bench
 bench: $(BENCH)
 	@./$(BENCH) $(PARAMETER_SET)
-	@$(MAKE) clean
 
 # run benchmarking for all NIST-approved parameter sets
 .PHONY: bench-all
 bench-all:
-	@$(MAKE) clean
 	@for p in $(PARAMETER_SETS); do \
 		$(MAKE) bench PARAMETER_SET=$$p || exit 1; \
 		rm -rf \
@@ -288,6 +305,6 @@ bench-all:
 			$(ARCHITECTURE)/avx2/active_params.jinc \
 			$(PARAM_HEADER) \
 			sphincsplus/ref/*.o \
-			bench/impls \
+			bench/impls/*.a \
 			bench/slh_dsa_bench; \
 	done
