@@ -2,24 +2,21 @@
 #  SETTINGS                                                        #
 # ---------------------------------------------------------------- #
 
-# prevent extraneous print statements that make the output cluttered
-MAKEFLAGS += --no-print-directory
+# command line options to provide
+ARCHITECTURE ?= x86-64
+IMPLEMENTATION_TYPE ?= avx2
+PARAMETER_SET ?= shake-256f
 
 # compiler settings
 JASMINC = jasmin/compiler/jasminc -I Keccak=formosa-keccak/src/amd64
 CC = /usr/bin/gcc
-
-# command line options to provide
-ARCHITECTURE ?= x86-64
-IMPLEMENTATION_TYPE ?= ref
-PARAMETER_SET ?= shake-256f
 
 # fixed-location files
 PARAM_HEADER = params/params.h
 CLI = cli
 BENCH = bench/slh_dsa_bench
 
-# parameter settings
+# parameter sets
 IMPLEMENTATIONS = ref avx2
 PARAMETER_SETS = \
 	sha2-128f sha2-128s \
@@ -36,6 +33,9 @@ GROUPED_JSONS = $(addprefix tests/acvp/grouped/slh_dsa_, \
 # ---------------------------------------------------------------- #
 #  STANDARD MAKEFILE STUFF                                         #
 # ---------------------------------------------------------------- #
+
+# prevent extraneous print statements that make the output cluttered
+MAKEFLAGS += --no-print-directory
 
 # default behaviour
 all: acvp-kat-test-all
