@@ -20,7 +20,7 @@ CLI = cli
 BENCH = bench/slh_dsa_bench
 
 # parameter settings
-IMPLEMENTATIONS = avx2 ref
+IMPLEMENTATIONS = ref avx2
 PARAMETER_SETS = \
 	sha2-128f sha2-128s \
 	sha2-192f sha2-192s \
@@ -43,12 +43,13 @@ all: acvp-kat-test-all
 # clean build artifacts
 .PHONY: clean
 clean:
-	@rm -rf *.s *.o *.so \
+	@rm -rf \
+		slh_dsa_*.s slh_dsa_*.o slh_dsa_*.so \
+		params/params.h \
 		x86-64/ref/active_params.jinc \
 		x86-64/avx2/active_params.jinc \
-		$(PARAM_HEADER) \
-		$(CLI) outputs \
-		.pytest_cache tests/__pycache__ tests/pyAES_DRBG/__pycache__/ \
+		cli outputs \
+		.pytest_cache tests/__pycache__ \
 		bench/slh_dsa_bench \
 		bench/impls \
 		bench/results \
