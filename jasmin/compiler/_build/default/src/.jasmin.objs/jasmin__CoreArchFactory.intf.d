@@ -1,1 +1,0 @@
-src/coreArchFactory.mli: Arch_full Arch_utils Arm_decl Arm_extra Arm_instr_decl Glob_options Riscv_decl Riscv_extra Riscv_instr_decl Utils X86_decl X86_extra X86_instr_decl

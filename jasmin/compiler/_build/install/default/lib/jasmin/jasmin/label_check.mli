@@ -1,1 +1,0 @@
-../../../../../default/src/label_check.mli

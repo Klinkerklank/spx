@@ -1,1 +1,0 @@
-../../../../../default/src/arch_full.mli

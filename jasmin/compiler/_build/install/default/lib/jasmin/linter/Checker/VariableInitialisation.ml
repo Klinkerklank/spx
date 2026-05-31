@@ -1,1 +1,0 @@
-../../../../../../default/linter/Checker/VariableInitialisation.ml
