@@ -1,5 +1,11 @@
 *.log
 
+jasmin/compiler/_build/
+jasmin/compiler/jasmin-ct
+jasmin/compiler/jasmin2ec
+jasmin/compiler/jasmin2tex
+jasmin/compiler/jasminc
+
 slh_dsa_*.s
 slh_dsa_*.o
 slh_dsa_*.so

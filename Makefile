@@ -8,7 +8,8 @@ IMPLEMENTATION_TYPE ?= avx2
 PARAMETER_SET ?= shake-256f
 
 # compiler settings
-JASMINC = jasmin/compiler/jasminc -I Keccak=formosa-keccak/src/amd64
+JASMINC = jasmin/compiler/jasminc
+JASMINFLAGS = -I Keccak=formosa-keccak/src/amd64
 CC = /usr/bin/gcc
 
 # fixed-location files
@@ -117,14 +118,31 @@ $(PARAM_HEADER):
 #  COMPILING                                                       #
 # ---------------------------------------------------------------- #
 
+# build the Jasmin compiler
+$(JASMINC):
+	@printf "\033[36mBuilding Jasmin compiler\033[0m\n"
+	@cd jasmin/compiler && \
+	make -s > jasmin_build.log 2>&1 && \
+	printf "\033[36mJasmin compiler built\033[0m\n"
+
 # compile assembly file
-slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).s: $(ARCHITECTURE)/ref/spx.jazz $(ARCHITECTURE)/ref/active_params.jinc $(PARAM_HEADER)
-	@$(JASMINC) -o slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).s $(ARCHITECTURE)/ref/spx.jazz
+slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).s: \
+	$(JASMINC) \
+	$(ARCHITECTURE)/ref/spx.jazz \
+	$(ARCHITECTURE)/ref/active_params.jinc \
+	$(PARAM_HEADER)
+
+	@$(JASMINC) $(JASMINFLAGS) -o slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).s $(ARCHITECTURE)/ref/spx.jazz
 	@grep -q GNU-stack slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).s || echo '.section .note.GNU-stack,"",@progbits' >> slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).s
 
 # compile assembly file
-slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).s: $(ARCHITECTURE)/avx2/spx.jazz $(ARCHITECTURE)/avx2/active_params.jinc $(PARAM_HEADER)
-	@$(JASMINC) -o slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).s $(ARCHITECTURE)/avx2/spx.jazz
+slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).s: \
+	$(JASMINC) \
+	$(ARCHITECTURE)/avx2/spx.jazz \
+	$(ARCHITECTURE)/avx2/active_params.jinc \
+	$(PARAM_HEADER)
+
+	@$(JASMINC) $(JASMINFLAGS) -o slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).s $(ARCHITECTURE)/avx2/spx.jazz
 	@grep -q GNU-stack slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).s || echo '.section .note.GNU-stack,"",@progbits' >> slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).s
 
 # compile object file
@@ -140,7 +158,11 @@ slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).o: slh_dsa_$(PARAMETER_SET)_avx2_$
 # ---------------------------------------------------------------- #
 
 # compile assembly and C into a CLI executable
-$(CLI): slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o
+$(CLI): \
+	slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o \
+	slh_dsa_cli.c \
+	$(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o
+
 	@$(CC) slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o -o $(CLI) -no-pie
 	@printf "\033[33mCommand-Line Interface compiled, see ./cli --help for usage instructions\033[0m\n"
 
@@ -153,8 +175,13 @@ $(GROUPED_JSONS): tests/acvp/group_json_per_paramset.py
 	@python3 tests/acvp/group_json_per_paramset.py
 
 # compile SPHINCS+ API from Jasmin to assembly
-slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s: $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/spx/spx.jinc $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/active_params.jinc $(PARAM_HEADER)
-	@$(JASMINC) -o slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/spx/spx.jinc
+slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s: \
+	$(JASMINC) \
+	$(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/spx/spx.jinc \
+	$(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/active_params.jinc \
+	$(PARAM_HEADER)
+
+	@$(JASMINC) $(JASMINFLAGS) -o slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/spx/spx.jinc
 	@grep -q GNU-stack slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s || echo '.section .note.GNU-stack,"",@progbits' >> slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s
 
 # generate a shared library
@@ -203,14 +230,14 @@ LDFLAGS += \
 LDLIBS += -lcrypto
 
 $(OPENSSL_BUILD)/lib64/libcrypto.so:
-	@printf "\033[33mInstalling OpenSSL (this may take a while)\033[0m\n"
+	@printf "\033[36mInstalling OpenSSL (this may take a while)\033[0m\n"
 	@cd $(OPENSSL_SRC) && \
 	./Configure linux-x86_64 \
 	    --prefix=$(OPENSSL_BUILD) \
 	    -O3 -march=native no-tests > /tmp/openssl_config.log 2>&1 && \
 	make -j2 -s > /tmp/openssl_build.log 2>&1 && \
 	make install_sw -s > /tmp/openssl_install.log && \
-	printf "\033[33mOpenSSL installed\033[0m\n"
+	printf "\033[36mOpenSSL installed\033[0m\n"
 
 # ---------------------------------------------------------------- #
 #  BENCHMARKING                                                    #
@@ -273,7 +300,17 @@ bench/impls/impl_c_ref.a: $(SPHINCSPLUS_OBJS)
 	@ar rcs $@ $^
 
 # compile a benchmarking executable
-$(BENCH): bench/bench_slh_dsa.c bench/impl_ifaces/iface_jasmin_ref.c bench/impl_ifaces/iface_jasmin_avx2.c bench/impl_ifaces/iface_c_ref.c bench/impl_ifaces/iface_openssl.c bench/impls/impl_jasmin_ref.a bench/impls/impl_jasmin_avx2.a bench/impls/impl_c_ref.a $(OPENSSL_BUILD)/lib64/libcrypto.so
+$(BENCH): \
+	bench/bench_slh_dsa.c \
+	bench/impl_ifaces/iface_jasmin_ref.c \
+	bench/impl_ifaces/iface_jasmin_avx2.c \
+	bench/impl_ifaces/iface_c_ref.c \
+	bench/impl_ifaces/iface_openssl.c \
+	bench/impls/impl_jasmin_ref.a \
+	bench/impls/impl_jasmin_avx2.a \
+	bench/impls/impl_c_ref.a \
+	$(OPENSSL_BUILD)/lib64/libcrypto.so
+
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
 	@$(CC) \
 		bench/bench_slh_dsa.c \
