@@ -15,9 +15,8 @@ cli
 /tests/__pycache__
 /tests/acvp/grouped/*.json
 
-/bench/impls/
-/bench/slh_dsa_bench
 /bench/impls
+/bench/slh_dsa_bench
 /bench/results
 
 /openssl
