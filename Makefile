@@ -243,13 +243,11 @@ $(OPENSSL_BUILD)/lib64/libcrypto.so:
 #  BENCHMARKING                                                    #
 # ---------------------------------------------------------------- #
 
-# Jasmin reference impl: create a static archive
-bench/impls/impl_jasmin_ref.a: slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).o $(ARCHITECTURE)/ref/misc/jasmin_syscall.o
-	@mkdir -p bench/impls
-	@ar rcs $@ $^
+# Jasmin implementations: create a static archive
+bench/impls/impl_jasmin_$(ARCHITECTURE)_%_$(PARAMETER_SET).a: \
+	slh_dsa_$(PARAMETER_SET)_%_$(ARCHITECTURE).o \
+	$(ARCHITECTURE)/%/misc/jasmin_syscall.o
 
-# Jasmin AVX2 impl: create a static archive
-bench/impls/impl_jasmin_avx2.a: slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).o $(ARCHITECTURE)/avx2/misc/jasmin_syscall.o
 	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
@@ -295,7 +293,7 @@ $(SPHINCSPLUS_REF_DIR)/%.o: $(SPHINCSPLUS_REF_DIR)/%.c
 	@$(CC) $(CFLAGS) -DPARAMS=sphincs-$(PARAMETER_SET) -c $< -o $@
 
 # C reference impl: create a static archive
-bench/impls/impl_c_ref.a: $(SPHINCSPLUS_OBJS)
+bench/impls/impl_c_ref_$(PARAMETER_SET).a: $(SPHINCSPLUS_OBJS)
 	@mkdir -p bench/impls
 	@ar rcs $@ $^
 
@@ -306,9 +304,9 @@ $(BENCH): \
 	bench/impl_ifaces/iface_jasmin_avx2.c \
 	bench/impl_ifaces/iface_c_ref.c \
 	bench/impl_ifaces/iface_openssl.c \
-	bench/impls/impl_jasmin_ref.a \
-	bench/impls/impl_jasmin_avx2.a \
-	bench/impls/impl_c_ref.a \
+	bench/impls/impl_jasmin_$(ARCHITECTURE)_ref_$(PARAMETER_SET).a \
+	bench/impls/impl_jasmin_$(ARCHITECTURE)_avx2_$(PARAMETER_SET).a \
+	bench/impls/impl_c_ref_$(PARAMETER_SET).a \
 	$(OPENSSL_BUILD)/lib64/libcrypto.so
 
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
@@ -318,9 +316,9 @@ $(BENCH): \
     	bench/impl_ifaces/iface_jasmin_avx2.c \
     	bench/impl_ifaces/iface_c_ref.c \
     	bench/impl_ifaces/iface_openssl.c \
-		bench/impls/impl_jasmin_ref.a \
-		bench/impls/impl_jasmin_avx2.a \
-		bench/impls/impl_c_ref.a \
+		bench/impls/impl_jasmin_$(ARCHITECTURE)_ref_$(PARAMETER_SET).a \
+		bench/impls/impl_jasmin_$(ARCHITECTURE)_avx2_$(PARAMETER_SET).a \
+		bench/impls/impl_c_ref_$(PARAMETER_SET).a \
 		-o $(BENCH) \
 		-no-pie \
 		$(LDFLAGS) $(LDLIBS) \
@@ -342,6 +340,5 @@ bench-all:
 			$(ARCHITECTURE)/avx2/active_params.jinc \
 			$(PARAM_HEADER) \
 			sphincsplus/ref/*.o \
-			bench/impls/*.a \
 			bench/slh_dsa_bench; \
 	done
