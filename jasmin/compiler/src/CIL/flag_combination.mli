@@ -1,0 +1,37 @@
+(* This prelude is added at extraction time. See lang/extraction.v. *)
+   [@@@ocaml.warning "-9-20-27-32-33-34-37-39-50-67"] (* End of prelude. *)
+
+open Operators
+open Wsize
+
+type combine_flags_core =
+| CFC_B
+| CFC_E
+| CFC_L
+| CFC_BE
+| CFC_LE
+
+val cf_tbl : combine_flags -> bool * combine_flags_core
+
+type flag_combination =
+| FCVar0
+| FCVar1
+| FCVar2
+| FCVar3
+| FCNot of flag_combination
+| FCAnd of flag_combination * flag_combination
+| FCOr of flag_combination * flag_combination
+| FCEq of flag_combination * flag_combination
+
+type coq_FlagCombinationParams =
+  combine_flags_core -> flag_combination
+  (* singleton inductive, whose constructor was Build_FlagCombinationParams *)
+
+val fc_sem :
+  ('a1 -> 'a1) -> ('a1 -> 'a1 -> 'a1) -> ('a1 -> 'a1 -> 'a1) -> ('a1 -> 'a1
+  -> 'a1) -> 'a1 -> 'a1 -> 'a1 -> 'a1 -> flag_combination -> 'a1
+
+val cf_xsem :
+  coq_FlagCombinationParams -> ('a1 -> 'a1) -> ('a1 -> 'a1 -> 'a1) -> ('a1 ->
+  'a1 -> 'a1) -> ('a1 -> 'a1 -> 'a1) -> 'a1 -> 'a1 -> 'a1 -> 'a1 ->
+  combine_flags -> 'a1
