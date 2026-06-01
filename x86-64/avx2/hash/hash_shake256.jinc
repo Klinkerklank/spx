@@ -1,55 +1,58 @@
 require "../adrs/adrs.jinc" // ADRS data structure
 
-// import the formosa-keccak SHAKE256 implementation
+// import a SHAKE256 implementation in which it is possible to manually set the state,
+// so we can combine manually writing fixed-size ptr reg arguments and the variable-sized 
+// reg u64 message and context strings
+// (used in H_msg and PRF_msg)
 from Keccak require "common/keccak1600_generic.jinc"
 from Keccak require "ref/select_bmi1.jinc"
 from Keccak require "ref/keccak1600.jinc"
-
-// import a SHAKE256 implementation in which it is possible to manually set the state,
-// so we can combine manually writer ptr reg arguments and the variable-sized reg u64
-// message and context strings
 require "shake256/keccak1600.jinc"
+
+// import the AVX2 SHAKE256 implementation
+// (used in PRF, F, H, T_len, and T_k)
+from Keccak require "avx2/keccak1600.jinc"
 
 // for single bytes
 namespace A_1 {
     param int _ASIZE = 1;
-    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    from Keccak require "avx2/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for separation byte and context length
 namespace A_2 {
     param int _ASIZE = 2;
-    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    from Keccak require "avx2/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for ADRS
 namespace A_32 {
     param int _ASIZE = 32;
-    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    from Keccak require "avx2/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for PK and SK elements, M_1, and output size of PRF, PRF_msg, F, H, T_len, and T_k
 namespace A_N {
     param int _ASIZE = SPX_N;
-    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    from Keccak require "avx2/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for output size of H_msg
 namespace A_M {
     param int _ASIZE = SPX_M;
-    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    from Keccak require "avx2/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for M_len
 namespace A_LENN {
     param int _ASIZE = SPX_LEN*SPX_N;
-    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    from Keccak require "avx2/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 // for M_k
 namespace A_KN {
     param int _ASIZE = SPX_K*SPX_N;
-    from Keccak require "ref/keccak1600_fixedsizes_ASIZE.jinc"
+    from Keccak require "avx2/keccak1600_fixedsizes_ASIZE.jinc"
 }
 
 inline
@@ -370,25 +373,23 @@ fn PRF(
     () = #spill(out); // only needed at the end of the function
     
     // register variables
-    reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
+    reg u256[7] st; // SHAKE256 state stack variable
 
     // stack variables
-    stack u64[25] st_s; // internal state of SHAKE256
     stack u8[32] adrs_bytes; // temporary variable for passing ADRS as a byte string
 
     // SHAKE256 state initialisation
-    st = st_s;
-    st = __state_init_ref(st);
+    st = __state_init_avx2();
     
     // absorb all inputs
-    st, _ =  A_N::__absorb_ref(st, 0,        pkseed,     UNFINISHED, R136); // absorb PK.seed
+    st, _ =  A_N::__absorb_avx2(st, 0,        pkseed,     UNFINISHED, R136); // absorb PK.seed
     adrs_bytes = __adrs_to_bytes(adrs_bytes, adrs);
-    st, _ = A_32::__absorb_ref(st, SPX_N,    adrs_bytes, UNFINISHED, R136); // absorb ADRS
-    st, _ =  A_N::__absorb_ref(st, SPX_N+32, skseed,     SHAKE,      R136); // absorb SK.seed
+    st, _ = A_32::__absorb_avx2(st, SPX_N,    adrs_bytes, UNFINISHED, R136); // absorb ADRS
+    st, _ =  A_N::__absorb_avx2(st, SPX_N+32, skseed,     SHAKE,      R136); // absorb SK.seed
 
     // squeeze to get the output
     () = #unspill(out);
-    _, out = A_N::__squeeze_ref(st, out, R136);
+    _, out = A_N::__squeeze_avx2(st, out, R136);
     
     return out;
 }
@@ -422,25 +423,23 @@ fn F(
     () = #spill(out); // only needed at the end of the function
     
     // register variables
-    reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
+    reg u256[7] st; // SHAKE256 state stack variable
 
     // stack variables
-    stack u64[25] st_s; // internal state of SHAKE256
     stack u8[32] adrs_bytes; // temporary variable for passing ADRS as a byte string
 
     // SHAKE256 state initialisation
-    st = st_s;
-    st = __state_init_ref(st);
+    st = __state_init_avx2();
     
     // absorb all inputs
-    st, _ =  A_N::__absorb_ref(st, 0,        pkseed,     UNFINISHED, R136); // absorb PK.seed
+    st, _ =  A_N::__absorb_avx2(st, 0,        pkseed,     UNFINISHED, R136); // absorb PK.seed
     adrs_bytes = __adrs_to_bytes(adrs_bytes, adrs);
-    st, _ = A_32::__absorb_ref(st, SPX_N,    adrs_bytes, UNFINISHED, R136); // absorb ADRS
-    st, _ =  A_N::__absorb_ref(st, SPX_N+32, out,        SHAKE,      R136); // absorb M_1
+    st, _ = A_32::__absorb_avx2(st, SPX_N,    adrs_bytes, UNFINISHED, R136); // absorb ADRS
+    st, _ =  A_N::__absorb_avx2(st, SPX_N+32, out,        SHAKE,      R136); // absorb M_1
 
     // squeeze to get the output
     () = #unspill(out);
-    _, out = A_N::__squeeze_ref(st, out, R136);
+    _, out = A_N::__squeeze_avx2(st, out, R136);
     
     return out;
 }
@@ -475,26 +474,24 @@ fn H(
     () = #spill(out); // only needed at the end of the function
     
     // register variables
-    reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
+    reg u256[7] st; // SHAKE256 state stack variable
 
     // stack variables
-    stack u64[25] st_s; // internal state of SHAKE256
     stack u8[32] adrs_bytes; // temporary variable for passing ADRS as a byte string
 
     // SHAKE256 state initialisation
-    st = st_s;
-    st = __state_init_ref(st);
+    st = __state_init_avx2();
     
     // absorb all inputs
-    st, _ =  A_N::__absorb_ref(st, 0,          pkseed,     UNFINISHED, R136); // absorb PK.seed
+    st, _ =  A_N::__absorb_avx2(st, 0,          pkseed,     UNFINISHED, R136); // absorb PK.seed
     adrs_bytes = __adrs_to_bytes(adrs_bytes, adrs);
-    st, _ = A_32::__absorb_ref(st, SPX_N,      adrs_bytes, UNFINISHED, R136); // absorb ADRS
-    st, _ =  A_N::__absorb_ref(st, SPX_N+32,   in1,        UNFINISHED, R136); // absorb M_2
-    st, _ =  A_N::__absorb_ref(st, 2*SPX_N+32, in2,        SHAKE,      R136); // absorb M_2
+    st, _ = A_32::__absorb_avx2(st, SPX_N,      adrs_bytes, UNFINISHED, R136); // absorb ADRS
+    st, _ =  A_N::__absorb_avx2(st, SPX_N+32,   in1,        UNFINISHED, R136); // absorb M_2
+    st, _ =  A_N::__absorb_avx2(st, 2*SPX_N+32, in2,        SHAKE,      R136); // absorb M_2
 
     // squeeze to get the output
     () = #unspill(out);
-    _, out = A_N::__squeeze_ref(st, out, R136);
+    _, out = A_N::__squeeze_avx2(st, out, R136);
     
     return out;
 }
@@ -530,25 +527,23 @@ fn T_len(
     () = #spill(out); // only needed at the end of the function
     
     // register variables
-    reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
+    reg u256[7] st; // SHAKE256 state stack variable
 
     // stack variables
-    stack u64[25] st_s; // internal state of SHAKE256
     stack u8[32] adrs_bytes; // temporary variable for passing ADRS as a byte string
 
     // SHAKE256 state initialisation
-    st = st_s;
-    st = __state_init_ref(st);
+    st = __state_init_avx2();
     
     // absorb all inputs
-    st, _ =    A_N::__absorb_ref(st, 0,        pkseed,     UNFINISHED, R136); // absorb PK.seed
+    st, _ =    A_N::__absorb_avx2(st, 0,        pkseed,     UNFINISHED, R136); // absorb PK.seed
     adrs_bytes = __adrs_to_bytes(adrs_bytes, adrs);
-    st, _ =   A_32::__absorb_ref(st, SPX_N,    adrs_bytes, UNFINISHED, R136); // absorb ADRS
-    st, _ = A_LENN::__absorb_ref(st, SPX_N+32, chains,     SHAKE,      R136); // absorb M_len
+    st, _ =   A_32::__absorb_avx2(st, SPX_N,    adrs_bytes, UNFINISHED, R136); // absorb ADRS
+    st, _ = A_LENN::__absorb_avx2(st, SPX_N+32, chains,     SHAKE,      R136); // absorb M_len
 
     // squeeze to get the output
     () = #unspill(out);
-    _, out = A_N::__squeeze_ref(st, out, R136);
+    _, out = A_N::__squeeze_avx2(st, out, R136);
     
     return out;
 }
@@ -583,25 +578,23 @@ fn T_k(
     () = #spill(out); // only needed at the end of the function
     
     // register variables
-    reg ptr u64[25] st; // pointer to SHAKE256 state stack variable
+    reg u256[7] st; // SHAKE256 state stack variable
 
     // stack variables
-    stack u64[25] st_s; // internal state of SHAKE256
     stack u8[32] adrs_bytes; // temporary variable for passing ADRS as a byte string
 
     // SHAKE256 state initialisation
-    st = st_s;
-    st = __state_init_ref(st);
+    st = __state_init_avx2();
     
     // absorb all inputs
-    st, _ =  A_N::__absorb_ref(st, 0,        pkseed,     UNFINISHED, R136); // absorb PK.seed
+    st, _ =  A_N::__absorb_avx2(st, 0,        pkseed,     UNFINISHED, R136); // absorb PK.seed
     adrs_bytes = __adrs_to_bytes(adrs_bytes, adrs);
-    st, _ = A_32::__absorb_ref(st, SPX_N,    adrs_bytes, UNFINISHED, R136); // absorb ADRS
-    st, _ = A_KN::__absorb_ref(st, SPX_N+32, roots,      SHAKE,      R136); // absorb M_k
+    st, _ = A_32::__absorb_avx2(st, SPX_N,    adrs_bytes, UNFINISHED, R136); // absorb ADRS
+    st, _ = A_KN::__absorb_avx2(st, SPX_N+32, roots,      SHAKE,      R136); // absorb M_k
 
     // squeeze to get the output
     () = #unspill(out);
-    _, out = A_N::__squeeze_ref(st, out, R136);
+    _, out = A_N::__squeeze_avx2(st, out, R136);
     
     return out;
 }
