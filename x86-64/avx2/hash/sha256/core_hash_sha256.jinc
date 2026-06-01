@@ -20,22 +20,28 @@ namespace sha256_mgf1_seed {
     require "sha256_array/sha256_array.jinc"
 }
 
+
+
 namespace sha256_tl_1n {
-    param int INLEN = SHA256_IN + 22 + SPX_N;
+    param int INLEN = 22 + SPX_N;
     require "sha256_array/sha256_array.jinc"
+    require "sha256_cache.jinc"
 }
 
 namespace sha256_tl_2n {
-    param int INLEN = SHA256_IN + 22 + 2*SPX_N;
+    param int INLEN = 22 + 2*SPX_N;
     require "sha256_array/sha256_array.jinc"
+    require "sha256_cache.jinc"
 }
 
 namespace sha256_compress_wots {
-    param int INLEN = SHA256_IN + 22 + SPX_LEN*SPX_N;
+    param int INLEN = 22 + SPX_LEN*SPX_N;
     require "sha256_array/sha256_array.jinc"
+    require "sha256_cache.jinc"
 }
 
 namespace sha256_compress_fors {
-    param int INLEN = SHA256_IN + 22 + SPX_K*SPX_N;
+    param int INLEN = 22 + SPX_K*SPX_N;
     require "sha256_array/sha256_array.jinc"
+    require "sha256_cache.jinc"
 }

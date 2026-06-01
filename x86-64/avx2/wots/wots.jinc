@@ -98,7 +98,8 @@ fn chain(
     reg u32 i,                // position in the chain
     reg u32 steps,            // number of hash evaluations to do
     reg ptr u8[SPX_N] pkseed, // PK.seed
-    reg ptr u32[8] adrs       // ADRS
+    reg ptr u32[8] adrs,      // ADRS
+    reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> out, adrs
 {
     // register variables
@@ -116,7 +117,7 @@ fn chain(
         () = #spill(pkseed, adrs, i, t); // free up space in the registers
 
         // compute (in-place) the hash of the previous chain value
-        out = __F(out, pkseed, adrs);
+        out = __F(out, pkseed, adrs, h_cache);
 
         () = #unspill(pkseed, adrs, i, t);
 
@@ -133,13 +134,14 @@ fn __chain(
     reg u32 i,                // position in the chain
     reg u32 steps,            // number of hash evaluations to do
     reg ptr u8[SPX_N] pkseed, // PK.seed
-    reg ptr u32[8] adrs       // ADRS
+    reg ptr u32[8] adrs,      // ADRS
+    reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> out, adrs
 {
     // split live-range of the parameters into two segments
-    out = out; i = i; steps = steps; pkseed = pkseed; adrs = adrs;
+    out = out; i = i; steps = steps; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
 
-    out, adrs = chain(out, i, steps, pkseed, adrs);
+    out, adrs = chain(out, i, steps, pkseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     out = out; adrs = adrs;
@@ -155,7 +157,8 @@ fn wots_pkgen(
     reg ptr u8[SPX_N] pk,     // out: WOTS+ public key
     reg ptr u8[SPX_N] skseed, // SK.seed
     reg ptr u8[SPX_N] pkseed, // PK.seed
-    reg ptr u32[8] adrs       // ADRS
+    reg ptr u32[8] adrs,      // ADRS
+    reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
     () = #spill(pk); // not needed until the end of the function
@@ -195,7 +198,7 @@ fn wots_pkgen(
         adrs_key = __adrs_set_chain_addr(adrs_key, cha);
 
         // compute the WOTS+ secret key value
-        chains[chain_addr : SPX_N] = __PRF(chains[chain_addr : SPX_N], pkseed, skseed, adrs_key);
+        chains[chain_addr : SPX_N] = __PRF(chains[chain_addr : SPX_N], pkseed, skseed, adrs_key, h_cache);
 
         () = #unspill(skseed, pkseed, idx_chain, chain_addr);
 
@@ -219,7 +222,7 @@ fn wots_pkgen(
         steps = SPX_W-1; // evaluate the entire hash chain to the last chain value (the public key value)
 
         // compute the WOTS+ public key value
-        chains[chain_addr : SPX_N], adrs = __chain(chains[chain_addr : SPX_N], start, steps, pkseed, adrs);
+        chains[chain_addr : SPX_N], adrs = __chain(chains[chain_addr : SPX_N], start, steps, pkseed, adrs, h_cache);
 
         () = #unspill(pkseed, idx_chain, chain_addr);
 
@@ -238,7 +241,7 @@ fn wots_pkgen(
 
     // compute the WOTS+ overall public key by hashing all public key chain values together
     () = #spill(adrs);
-    pk = __T_len(pk, pkseed, adrs_key, chains);
+    pk = __T_len(pk, pkseed, adrs_key, chains, h_cache);
     () = #unspill(adrs);
 
     return pk, adrs;
@@ -249,13 +252,14 @@ fn __wots_pkgen(
     reg ptr u8[SPX_N] pk,     // out: WOTS+ public key
     reg ptr u8[SPX_N] skseed, // SK.seed
     reg ptr u8[SPX_N] pkseed, // PK.seed
-    reg ptr u32[8] adrs       // ADRS
+    reg ptr u32[8] adrs,      // ADRS
+    reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk, adrs
 {
     // split live-range of the parameters into two segments
-    pk = pk; skseed = skseed; pkseed = pkseed; adrs = adrs;
+    pk = pk; skseed = skseed; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
 
-    pk, adrs = wots_pkgen(pk, skseed, pkseed, adrs);
+    pk, adrs = wots_pkgen(pk, skseed, pkseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     pk = pk; adrs = adrs;
@@ -272,7 +276,8 @@ fn wots_sign(
     reg ptr u8[SPX_N] m,           // message to sign (XMSS tree root or FORS public key)
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg ptr u8[SPX_N] pkseed,      // PK.seed
-    reg ptr u32[8] adrs            // ADRS
+    reg ptr u32[8] adrs,           // ADRS
+    reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig_wots, adrs
 {
     // stack variables
@@ -316,7 +321,7 @@ fn wots_sign(
         // compute the WOTS+ secret key value
         sk_wots = sig_wots[chain_addr : SPX_N]; // get the pointer to the subarray so the full array can be spilled
         () = #spill(sig_wots);
-        sk_wots = __PRF(sk_wots, pkseed, skseed, skadrs);
+        sk_wots = __PRF(sk_wots, pkseed, skseed, skadrs, h_cache);
         () = #unspill(sig_wots);
         sig_wots[chain_addr : SPX_N] = sk_wots; // redesignate the pointer so the region of the full array is not partial
 
@@ -345,7 +350,7 @@ fn wots_sign(
         // compute the WOTS+ signature value
         pk_wots = sig_wots[chain_addr : SPX_N]; // get the pointer to the subarray so the full array can be spilled
         () = #spill(sig_wots);
-        pk_wots, adrs = __chain(pk_wots, start, steps, pkseed, adrs);
+        pk_wots, adrs = __chain(pk_wots, start, steps, pkseed, adrs, h_cache);
         () = #unspill(sig_wots);
         sig_wots[chain_addr : SPX_N] = pk_wots; // redesignate the pointer so the region of the full array is not partial
 
@@ -364,13 +369,14 @@ fn __wots_sign(
     reg ptr u8[SPX_N] m,           // message to sign (XMSS tree root or FORS public key)
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg ptr u8[SPX_N] pkseed,      // PK.seed
-    reg ptr u32[8] adrs            // ADRS
+    reg ptr u32[8] adrs,           // ADRS
+    reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[WOTS_SIG], reg ptr u32[8] // -> sig_wots, adrs
 {
     // split live-range of the parameters into two segments
-    sig_wots = sig_wots; m = m; skseed = skseed; pkseed = pkseed; adrs = adrs;
+    sig_wots = sig_wots; m = m; skseed = skseed; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
 
-    sig_wots, adrs = wots_sign(sig_wots, m, skseed, pkseed, adrs);
+    sig_wots, adrs = wots_sign(sig_wots, m, skseed, pkseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     sig_wots = sig_wots; adrs = adrs;
@@ -388,7 +394,8 @@ fn wots_pkfromsig(
     reg ptr u8[WOTS_SIG] sig_wots, // WOTS+ signature
     reg ptr u8[SPX_N] m,           // message (XMSS root or FORS public key)
     reg ptr u8[SPX_N] pkseed,      // PK.seed
-    reg ptr u32[8] adrs            // ADRS
+    reg ptr u32[8] adrs,           // ADRS
+    reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_wots, adrs
 {
     () = #spill(pk_wots); // only needed at the end of this function
@@ -432,7 +439,7 @@ fn wots_pkfromsig(
         steps -= start;
 
         // compute the WOTS+ public key value from the signature value
-        sigvals[chain_addr : SPX_N], adrs = __chain(sigvals[chain_addr : SPX_N], start, steps, pkseed, adrs);
+        sigvals[chain_addr : SPX_N], adrs = __chain(sigvals[chain_addr : SPX_N], start, steps, pkseed, adrs, h_cache);
 
         () = #unspill(pkseed, idx_chain, chain_addr);
 
@@ -452,7 +459,7 @@ fn wots_pkfromsig(
 
     // compute the WOTS+ overall public key by hashing all public key chain values together
     () = #spill(adrs);
-    pk_wots = __T_len(pk_wots, pkseed, wotspkADRS, sigvals);
+    pk_wots = __T_len(pk_wots, pkseed, wotspkADRS, sigvals, h_cache);
     () = #unspill(adrs);
 
     return pk_wots, adrs;
@@ -464,13 +471,14 @@ fn __wots_pkfromsig(
     reg ptr u8[WOTS_SIG] sig_wots, // WOTS+ signature
     reg ptr u8[SPX_N] m,           // message (XMSS root or FORS public key)
     reg ptr u8[SPX_N] pkseed,      // PK.seed
-    reg ptr u32[8] adrs            // ADRS
+    reg ptr u32[8] adrs,           // ADRS
+    reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_wots, adrs
 {
     // split live-range of the parameters into two segments
-    pk_wots = pk_wots; sig_wots = sig_wots; m = m; pkseed = pkseed; adrs = adrs;
+    pk_wots = pk_wots; sig_wots = sig_wots; m = m; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
 
-    pk_wots, adrs = wots_pkfromsig(pk_wots, sig_wots, m, pkseed, adrs);
+    pk_wots, adrs = wots_pkfromsig(pk_wots, sig_wots, m, pkseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     pk_wots = pk_wots; adrs = adrs;

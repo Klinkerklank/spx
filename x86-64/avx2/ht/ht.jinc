@@ -51,7 +51,8 @@ fn ht_sign(
     reg ptr u8[SPX_N] skseed,  // SK.seed: secret seed
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
     reg ptr u32[3] tree,       // lowest-layer XMSS tree index
-    reg u32        leaf        // XMSS tree leaf index
+    reg u32        leaf,       // XMSS tree leaf index
+    reg ptr u8[96] h_cache     // cached SHA2 state
 ) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     // stack variables
@@ -79,13 +80,13 @@ fn ht_sign(
     // compute the lowest-layer XMSS signature on the FORS public key
     sig_xmss = sig_ht[0 : XMSS_SIG]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(sig_ht, skseed, pkseed, pk_fors, idx_leaf);
-    sig_xmss, adrs = __xmss_sign(sig_xmss, pk_fors, skseed, idx_leaf, pkseed, adrs);
+    sig_xmss, adrs = __xmss_sign(sig_xmss, pk_fors, skseed, idx_leaf, pkseed, adrs, h_cache);
     () = #unspill(sig_ht, skseed, pkseed, pk_fors, idx_leaf);
     sig_ht[0 : XMSS_SIG] = sig_xmss; // redesignate the pointer so the region of the full array is not partial
 
     // compute the lowest-layer XMSS tree root based on the first XMSS signature
     () = #spill(skseed, pkseed, sig_ht);
-    root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, pk_fors, pkseed, adrs);
+    root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, pk_fors, pkseed, adrs, h_cache);
     () = #unspill(skseed, pkseed, sig_ht);
 
     // iteratively compute the XMSS signatures that sign the root of the previous XMSS tree
@@ -109,7 +110,7 @@ fn ht_sign(
         // compute the XMSS signature on the previous XMSS tree's root
         sig_xmss = sig_ht[offset : XMSS_SIG]; // get the pointer to the subarray so the full array can be spilled
         () = #spill(sig_ht, pkseed, j, offset, idx_leaf);
-        sig_xmss, adrs = __xmss_sign(sig_xmss, root_prev, skseed, idx_leaf, pkseed, adrs);
+        sig_xmss, adrs = __xmss_sign(sig_xmss, root_prev, skseed, idx_leaf, pkseed, adrs, h_cache);
         () = #unspill(sig_ht, pkseed, j, offset, idx_leaf);
         sig_ht[offset : XMSS_SIG] = sig_xmss; // redesignate the pointer so the region of the full array is not partial
 
@@ -117,7 +118,7 @@ fn ht_sign(
         // in which case the root will be PK.root (which is not part of the signature)
         if (j < SPX_D-1) {
             () = #spill(pkseed, sig_ht, j, offset);
-            root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, root_prev, pkseed, adrs);
+            root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, root_prev, pkseed, adrs, h_cache);
             () = #unspill(pkseed, sig_ht, j, offset);
         }
 
@@ -137,13 +138,14 @@ fn __ht_sign(
     reg ptr u8[SPX_N] skseed,  // SK.seed: secret seed
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
     reg ptr u32[3] tree,       // lowest-layer XMSS tree index
-    reg u32        leaf        // XMSS tree leaf index
+    reg u32        leaf,       // XMSS tree leaf index
+    reg ptr u8[96] h_cache     // cached SHA2 state
 ) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     // split live-range of the input parameters into two segments
-    sig_ht = sig_ht; pk_fors = pk_fors; skseed = skseed; pkseed = pkseed; tree = tree; leaf = leaf;
+    sig_ht = sig_ht; pk_fors = pk_fors; skseed = skseed; pkseed = pkseed; tree = tree; leaf = leaf; h_cache = h_cache;
 
-    sig_ht = ht_sign(sig_ht, pk_fors, skseed, pkseed, tree, leaf);
+    sig_ht = ht_sign(sig_ht, pk_fors, skseed, pkseed, tree, leaf, h_cache);
 
     // split live-range of the output parameters into two segments
     sig_ht = sig_ht;
@@ -161,7 +163,8 @@ fn ht_verify(
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
     reg ptr u32[3] tree,       // lowest-layer XMSS tree index
     reg u32        leaf,       // XMSS tree leaf index
-    reg ptr u8[SPX_N] pkroot   // PK.root: hypertree root
+    reg ptr u8[SPX_N] pkroot,  // PK.root: hypertree root
+    reg ptr u8[96] h_cache     // cached SHA2 state
 ) -> reg u64 // -> Boolean whether the HT signature is correct w.r.t. PK.root
 {
     () = #spill(pkroot); // not needed until at the end of the function
@@ -195,7 +198,7 @@ fn ht_verify(
 
     // compute the lowest-layer XMSS tree root based on the first XMSS signature
     () = #spill(pkseed, sig_ht);
-    root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, pk_fors, pkseed, adrs);
+    root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, pk_fors, pkseed, adrs, h_cache);
     () = #unspill(pkseed, sig_ht);
 
     // iteratively compute the XMSS tree roots based on the XMSS signatures
@@ -221,7 +224,7 @@ fn ht_verify(
 
         // compute the current XMSS tree's root
         () = #spill(pkseed, sig_ht);
-        root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, root_prev, pkseed, adrs);
+        root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, root_prev, pkseed, adrs, h_cache);
         () = #unspill(pkseed, sig_ht);
 
         () = #unspill(j, offset);
@@ -246,14 +249,15 @@ fn __ht_verify(
     reg ptr u8[SPX_N] pkseed,  // PK.seed: public seed
     reg ptr u32[3] tree,       // lowest-layer XMSS tree index
     reg u32        leaf,       // XMSS tree leaf index
-    reg ptr u8[SPX_N] pkroot   // PK.root: hypertree root
+    reg ptr u8[SPX_N] pkroot,  // PK.root: hypertree root
+    reg ptr u8[96] h_cache     // cached SHA2 state
 ) -> reg u64 // -> Boolean whether the HT signature is correct w.r.t. PK.root
 {
     // split live-range of the input parameters into two segments
-    pk_fors = pk_fors; sig_ht = sig_ht; pkseed = pkseed; tree = tree; leaf = leaf; pkroot = pkroot;
+    pk_fors = pk_fors; sig_ht = sig_ht; pkseed = pkseed; tree = tree; leaf = leaf; pkroot = pkroot; h_cache = h_cache;
 
     reg u64 res;
-    res = ht_verify(pk_fors, sig_ht, pkseed, tree, leaf, pkroot);
+    res = ht_verify(pk_fors, sig_ht, pkseed, tree, leaf, pkroot, h_cache);
 
     // split live-range of the output parameters into two segments
     res = res;

@@ -53,7 +53,8 @@ fn xmss_node(
     reg u32 i,                // target node index (horizontal)
     reg u32 z,                // target node height
     reg ptr u8[SPX_N] pkseed, // PK.seed
-    reg ptr u32[8] adrs       // ADRS
+    reg ptr u32[8] adrs,      // ADRS
+    reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     () = #spill(root);
@@ -112,7 +113,7 @@ fn xmss_node(
                 node_addr *= SPX_N;     // byte address of node
 
                 // compute the WOTS+ public key
-                flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs);
+                flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, h_cache);
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
 
@@ -153,7 +154,7 @@ fn xmss_node(
 
                 // compute node value = H(PK.seed, ADRS, lnode || rnode)
                 () = #spill(adrs);
-                flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r);
+                flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r, h_cache);
                 () = #unspill(adrs);
             }
 
@@ -185,13 +186,14 @@ fn __xmss_node(
     reg u32 i,                // target node index (horizontal)
     reg u32 z,                // target node height
     reg ptr u8[SPX_N] pkseed, // PK.seed
-    reg ptr u32[8] adrs       // ADRS
+    reg ptr u32[8] adrs,      // ADRS
+    reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     // split live-range of the parameters into two segments
-    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs;
+    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
 
-    root, adrs = xmss_node(root, skseed, i, z, pkseed, adrs);
+    root, adrs = xmss_node(root, skseed, i, z, pkseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     root = root; adrs = adrs;
@@ -209,7 +211,8 @@ fn xmss_sign(
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg u32 idx,                   // WOTS+ leaf index to sign with
     reg ptr u8[SPX_N] pkseed,      // PK.seed
-    reg ptr u32[8] adrs            // ADRS
+    reg ptr u32[8] adrs,           // ADRS
+    reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
     () = #spill(m);
@@ -238,7 +241,7 @@ fn xmss_sign(
         // compute the sibling node
         auth_node = sig_xmss[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
         () = #spill(sig_xmss);
-        auth_node, adrs = __xmss_node(auth_node, skseed, k, j, pkseed, adrs);
+        auth_node, adrs = __xmss_node(auth_node, skseed, k, j, pkseed, adrs, h_cache);
         () = #unspill(sig_xmss);
         sig_xmss[offset : SPX_N] = auth_node; // redesignate the pointer so the region of the full array is not partial
 
@@ -261,7 +264,7 @@ fn xmss_sign(
     // compute the WOTS+ signature on the XMSS or FORS public key
     sig_wots = sig_xmss[0 : WOTS_SIG]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(sig_xmss);
-    sig_wots, adrs = __wots_sign(sig_wots, m, skseed, pkseed, adrs);
+    sig_wots, adrs = __wots_sign(sig_wots, m, skseed, pkseed, adrs, h_cache);
     () = #unspill(sig_xmss);
     sig_xmss[0 : WOTS_SIG] = sig_wots; // redesignate the pointer so the region of the full array is not partial
 
@@ -275,13 +278,14 @@ fn __xmss_sign(
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg u32 idx,                   // WOTS+ leaf index to sign with
     reg ptr u8[SPX_N] pkseed,      // PK.seed
-    reg ptr u32[8] adrs            // ADRS
+    reg ptr u32[8] adrs,           // ADRS
+    reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
     // split live-range of the parameters into two segments
-    sig_xmss = sig_xmss; m = m; skseed = skseed; idx = idx; pkseed = pkseed; adrs = adrs;
+    sig_xmss = sig_xmss; m = m; skseed = skseed; idx = idx; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
 
-    sig_xmss, adrs = xmss_sign(sig_xmss, m, skseed, idx, pkseed, adrs);
+    sig_xmss, adrs = xmss_sign(sig_xmss, m, skseed, idx, pkseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     sig_xmss = sig_xmss; adrs = adrs;
@@ -299,7 +303,8 @@ fn xmss_pkfromsig(
     reg ptr u8[XMSS_SIG] sig_xmss, // XMSS signature
     reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
     reg ptr u8[SPX_N] pkseed,      // PK.seed
-    reg ptr u32[8] adrs            // ADRS
+    reg ptr u32[8] adrs,           // ADRS
+    reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_xmss, adrs
 {
     () = #spill(pk_xmss); // only needed at the end of this function
@@ -328,7 +333,7 @@ fn xmss_pkfromsig(
 
     // compute the WOTS+ public key from the WOTS+ signature
     () = #spill(pkseed, idx, sig_xmss);
-    node0, adrs = __wots_pkfromsig(node0, sig_wots, m, pkseed, adrs);
+    node0, adrs = __wots_pkfromsig(node0, sig_wots, m, pkseed, adrs, h_cache);
     () = #unspill(pkseed, idx, sig_xmss);
 
     // set the correct values in ADRS for Merkle tree hashing
@@ -383,7 +388,7 @@ fn xmss_pkfromsig(
 
         // compute the parent node
         () = #spill(pkseed, adrs, idx, sig_xmss, offset);
-        node1 = __H(node1, pkseed, adrs, buf0, buf1);
+        node1 = __H(node1, pkseed, adrs, buf0, buf1, h_cache);
         () = #unspill(pkseed, adrs, idx, sig_xmss, offset);
 
         // save the parent node's value to become the next iteration's child node
@@ -412,13 +417,14 @@ fn __xmss_pkfromsig(
     reg ptr u8[XMSS_SIG] sig_xmss, // XMSS signature
     reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
     reg ptr u8[SPX_N] pkseed,      // PK.seed
-    reg ptr u32[8] adrs            // ADRS
+    reg ptr u32[8] adrs,           // ADRS
+    reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_xmss, adrs
 {
     // split live-range of the parameters into two segments
-    pk_xmss = pk_xmss; idx = idx; sig_xmss = sig_xmss; m = m; pkseed = pkseed; adrs = adrs;
+    pk_xmss = pk_xmss; idx = idx; sig_xmss = sig_xmss; m = m; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
 
-    pk_xmss, adrs = xmss_pkfromsig(pk_xmss, idx, sig_xmss, m, pkseed, adrs);
+    pk_xmss, adrs = xmss_pkfromsig(pk_xmss, idx, sig_xmss, m, pkseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     pk_xmss = pk_xmss; adrs = adrs;
