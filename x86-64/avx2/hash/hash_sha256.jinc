@@ -169,7 +169,6 @@ fn __PRF_msg(
 // PRF(PK.seed, SK.seed, ADRS) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || SK.seed))
 fn PRF(
     reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u8[SPX_N] skseed, // SK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[96] h_cache    // cached SHA2 state
@@ -182,8 +181,6 @@ fn PRF(
 
     // buffer for the output
     stack u8[SHA256_OUT] digest;
-
-    inline int i;
 
     // buf = ADRS^c
     buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
@@ -205,16 +202,15 @@ fn PRF(
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __PRF(
     reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u8[SPX_N] skseed, // SK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; pkseed = pkseed; skseed = skseed; adrs = adrs; h_cache = h_cache;
+    out = out; skseed = skseed; adrs = adrs; h_cache = h_cache;
 
-    out = PRF(out, pkseed, skseed, adrs, h_cache);
+    out = PRF(out, skseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -225,7 +221,6 @@ fn __PRF(
 // F(PK.seed, ADRS, M_1) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_1))
 fn F(
     reg ptr u8[SPX_N] out,    // both input and output (F is in-place)
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
@@ -235,8 +230,6 @@ fn F(
 
     // buffer for the output
     stack u8[SHA256_OUT] digest;
-
-    inline int i;
 
     // buf = ADRS^c
     buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
@@ -259,15 +252,14 @@ fn F(
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __F(
     reg ptr u8[SPX_N] out,    // both input and output (F is in-place)
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
+    out = out; adrs = adrs; h_cache = h_cache;
 
-    out = F(out, pkseed, adrs, h_cache);
+    out = F(out, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -278,7 +270,6 @@ fn __F(
 // H(PK.seed, ADRS, M_2) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_2))
 fn H(
     reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[SPX_N] in1,    // first part of the concatenation
     reg ptr u8[SPX_N] in2,    // second part of the concatenation
@@ -292,8 +283,6 @@ fn H(
 
     // buffer for the output
     stack u8[SHA256_OUT] digest;
-
-    inline int i;
 
     // buf = ADRS^c
     buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
@@ -316,7 +305,6 @@ fn H(
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H(
     reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[SPX_N] in1,    // first part of the concatenation
     reg ptr u8[SPX_N] in2,    // second part of the concatenation
@@ -324,9 +312,9 @@ fn __H(
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; pkseed = pkseed; adrs = adrs; in1 = in1; in2 = in2; h_cache = h_cache;
+    out = out; adrs = adrs; in1 = in1; in2 = in2; h_cache = h_cache;
 
-    out = H(out, pkseed, adrs, in1, in2, h_cache);
+    out = H(out, adrs, in1, in2, h_cache);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -337,7 +325,6 @@ fn __H(
 // T_len(PK.seed, ADRS, M_len) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_len))
 fn T_len(
     reg ptr u8[SPX_N] out,            // output: buffer the result gets written to
-    reg ptr u8[SPX_N] pkseed,         // PK.seed
     reg ptr u32[8] adrs,              // ADRS
     reg ptr u8[SPX_LEN*SPX_N] chains, // concatenation of all chain end values in a WOTS instance
     reg ptr u8[96] h_cache            // cached SHA2 state
@@ -375,16 +362,15 @@ fn T_len(
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __T_len(
     reg ptr u8[SPX_N] out,            // output: buffer the result gets written to
-    reg ptr u8[SPX_N] pkseed,         // PK.seed
     reg ptr u32[8] adrs,              // ADRS
     reg ptr u8[SPX_LEN*SPX_N] chains, // concatenation of all chain end values in a WOTS instance
     reg ptr u8[96] h_cache            // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; pkseed = pkseed; adrs = adrs; chains = chains; h_cache = h_cache;
+    out = out; adrs = adrs; chains = chains; h_cache = h_cache;
 
-    out = T_len(out, pkseed, adrs, chains, h_cache);
+    out = T_len(out, adrs, chains, h_cache);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -395,7 +381,6 @@ fn __T_len(
 // T_k(PK.seed, ADRS, M_k) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_k))
 fn T_k(
     reg ptr u8[SPX_N] out,         // output: buffer the result gets written to
-    reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[SPX_K*SPX_N] roots, // concatenation of all roots in a FORS forest
     reg ptr u8[96] h_cache         // cached SHA2 state
@@ -433,16 +418,15 @@ fn T_k(
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __T_k(
     reg ptr u8[SPX_N] out,         // output: buffer the result gets written to
-    reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[SPX_K*SPX_N] roots, // concatenation of all roots in a FORS forest
     reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; pkseed = pkseed; adrs = adrs; roots = roots; h_cache = h_cache;
+    out = out; adrs = adrs; roots = roots; h_cache = h_cache;
 
-    out = T_k(out, pkseed, adrs, roots, h_cache);
+    out = T_k(out, adrs, roots, h_cache);
 
     // split live-range of the output parameters into two segments
     out = out;

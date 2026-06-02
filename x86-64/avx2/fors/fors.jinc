@@ -60,7 +60,6 @@ fn __forest_label(
 fn fors_skgen(
     reg ptr u8[SPX_N] sk,     // output: FORS secret key value
     reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg u32 idx,              // secret key index
     reg ptr u8[96] h_cache    // cached SHA2 state
@@ -84,7 +83,7 @@ fn fors_skgen(
     skadrs = __adrs_set_tree_index(skadrs, idx);
 
     // compute the secret key value
-    sk = __PRF(sk, pkseed, skseed, skadrs, h_cache);
+    sk = __PRF(sk, skseed, skadrs, h_cache);
 
     return sk;
 }
@@ -93,16 +92,15 @@ inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin co
 fn __fors_skgen(
     reg ptr u8[SPX_N] sk,     // output: FORS secret key value
     reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg u32 idx,              // secret key index
     reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> sk
 {
     // split live-range of the parameters into two segments
-    sk = sk; skseed = skseed; pkseed = pkseed; adrs = adrs; idx = idx; h_cache = h_cache;
+    sk = sk; skseed = skseed; adrs = adrs; idx = idx; h_cache = h_cache;
 
-    sk = fors_skgen(sk, skseed, pkseed, adrs, idx, h_cache);
+    sk = fors_skgen(sk, skseed, adrs, idx, h_cache);
 
     // split live-range of the output parameters into two segments
     sk = sk;
@@ -120,7 +118,6 @@ fn fors_node(
     reg ptr u8[SPX_N] skseed, // SK.seed
     reg u32 i,                // target node index (horizontal)
     reg u32 z,                // target node height
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
@@ -183,14 +180,14 @@ fn fors_node(
                 node_addr *= SPX_N; // node_addr = forest_label(node, layer) * SPX_N
 
                 // compute the FORS secret key value
-                () = #spill(pkseed, adrs, i, layer, node, node_addr);
-                flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, pkseed, adrs, node, h_cache);
-                () = #unspill(pkseed, adrs, i, layer, node, node_addr);
+                () = #spill(adrs, i, layer, node, node_addr, h_cache);
+                flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, adrs, node, h_cache);
+                () = #unspill(adrs, i, layer, node, node_addr, h_cache);
 
                 // compute the hash of the FORS secret key value
-                () = #spill(pkseed, adrs, i, layer, node, node_addr);
-                flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], pkseed, adrs, h_cache);
-                () = #unspill(pkseed, adrs, i, layer, node, node_addr);
+                () = #spill(adrs, i, layer, node, node_addr, h_cache);
+                flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], adrs, h_cache);
+                () = #unspill(adrs, i, layer, node, node_addr, h_cache);
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
 
@@ -231,9 +228,9 @@ fn fors_node(
                 node_addr *= SPX_N; // node_addr = forest_label(node, layer) * SPX_N
 
                 // compute node value = H(PK.seed, ADRS, lnode || rnode)
-                () = #spill(pkseed, adrs, i, layer, node);
-                flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], pkseed, adrs, buf_l, buf_r, h_cache);
-                () = #unspill(pkseed, adrs, i, layer, node);
+                () = #spill(adrs, i, layer, node, h_cache);
+                flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], adrs, buf_l, buf_r, h_cache);
+                () = #unspill(adrs, i, layer, node, h_cache);
             }
 
             () = #unspill(skseed, rightmost);
@@ -263,15 +260,14 @@ fn __fors_node(
     reg ptr u8[SPX_N] skseed, // SK.seed
     reg u32 i,                // target node index (horizontal)
     reg u32 z,                // target node height
-    reg ptr u8[SPX_N] pkseed, // PK.seed
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[96] h_cache    // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     // split live-range of the parameters into two segments
-    root = root; skseed = skseed; i = i; z = z; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
+    root = root; skseed = skseed; i = i; z = z; adrs = adrs; h_cache = h_cache;
 
-    root, adrs = fors_node(root, skseed, i, z, pkseed, adrs, h_cache);
+    root, adrs = fors_node(root, skseed, i, z, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     root = root; adrs = adrs;
@@ -287,7 +283,6 @@ fn fors_sign(
     reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
     reg ptr u8[SPX_MD_LEN] md,     // message digest
     reg ptr u8[SPX_N] skseed,      // SK.seed
-    reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
@@ -321,9 +316,9 @@ fn fors_sign(
 
         // compute the i-th FORS tree's secret key value
         node = sig_fors[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
-        () = #spill(skseed, pkseed, adrs, sig_fors, i, offset);
-        node = __fors_skgen(node, skseed, pkseed, adrs, idx_leaf, h_cache);
-        () = #unspill(skseed, pkseed, adrs, sig_fors, i, offset);
+        () = #spill(skseed, adrs, sig_fors, i, offset, h_cache);
+        node = __fors_skgen(node, skseed, adrs, idx_leaf, h_cache);
+        () = #unspill(skseed, adrs, sig_fors, i, offset, h_cache);
         sig_fors[offset : SPX_N] = node; // redesignate the pointer so the region of the full array is not partial
 
         offset += SPX_N; // one n-byte secret key value has been written
@@ -335,7 +330,7 @@ fn fors_sign(
         // compute and store the authentication path AUTH for the i-th tree in the forest
         j = 0; // iterator over the authentication path nodes
         while (j < SPX_A) {
-            () = #spill(skseed, pkseed, i, j, offset, s);
+            () = #spill(skseed, i, j, offset, s);
 
             // the leftmost leaf in the i-th FORS tree then is i*2^(a-j)
             exp = SPX_A; // exp = a
@@ -347,12 +342,12 @@ fn fors_sign(
 
             // compute the sibling node
             node = sig_fors[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
-            () = #spill(sig_fors);
-            node, adrs = __fors_node(node, skseed, idx_sib, j, pkseed, adrs, h_cache);
-            () = #unspill(sig_fors);
+            () = #spill(sig_fors, h_cache);
+            node, adrs = __fors_node(node, skseed, idx_sib, j, adrs, h_cache);
+            () = #unspill(sig_fors, h_cache);
             sig_fors[offset : SPX_N] = node; // redesignate the pointer so the region of the full array is not partial
 
-            () = #unspill(skseed, pkseed, i, j, offset, s);
+            () = #unspill(skseed, i, j, offset, s);
 
             // update the sibling node's horizontal index for the next iteration
             s >>= 1; // s = floor(indices[i] / 2^j)
@@ -374,15 +369,14 @@ fn __fors_sign(
     reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
     reg ptr u8[SPX_MD_LEN] md,     // message digest
     reg ptr u8[SPX_N] skseed,      // SK.seed
-    reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
 {
     // split live-range of the parameters into two segments
-    sig_fors = sig_fors; md = md; skseed = skseed; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
+    sig_fors = sig_fors; md = md; skseed = skseed; adrs = adrs; h_cache = h_cache;
 
-    sig_fors, adrs = fors_sign(sig_fors, md, skseed, pkseed, adrs, h_cache);
+    sig_fors, adrs = fors_sign(sig_fors, md, skseed, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     sig_fors = sig_fors; adrs = adrs;
@@ -398,7 +392,6 @@ fn fors_pkfromsig(
     reg ptr u8[SPX_N] pk_fors,     // output: compressed FORS public key
     reg ptr u8[FORS_SIG] sig_fors, // FORS signature
     reg ptr u8[SPX_MD_LEN] md,     // message digest
-    reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_fors, adrs
@@ -453,9 +446,9 @@ fn fors_pkfromsig(
         adrs = __adrs_set_tree_index(adrs, idx_leaf);
 
         // compute the hash of the FORS secret key value
-        () = #spill(pkseed, adrs, sig_fors, i, offset);
-        node0 = __F(node0, pkseed, adrs, h_cache);
-        () = #unspill(pkseed, adrs, sig_fors, i, offset);
+        () = #spill(adrs, sig_fors, i, offset);
+        node0 = __F(node0, adrs, h_cache);
+        () = #unspill(adrs, sig_fors, i, offset);
 
         offset += SPX_N; // one n-byte secret key value has been consumed
 
@@ -503,9 +496,9 @@ fn fors_pkfromsig(
             }
 
             // compute the parent node
-            () = #spill(pkseed, adrs, sig_fors, i, offset);
-            node1 = __H(node1, pkseed, adrs, buf0, buf1, h_cache);
-            () = #unspill(pkseed, adrs, sig_fors, i, offset);
+            () = #spill(adrs, sig_fors, i, offset, h_cache);
+            node1 = __H(node1, adrs, buf0, buf1, h_cache);
+            () = #unspill(adrs, sig_fors, i, offset, h_cache);
 
             // save the parent node's value to become the next iteration's child node
             node0 = __copy_nbytes(node0, node1);
@@ -538,7 +531,7 @@ fn fors_pkfromsig(
 
     () = #unspill(pk_fors);
 
-    pk_fors = __T_k(pk_fors, pkseed, forspkadrs, roots, h_cache);
+    pk_fors = __T_k(pk_fors, forspkadrs, roots, h_cache);
 
     return pk_fors, adrs;
 }
@@ -548,15 +541,14 @@ fn __fors_pkfromsig(
     reg ptr u8[SPX_N] pk_fors,     // output: compressed FORS public key
     reg ptr u8[FORS_SIG] sig_fors, // FORS signature
     reg ptr u8[SPX_MD_LEN] md,     // message digest
-    reg ptr u8[SPX_N] pkseed,      // PK.seed
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[96] h_cache         // cached SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_fors, adrs
 {
     // split live-range of the parameters into two segments
-    pk_fors = pk_fors; sig_fors = sig_fors; md = md; pkseed = pkseed; adrs = adrs; h_cache = h_cache;
+    pk_fors = pk_fors; sig_fors = sig_fors; md = md; adrs = adrs; h_cache = h_cache;
 
-    pk_fors, adrs = fors_pkfromsig(pk_fors, sig_fors, md, pkseed, adrs, h_cache);
+    pk_fors, adrs = fors_pkfromsig(pk_fors, sig_fors, md, adrs, h_cache);
 
     // split live-range of the output parameters into two segments
     pk_fors = pk_fors; adrs = adrs;

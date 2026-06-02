@@ -130,6 +130,14 @@ fn slh_keygen_internal_(
     skseed = sk[0*SPX_N : SPX_N];
     pkseed = sk[2*SPX_N : SPX_N];
 
+    // compute the SHA256 state after consuming exactly one block of input,
+    // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
+    // with any differences only being present in the second block onwards
+    () = #spill(sk, pk, skseed, pkseed);
+    h_cache = sha256_firstblock::sha256_initH_cache(h_cache, pkseed);
+    // h_cache = sha512_firstblock::sha512_initH_cache(h_cache, pkseed);
+    () = #unspill(sk, pk, skseed, pkseed);
+
     // initialise ADRS to the all-zero string
     adrs = __adrs_init(adrs);
 
@@ -142,15 +150,9 @@ fn slh_keygen_internal_(
     i = 0;
     z = SPX_H_PRIME;
 
-    // compute the SHA256 state after consuming exactly one block of input,
-    // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
-    // with any differences only being present in the second block onwards
-    h_cache = sha256_firstblock::sha256_initH_cache(h_cache, pkseed);
-    // h_cache = sha512_firstblock::sha512_initH_cache(h_cache, pkseed);
-
     pkroot = sk[3*SPX_N : SPX_N]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(sk, pk);
-    pkroot, adrs = __xmss_node(pkroot, skseed, i, z, pkseed, adrs, h_cache);
+    pkroot, adrs = __xmss_node(pkroot, skseed, i, z, adrs, h_cache);
     () = #unspill(sk, pk);
     sk[3*SPX_N : SPX_N] = pkroot; // redesignate the pointer so the region of the full array is not partial
 
@@ -285,26 +287,28 @@ fn slh_sign_internal_(
     // compute the SHA256 state after consuming exactly one block of input,
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
+    () = #spill(skseed, sig_slh, md, idx_leaf);
     h_cache = sha256_firstblock::sha256_initH_cache(h_cache, pkseed);
     // h_cache = sha512_firstblock::sha512_initH_cache(h_cache, pkseed);
+    () = #unspill(skseed, sig_slh, md, idx_leaf);
 
     // compute the FORS signature
     sig_fors = sig_slh[SPX_N : FORS_SIG]; // get the pointer to the subarray so the full array can be spilled
-    () = #spill(skseed, pkseed, sig_slh, md, idx_leaf);
-    sig_fors, adrs = __fors_sign(sig_fors, md, skseed, pkseed, adrs, h_cache);
-    () = #unspill(skseed, pkseed, sig_slh, md, idx_leaf);
+    () = #spill(skseed, sig_slh, md, idx_leaf);
+    sig_fors, adrs = __fors_sign(sig_fors, md, skseed, adrs, h_cache);
+    () = #unspill(skseed, sig_slh, md, idx_leaf);
     sig_slh[SPX_N : FORS_SIG] = sig_fors; // redesignate the pointer so the region of the full array is not partial
 
     // compute the FORS public key based on the FORS signature
-    () = #spill(skseed, pkseed, sig_slh, idx_leaf);
-    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, pkseed, adrs, h_cache);
-    () = #unspill(skseed, pkseed, sig_slh, idx_leaf);
+    () = #spill(skseed, sig_slh, idx_leaf);
+    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, adrs, h_cache);
+    () = #unspill(skseed, sig_slh, idx_leaf);
 
     // compute the hypertree signature on the FORS public key
     sig_ht = sig_slh[SPX_N + FORS_SIG : HT_SIG]; // get the pointer to the subarray so the full array can be spilled
-    () = #spill(skseed, pkseed, sig_slh);
-    sig_ht = __ht_sign(sig_ht, pk_fors, skseed, pkseed, idx_tree, idx_leaf, h_cache);
-    () = #unspill(skseed, pkseed, sig_slh);
+    () = #spill(skseed, sig_slh);
+    sig_ht = __ht_sign(sig_ht, pk_fors, skseed, idx_tree, idx_leaf, h_cache);
+    () = #unspill(skseed, sig_slh);
     sig_slh[SPX_N + FORS_SIG : HT_SIG] = sig_ht; // redesignate the pointer so the region of the full array is not partial
 
     res = 0; // set return value to 0 (successful)
@@ -419,22 +423,24 @@ fn slh_verify_internal_(
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_FORS_TREE);
     adrs = __adrs_set_key_pair_addr(adrs, idx_leaf); // Leaf index of the XMSS tree that will sign the FORS public key
 
-    // extract the FORS signature from the overall signature
-    sig_fors = sig_slh[SPX_N : FORS_SIG];
-
     // compute the SHA256 state after consuming exactly one block of input,
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
+    () = #spill(pkroot, sig_slh, idx_leaf);
     h_cache = sha256_firstblock::sha256_initH_cache(h_cache, pkseed);
     // h_cache = sha512_firstblock::sha512_initH_cache(h_cache, pkseed);
+    () = #unspill(pkroot, sig_slh, idx_leaf);
+
+    // extract the FORS signature from the overall signature
+    sig_fors = sig_slh[SPX_N : FORS_SIG];
 
     // compute the FORS public key based on the FORS signature
-    () = #spill(pkseed, pkroot, sig_slh, idx_leaf);
-    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, pkseed, adrs, h_cache);
-    () = #unspill(pkseed, pkroot, sig_slh, idx_leaf);
+    () = #spill(pkroot, sig_slh, idx_leaf);
+    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, adrs, h_cache);
+    () = #unspill(pkroot, sig_slh, idx_leaf);
 
     // verify the hypertree signature on the FORS public key
-    res = __ht_verify(pk_fors, sig_slh[SPX_N + FORS_SIG : HT_SIG], pkseed, idx_tree, idx_leaf, pkroot, h_cache);
+    res = __ht_verify(pk_fors, sig_slh[SPX_N + FORS_SIG : HT_SIG], idx_tree, idx_leaf, pkroot, h_cache);
 
     return res;
 }
