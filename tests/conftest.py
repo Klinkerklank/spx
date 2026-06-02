@@ -8,7 +8,7 @@ def pytest_addoption(parser):
         "--parameter-set",
         action="store",
         default="sha2-128f",
-        help="SLH_DSA parameter set example: sha2-128f",
+        help="SLH_DSA parameter sets: [sha2/shake]-[128/192/256][s/f]",
         choices=("sha2-128s", "sha2-128f", "sha2-192s", "sha2-192f", "sha2-256s", "sha2-256f", "shake-128s", "shake-128f", "shake-192s", "shake-192f", "shake-256s", "shake-256f"),
     )
     parser.addoption(
@@ -22,7 +22,7 @@ def pytest_addoption(parser):
         "--implementation-type",
         action="store",
         default="ref",
-        help="Implementation type: ref",
+        help="Implementation types: ref, avx2",
         choices=("ref", "avx2"),
     )
 

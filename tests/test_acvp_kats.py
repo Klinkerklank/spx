@@ -12,7 +12,7 @@ def kats(slh_dsa):
         return json.load(kats_raw)
 
 
-def test_against_cref_kats(slh_dsa, kats):
+def test_against_acvp_kats(slh_dsa, kats):
     for kat in kats:
         if kat["mode"] == "keyGen":
             # Key generation
