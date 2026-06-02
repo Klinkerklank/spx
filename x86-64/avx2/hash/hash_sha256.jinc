@@ -341,7 +341,7 @@ fn T_len(
     inline int i;
 
     // buf = ADRS^c
-    buf[SHA256_IN : 22] = __adrs_compress(buf[SHA256_IN : 22], adrs);
+    buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
 
     // buf = ADRS^c || M_len
     for i=0 to SPX_LEN {

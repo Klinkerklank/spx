@@ -133,10 +133,10 @@ fn slh_keygen_internal_(
     // compute the SHA256 state after consuming exactly one block of input,
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
-    () = #spill(sk, pk, skseed, pkseed);
+    () = #spill(sk, pk, skseed);
     h_cache = sha256_firstblock::sha256_initH_cache(h_cache, pkseed);
     // h_cache = sha512_firstblock::sha512_initH_cache(h_cache, pkseed);
-    () = #unspill(sk, pk, skseed, pkseed);
+    () = #unspill(sk, pk, skseed);
 
     // initialise ADRS to the all-zero string
     adrs = __adrs_init(adrs);

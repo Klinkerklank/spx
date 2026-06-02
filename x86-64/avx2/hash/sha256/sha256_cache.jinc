@@ -40,14 +40,16 @@ fn sha256_cached(reg ptr u8[32] out, reg ptr u8[INLEN] in, reg ptr u8[96] Hc) ->
     bits += SHA256_IN; // add the number of bytes that were processed to get the cached state Hc
     bits <<= 3;
     () = #spill(bits);
-
-    // set the state to the cached state
-    for i=0 to 8 {
-        H[i] = Hc[:u32 i];
-    }
     
-    () = #spill(in);
     Hp = H;
+
+    // set the state pointer to the cached state
+    for i=0 to 8 {
+        // Hp[i] = 0;
+        Hp[i] = Hc[:u32 i];
+    }
+
+    () = #spill(in);
     Hp, offset = _blocks_0_ref_array(Hp, in);
 
     () = #unspill(in, bits);
