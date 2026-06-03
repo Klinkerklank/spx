@@ -1,27 +1,3 @@
-// require "../../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
-
-fn sha256_initH_cache(reg ptr u8[96] Hc, reg ptr u8[SPX_N] pkseed) -> reg ptr u8[96]
-{
-    stack u32[8] H;
-    stack u8[INLEN] block;
-    reg ptr u32[8] Hp;
-    inline int i;
-
-    for i=0 to INLEN/8 { block[:u64 i] = 0; }
-
-    for i=0 to SPX_N { block[i] = pkseed[i]; }
-    // block[0 : SPX_N] = __copy_nbytes(block[0 : SPX_N], pkseed);
-
-    H = __initH_ref();
-    
-    Hp = H;
-    Hp, _ = _blocks_0_ref_array(Hp, block);
-
-    for i=0 to 8 { Hc[:u32 i] = Hp[i]; }
-
-    return Hc;
-}
-
 // OBS: This function does not have the INLEN parameter defined
 // It needs to be instantiated w/ namespaces 
 fn sha256_cached(reg ptr u8[32] out, reg ptr u8[INLEN] in, reg ptr u8[96] Hc) -> reg ptr u8[32]
@@ -45,7 +21,6 @@ fn sha256_cached(reg ptr u8[32] out, reg ptr u8[INLEN] in, reg ptr u8[96] Hc) ->
 
     // set the state pointer to the cached state
     for i=0 to 8 {
-        // Hp[i] = 0;
         Hp[i] = Hc[:u32 i];
     }
 

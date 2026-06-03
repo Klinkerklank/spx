@@ -11,18 +11,6 @@ require "../xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS: eXtended Merkle Sign
 require "../ht/ht.jinc"     // algorithms 12-13 of SLH-DSS: HyperTree
 require "../fors/fors.jinc" // algorithms 14-17 of SLH-DSS: Forest Of Random Subsets
 
-namespace sha256_firstblock {
-    param int INLEN = SHA256_IN;
-    require "../hash/sha256/sha256_array/sha256_array.jinc"
-    require "../hash/sha256/sha256_cache.jinc"
-}
-
-// namespace sha512_firstblock {
-//     param int INLEN = SHA512_IN;
-//     require "../hash/sha512/sha512_array/sha512_array.jinc"
-//     require "../hash/sha512/sha512_cache.jinc"
-// }
-
 /////////////////////// HELPER FUNCTIONS ///////////////////////
 
 // turn byte arrays representing idx_tree and idx_leaf into registers
@@ -134,8 +122,7 @@ fn slh_keygen_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(sk, pk, skseed);
-    h_cache = sha256_firstblock::sha256_initH_cache(h_cache, pkseed);
-    // h_cache = sha512_firstblock::sha512_initH_cache(h_cache, pkseed);
+    h_cache = init_cache(h_cache, pkseed);
     () = #unspill(sk, pk, skseed);
 
     // initialise ADRS to the all-zero string
@@ -288,8 +275,7 @@ fn slh_sign_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(skseed, sig_slh, md, idx_leaf);
-    h_cache = sha256_firstblock::sha256_initH_cache(h_cache, pkseed);
-    // h_cache = sha512_firstblock::sha512_initH_cache(h_cache, pkseed);
+    h_cache = init_cache(h_cache, pkseed);
     () = #unspill(skseed, sig_slh, md, idx_leaf);
 
     // compute the FORS signature
@@ -427,8 +413,7 @@ fn slh_verify_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(pkroot, sig_slh, idx_leaf);
-    h_cache = sha256_firstblock::sha256_initH_cache(h_cache, pkseed);
-    // h_cache = sha512_firstblock::sha512_initH_cache(h_cache, pkseed);
+    h_cache = init_cache(h_cache, pkseed);
     () = #unspill(pkroot, sig_slh, idx_leaf);
 
     // extract the FORS signature from the overall signature
