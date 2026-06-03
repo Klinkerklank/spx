@@ -20,22 +20,28 @@ namespace sha512_mgf1_seed {
     require "sha512_array/sha512_array.jinc"
 }
 
+
+
 namespace sha512_tl_1n {
-    param int INLEN = SHA512_IN + 22 + SPX_N;
+    param int INLEN = 22 + SPX_N;
     require "sha512_array/sha512_array.jinc"
+    require "sha512_cache/sha512_cache_hash.jinc"
 }
 
 namespace sha512_tl_2n {
-    param int INLEN = SHA512_IN + 22 + 2*SPX_N;
+    param int INLEN = 22 + 2*SPX_N;
     require "sha512_array/sha512_array.jinc"
+    require "sha512_cache/sha512_cache_hash.jinc"
 }
 
 namespace sha512_compress_wots {
-    param int INLEN = SHA512_IN + 22 + SPX_LEN*SPX_N;
+    param int INLEN = 22 + SPX_LEN*SPX_N;
     require "sha512_array/sha512_array.jinc"
+    require "sha512_cache/sha512_cache_hash.jinc"
 }
 
 namespace sha512_compress_fors {
-    param int INLEN = SHA512_IN + 22 + SPX_K*SPX_N;
+    param int INLEN = 22 + SPX_K*SPX_N;
     require "sha512_array/sha512_array.jinc"
+    require "sha512_cache/sha512_cache_hash.jinc"
 }
