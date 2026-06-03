@@ -58,6 +58,7 @@ param int SPX_ADRS_TYPE_WOTS_PRF   = 5;
 param int SPX_ADRS_TYPE_FORS_PRF   = 6;
 
 // SHA2 parameters
+param int SHA2_VERSION  = 512;
 param int SHA256_IN  = 64;
 param int SHA256_OUT = 32;
 param int SHA512_IN  = 128;
