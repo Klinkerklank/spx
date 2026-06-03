@@ -19,16 +19,16 @@ fn sha512_cached(reg ptr u8[64] out, reg ptr u8[INLEN] in, reg ptr u8[96] Hc) ->
     
     Hp = H;
 
-    // set the state to the cached state
+    // set the state pointer to the cached state
     for i=0 to 8 {
-        H[i] = Hc[:u64 4 + i];
+        Hp[i] = Hc[:u64 4 + i];
     }
     
     () = #spill(in);
     Hp, offset = _SHA512_blocks_0_ref_array(Hp, in);
 
     () = #unspill(in, bits);
-    inlen = INLEN % 64;
+    inlen = INLEN % 128;
     sblocks, nblocks = __SHA512_lastblocks_ref_array(in, inlen, offset, bits);
     sblocksp = sblocks;
     Hp, _ = _SHA512_blocks_1_ref(Hp, sblocksp, nblocks);
