@@ -62,42 +62,50 @@ clean:
 
 # set the correct values of SPX_N and SPX_SIG_BYTES
 ifneq (,$(filter %128f,$(PARAMETER_SET)))
-  SPX_N = 16
-  SPX_SIG_BYTES = 17088
+    SPX_N = 16
+    SPX_SIG_BYTES = 17088
 endif
 ifneq (,$(filter %128s,$(PARAMETER_SET)))
-  SPX_N = 16
-  SPX_SIG_BYTES = 7856
+    SPX_N = 16
+    SPX_SIG_BYTES = 7856
 endif
 ifneq (,$(filter %192f,$(PARAMETER_SET)))
-  SPX_N = 24
-  SPX_SIG_BYTES = 35664
+    SPX_N = 24
+    SPX_SIG_BYTES = 35664
 endif
 ifneq (,$(filter %192s,$(PARAMETER_SET)))
-  SPX_N = 24
-  SPX_SIG_BYTES = 16224
+    SPX_N = 24
+    SPX_SIG_BYTES = 16224
 endif
 ifneq (,$(filter %256f,$(PARAMETER_SET)))
-  SPX_N = 32
-  SPX_SIG_BYTES = 49856
+    SPX_N = 32
+    SPX_SIG_BYTES = 49856
 endif
 ifneq (,$(filter %256s,$(PARAMETER_SET)))
-  SPX_N = 32
-  SPX_SIG_BYTES = 29792
+    SPX_N = 32
+    SPX_SIG_BYTES = 29792
 endif
 
 # select the correct hash function implementation file,
 # relative to the implementation folder
 ifneq (,$(filter sha2-128s sha2-128f,$(PARAMETER_SET)))
-  HASH_IMPL = hash/hash_sha256.jinc
-  CACHE_IMPL = hash/sha256/sha256_cache/sha256_cache.jinc
+    HASH_IMPL = hash/hash_sha256.jinc
+    CACHE_IMPL = hash/sha256/sha256_cache/sha256_cache.jinc
+    SPX_IMPL = spx/spx_sha2.jinc
 endif
 ifneq (,$(filter sha2-192s sha2-192f sha2-256s sha2-256f,$(PARAMETER_SET)))
-  HASH_IMPL = hash/hash_sha512.jinc
-  CACHE_IMPL = hash/sha512/sha512_cache/sha512_cache.jinc
+    HASH_IMPL = hash/hash_sha512.jinc
+    CACHE_IMPL = hash/sha512/sha512_cache/sha512_cache.jinc
+    SPX_IMPL = spx/spx_sha2.jinc
 endif
 ifneq (,$(filter shake-128s shake-128f shake-192s shake-192f shake-256s shake-256f,$(PARAMETER_SET)))
-  HASH_IMPL = hash/hash_shake256.jinc
+    HASH_IMPL = hash/hash_shake256.jinc
+    SPX_IMPL = spx/spx_shake.jinc
+endif
+
+# reference implementation always uses the generic spx.jinc
+ifeq ($(IMPLEMENTATION_TYPE),ref)
+    SPX_IMPL = spx/spx.jinc
 endif
 
 # make the Jasmin parameter header, with the SPHINCS+ parameters and the hash function implementations
@@ -109,8 +117,9 @@ $(ARCHITECTURE)/ref/active_params.jinc:
 $(ARCHITECTURE)/avx2/active_params.jinc:
 	@echo 'require "../../params/params-spx-$(PARAMETER_SET).jinc" // SPHINCS+ parameters' > $(ARCHITECTURE)/avx2/active_params.jinc
 	@echo 'require "$(HASH_IMPL)" // hash function implementations' >> $(ARCHITECTURE)/avx2/active_params.jinc
+	@echo 'require "$(SPX_IMPL)" // SPHINCS+ SHA2 or SHAKE variant' >> $(ARCHITECTURE)/avx2/active_params.jinc
 	@if [ -n "$(CACHE_IMPL)" ]; then \
-		echo 'require "$(CACHE_IMPL)" // hash function caching implementation' >> $@; \
+		echo 'require "$(CACHE_IMPL)" // hash function caching implementation' >> $(ARCHITECTURE)/avx2/active_params.jinc; \
 	fi
 
 # make the C parameter header
@@ -172,7 +181,7 @@ $(CLI): \
 	@printf "\033[33mCommand-Line Interface compiled, see ./cli --help for usage instructions\033[0m\n"
 
 # ---------------------------------------------------------------- #
-#  KAT TESTING                                                     #
+#  KNOWN-ANSWER TESTS                                              #
 # ---------------------------------------------------------------- #
 
 # group the test vectors in .json files per parameter set
@@ -182,11 +191,11 @@ $(GROUPED_JSONS): tests/acvp/group_json_per_paramset.py
 # compile SPHINCS+ API from Jasmin to assembly
 slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s: \
 	$(JASMINC) \
-	$(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/spx/spx.jinc \
+	$(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/$(SPX_IMPL) \
 	$(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/active_params.jinc \
 	$(PARAM_HEADER)
 
-	@$(JASMINC) $(JASMINFLAGS) -o slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/spx/spx.jinc
+	@$(JASMINC) $(JASMINFLAGS) -o slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/$(SPX_IMPL)
 	@grep -q GNU-stack slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s || echo '.section .note.GNU-stack,"",@progbits' >> slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE)_kattest.s
 
 # generate a shared library
