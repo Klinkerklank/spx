@@ -117,10 +117,10 @@ $(ARCHITECTURE)/ref/active_params.jinc:
 $(ARCHITECTURE)/avx2/active_params.jinc:
 	@echo 'require "../../params/params-spx-$(PARAMETER_SET).jinc" // SPHINCS+ parameters' > $(ARCHITECTURE)/avx2/active_params.jinc
 	@echo 'require "$(HASH_IMPL)" // hash function implementations' >> $(ARCHITECTURE)/avx2/active_params.jinc
-	@echo 'require "$(SPX_IMPL)" // SPHINCS+ SHA2 or SHAKE variant' >> $(ARCHITECTURE)/avx2/active_params.jinc
 	@if [ -n "$(CACHE_IMPL)" ]; then \
 		echo 'require "$(CACHE_IMPL)" // hash function caching implementation' >> $(ARCHITECTURE)/avx2/active_params.jinc; \
 	fi
+	@echo 'require "$(SPX_IMPL)" // SPHINCS+ SHA2 or SHAKE variant' >> $(ARCHITECTURE)/avx2/active_params.jinc
 
 # make the C parameter header
 $(PARAM_HEADER):
@@ -257,7 +257,7 @@ $(OPENSSL_BUILD)/lib64/libcrypto.so:
 #  BENCHMARKING                                                    #
 # ---------------------------------------------------------------- #
 
-# Jasmin implementations: create a static archive
+# Jasmin impls: create a static archive
 bench/impls/impl_jasmin_$(ARCHITECTURE)_%_$(PARAMETER_SET).a: \
 	slh_dsa_$(PARAMETER_SET)_%_$(ARCHITECTURE).o \
 	$(ARCHITECTURE)/%/misc/jasmin_syscall.o
