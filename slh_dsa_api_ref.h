@@ -1,5 +1,5 @@
-#ifndef SLH_DSA_CLI_H
-#define SLH_DSA_CLI_H
+#ifndef SLH_DSA_API_REF
+#define SLH_DSA_API_REF
 
 #include <stdint.h>
 #include <stddef.h>
@@ -45,5 +45,5 @@ extern int slh_verify_internal(
   const uint8_t pk[2*SPX_N]
 );
 
-#endif /* SLH_DSA_CLI_H */
+#endif /* SLH_DSA_API_REF */
 

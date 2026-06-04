@@ -171,7 +171,7 @@ fn __slh_keygen_internal(
 export // this function is visible to the outside after compilation
 // it's the same as __slh_keygen_internal, but separated to prevent
 // the warning 'warning: export function will be inlined'
-fn slh_keygen_internal(
+fn slh_keygen_internal_avx2(
     reg ptr u8[SPX_SKBYTES] sk, // out: (SK.seed, SK.prf. PK.seed, PK.root)
     reg ptr u8[SPX_PKBYTES] pk, // out: (PK.seed, PK.root)
     reg ptr u8[3*SPX_N] keyrnd  // key randomness
@@ -325,7 +325,7 @@ fn __slh_sign_internal(
 export // this function is visible to the outside after compilation
 // it's the same as __slh_sign_internal, but separated to prevent
 // the warning 'warning: export function will be inlined'
-fn slh_sign_internal(
+fn slh_sign_internal_avx2(
     reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
@@ -453,7 +453,7 @@ fn __slh_verify_internal(
 export // this function is visible to the outside after compilation
 // it's the same as __slh_verify_internal, but separated to prevent
 // the warning 'warning: export function will be inlined'
-fn slh_verify_internal(
+fn slh_verify_internal_avx2(
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
     reg ptr u8[SPX_SIG] sig_slh, // SPHINCS+ signature

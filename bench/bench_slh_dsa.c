@@ -14,7 +14,7 @@ extern slh_dsa_impl jasmin_avx2_impl; // Jasmin AVX2 implementation
 extern slh_dsa_impl c_ref_impl;       // C reference implementation
 extern slh_dsa_impl openssl_impl;     // OpenSSL implementation
 
-#define TIMINGS 100
+#define TIMINGS 1000
 #define SPX_MSG_LEN 32
 #define SPX_CTX_LEN 32
 

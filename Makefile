@@ -258,9 +258,17 @@ $(OPENSSL_BUILD)/lib64/libcrypto.so:
 # ---------------------------------------------------------------- #
 
 # Jasmin impls: create a static archive
-bench/impls/impl_jasmin_$(ARCHITECTURE)_%_$(PARAMETER_SET).a: \
-	slh_dsa_$(PARAMETER_SET)_%_$(ARCHITECTURE).o \
-	$(ARCHITECTURE)/%/misc/jasmin_syscall.o
+bench/impls/impl_jasmin_$(ARCHITECTURE)_ref_$(PARAMETER_SET).a: \
+	slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).o \
+	$(ARCHITECTURE)/ref/misc/jasmin_syscall.o
+
+	@mkdir -p bench/impls
+	@ar rcs $@ $^
+
+# Jasmin impls: create a static archive
+bench/impls/impl_jasmin_$(ARCHITECTURE)_avx2_$(PARAMETER_SET).a: \
+	slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).o \
+	$(ARCHITECTURE)/avx2/misc/jasmin_syscall.o
 
 	@mkdir -p bench/impls
 	@ar rcs $@ $^

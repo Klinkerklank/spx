@@ -1,6 +1,6 @@
-#include "../../params/params.h" // contains SPX_N and SPX_SIG_BYTES
-#include "../../slh_dsa_cli.h"   // declare the Jasmin export function signatures in spx.jazz
-#include "slh_dsa_iface.h"       // contains the abstract interface wrapper
+#include "../../params/params.h"    // contains SPX_N and SPX_SIG_BYTES
+#include "../../slh_dsa_api_avx2.h" // declare the Jasmin export function signatures in spx.jazz
+#include "slh_dsa_iface.h"          // contains the abstract interface wrapper
 
 static int jasmin_avx2_keygen(
     uint8_t *sk,
@@ -8,7 +8,7 @@ static int jasmin_avx2_keygen(
     const uint8_t *keyrnd
 )
 {
-    return slh_keygen_internal(sk, pk, keyrnd);
+    return slh_keygen_internal_avx2(sk, pk, keyrnd);
 }
 
 static int jasmin_avx2_sign(
@@ -30,7 +30,7 @@ static int jasmin_avx2_sign(
     ctx_msg_lens[0] = ctx_len;
     ctx_msg_lens[1] = msg_len;
 
-    return slh_sign_internal(sig, ctx_msg_ptrs, ctx_msg_lens, sk, addrnd);
+    return slh_sign_internal_avx2(sig, ctx_msg_ptrs, ctx_msg_lens, sk, addrnd);
 }
 
 static int jasmin_avx2_verify(
@@ -51,7 +51,7 @@ static int jasmin_avx2_verify(
     ctx_msg_lens[0] = ctx_len;
     ctx_msg_lens[1] = msg_len;
 
-    return slh_verify_internal(ctx_msg_ptrs, ctx_msg_lens, sig, pk);
+    return slh_verify_internal_avx2(ctx_msg_ptrs, ctx_msg_lens, sig, pk);
 }
 
 slh_dsa_impl jasmin_avx2_impl = {

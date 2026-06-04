@@ -13,7 +13,7 @@ require "adrs/adrs.jinc" // ADRS data structure
 | using the #randombytes hook.                                 |
 +-------------------------------------------------------------*/
 export // this function is visible to the outside after compilation
-fn slh_keygen(
+fn slh_keygen_avx2(
     reg ptr u8[SPX_SKBYTES] sk, // out: secret key
     reg ptr u8[SPX_PKBYTES] pk  // out: public key
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
@@ -43,7 +43,7 @@ fn slh_keygen(
 | the #randombytes hook.                                       |
 +-------------------------------------------------------------*/
 export // this function is visible to the outside after compilation
-fn slh_sign(
+fn slh_sign_avx2(
     reg ptr u8[SPX_SIG] sig_slh, // out: SPHINCS+ signature
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
@@ -82,7 +82,7 @@ fn slh_sign(
 | Verifies a pure SLH-DSA signature.                           |
 +-------------------------------------------------------------*/
 export // this function is visible to the outside after compilation
-fn slh_verify(
+fn slh_verify_avx2(
     reg ptr u64[2] ctx_msg_ptrs, // context and message pointers
     reg ptr u64[2] ctx_msg_lens, // context and message lengths
     reg ptr u8[SPX_SIG] sig,     // SPHINCS+ signature

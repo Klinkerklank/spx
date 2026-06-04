@@ -54,9 +54,14 @@ class SLH_DSA_X86_64(SLH_DSA):
             self.signing_key_size      = 128
             self.signature_size        = 49856
 
-        self.keygen_internal = slh_dsa.slh_keygen_internal
-        self.sign_internal   = slh_dsa.slh_sign_internal
-        self.verify_internal = slh_dsa.slh_verify_internal
+        if implementation_type == "ref":
+            self.keygen_internal = slh_dsa.slh_keygen_internal
+            self.sign_internal   = slh_dsa.slh_sign_internal
+            self.verify_internal = slh_dsa.slh_verify_internal
+        else: # implementation_type == "avx2"
+            self.keygen_internal = slh_dsa.slh_keygen_internal_avx2
+            self.sign_internal   = slh_dsa.slh_sign_internal_avx2
+            self.verify_internal = slh_dsa.slh_verify_internal_avx2
 
     def bytearray_to_ctype(self, ba):
         char_array = ctypes.c_char * len(ba)
