@@ -6,11 +6,6 @@ require "stdlib/memcmp/memcmp.jinc" // for comparing SPX_N-byte strings
 
 require "adrs/adrs.jinc" // ADRS data structure
 
-require "wots/wots.jinc" // algorithms 5-8   of SLH-DSS: Winternitz One-Time Signature Plus
-require "xmss/xmss.jinc" // algorithms 9-11  of SLH-DSS: eXtended Merkle Signature Scheme
-require "ht/ht.jinc"     // algorithms 12-13 of SLH-DSS: HyperTree
-require "fors/fors.jinc" // algorithms 14-17 of SLH-DSS: Forest Of Random Subsets
-
 /*-------------------------------------------------------------+
 | ALGORITHM 21 FROM SLH-DSS (FIPS 205)                         |
 | Generates an SLH-DSA key pair.                               |
