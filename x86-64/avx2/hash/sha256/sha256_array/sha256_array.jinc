@@ -10,13 +10,11 @@ fn _blocks_0_ref_array(
 ) -> reg ptr u32[8], reg u64
 {
   inline int t;
-  reg u32 T1 T2 a b c d e f g h r v;
   reg u64 offset;
-  stack u32[64] W;
+  stack u8[64] W;
   reg ptr u32[64] Kp;
   stack ptr u32[8] Hp;
   reg ptr u32[8] H;
-  reg u64 tr;
   reg u64 inlen;
 
   offset = 0;
@@ -44,64 +42,13 @@ fn _blocks_0_ref_array(
   // (when INLEN < 64), the while loop will be removed by the compiler
   if (INLEN >= 64) {
     while(inlen >= 64) {
-      () = #spill(inlen);
-      for t=0 to 16
-      { 
-        v = in.[: u32 offset + 4*t]; // v = (u32)[in + t*4];
-        v = #BSWAP_32(v);
-        W[t] = v;
+      for t=0 to 8 {
+        W[:u64 t] = in.[:u64 offset + 8*t];
       }
 
-      () = #spill(in, offset);
+      () = #spill(in, offset, inlen);
 
-      for t=16 to 64 { W = __Wt_ref(W, t); }
-
-      a, b, c, d, e, f, g, h, H = __load_H_ref(H);
-      Hp = H;
-
-      tr = 0;
-      while(tr < 64)
-      {
-        //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
-        T1  = h;
-        r   = __BSIG1_ref(e);
-        T1 += r;
-        r   = __CH_ref(e,f,g);
-        T1 += r;
-        T1 += Kp[tr];
-        T1 += W[tr];
-        
-
-        //T2 = BSIG0(a) + MAJ(a,b,c)
-        T2  = __BSIG0_ref(a);
-        r   = __MAJ_ref(a,b,c);
-        T2 += r;
-
-        h  = g;
-        g  = f;
-        f  = e;
-        e  = d;
-        e += T1;
-        d  = c;
-        c  = b;
-        b  = a;
-        a  = T1;
-        a += T2;
-        
-        tr += 1;
-      }
-
-      H = Hp;
-      a += H[0];
-      b += H[1];
-      c += H[2];
-      d += H[3];
-      e += H[4];
-      f += H[5];
-      g += H[6];
-      h += H[7];
-
-      H = __store_H_ref(H,a,b,c,d,e,f,g,h);
+      H = sha256::compress(H, W);
 
       () = #unspill(in, offset, inlen);
       offset += 64;
@@ -167,6 +114,7 @@ fn __sha256(reg ptr u8[32] out, reg ptr u8[INLEN] in) -> reg ptr u8[32]
   reg ptr u32[8] Hp;
   stack u32[32] sblocks;
   reg ptr u32[32] sblocksp;
+  inline int i;
 
   () = #spill(out);
 
@@ -178,7 +126,12 @@ fn __sha256(reg ptr u8[32] out, reg ptr u8[INLEN] in) -> reg ptr u8[32]
   
   () = #spill(in);
   Hp = H;
-  Hp, offset = _blocks_0_ref_array(Hp, in);
+
+  // Hp, offset = _blocks_0_ref_array(Hp, in);
+  for i=0 to INLEN/64 {
+    Hp = sha256::compress(Hp, in[i*64 : 64]);
+  }
+  offset = (INLEN/64)*64;
 
   () = #unspill(in, bits);
   inlen = INLEN % 64;

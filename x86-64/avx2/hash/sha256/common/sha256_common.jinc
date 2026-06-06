@@ -208,15 +208,12 @@ inline fn __Wt_ptr_ref(reg ptr u32[64] W, inline int t) -> reg ptr u32[64]
 fn _blocks_1_ref(reg ptr u32[8] _H, reg ptr u32[32] sblocks, reg u64 nblocks) -> reg ptr u32[8], reg ptr u32[32]
 {
   inline int t;
-  reg u32 T1 T2 a b c d e f g h r v;
-  stack u32[64] W;
-  reg ptr u32[64] Kp;
+  stack u8[64] W;
   stack ptr u32[8] Hp;
   reg ptr u32[8] H;
   stack ptr u32[32] s_sblocks;
-  reg u64 i oblocks tr;
+  reg u64 i oblocks;
 
-  Kp = SHA256_K;
   Hp = _H;
   i = 0;
 
@@ -226,61 +223,17 @@ fn _blocks_1_ref(reg ptr u32[8] _H, reg ptr u32[32] sblocks, reg u64 nblocks) ->
   {
     () = #spill(i);
     oblocks = i << 4;
-    for t=0 to 16
-    { v = sblocks[oblocks + t];
-      v = #BSWAP_32(v);
-      W[t] = v;
+    for t=0 to 8 {
+      W[:u64 t] = sblocks.[:u64 oblocks + 8*t];
     }
+    // for t=0 to 16
+    // { v = sblocks[oblocks + t];
+    //   v = #BSWAP_32(v);
+    //   W[t] = v;
+    // }
     s_sblocks = sblocks;
-
-    for t=16 to 64
-    { W = __Wt_ref(W, t); }
-
-    a, b, c, d, e, f, g, h, H = __load_H_ref(H);
-    Hp = H;
-
-    tr = 0;
-    while(tr < 64)
-    {
-      //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
-      T1  = h;
-      r   = __BSIG1_ref(e);
-      T1 += r;
-      r   = __CH_ref(e,f,g);
-      T1 += r;
-      T1 += Kp[tr];
-      T1 += W[tr];
-
-      //T2 = BSIG0(a) + MAJ(a,b,c)
-      T2  = __BSIG0_ref(a);
-      r   = __MAJ_ref(a,b,c);
-      T2 += r;
-
-      h  = g;
-      g  = f;
-      f  = e;
-      e  = d;
-      e += T1;
-      d  = c;
-      c  = b;
-      b  = a;
-      a  = T1;
-      a += T2;
-
-      tr+= 1;
-    }
-
-    H = Hp;
-    a += H[0];
-    b += H[1];
-    c += H[2];
-    d += H[3];
-    e += H[4];
-    f += H[5];
-    g += H[6];
-    h += H[7];
-
-    H = __store_H_ref(H,a,b,c,d,e,f,g,h);
+    
+    H = sha256::compress(H, W);
 
     sblocks = s_sblocks;
     () = #unspill(i);
