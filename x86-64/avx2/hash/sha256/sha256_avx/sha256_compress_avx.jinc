@@ -345,7 +345,7 @@ namespace sha256 {
     return out;
   }
 
-  fn compress(
+  fn sha256_compress(
     reg ptr u32[STATE_u32_SIZE] state,
     reg ptr u8[BLOCK_SIZE] data
   )

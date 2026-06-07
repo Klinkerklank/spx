@@ -226,14 +226,9 @@ fn _blocks_1_ref(reg ptr u32[8] _H, reg ptr u32[32] sblocks, reg u64 nblocks) ->
     for t=0 to 8 {
       W[:u64 t] = sblocks.[:u64 oblocks + 8*t];
     }
-    // for t=0 to 16
-    // { v = sblocks[oblocks + t];
-    //   v = #BSWAP_32(v);
-    //   W[t] = v;
-    // }
     s_sblocks = sblocks;
     
-    H = sha256::compress(H, W);
+    H = sha256::sha256_compress(H, W);
 
     sblocks = s_sblocks;
     () = #unspill(i);

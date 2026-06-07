@@ -250,7 +250,7 @@ fn finish(
   return Hp, W;
 }
 
-fn __sha256_absorb(
+fn sha256_absorb(
   reg ptr u8[32] out,
   reg ptr u8[PREFIXLEN] prefix,
   reg u64 ctx_ptr ctx_len,
