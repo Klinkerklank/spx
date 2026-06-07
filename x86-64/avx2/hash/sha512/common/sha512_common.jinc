@@ -212,15 +212,12 @@ inline fn __SHA512_Wt_ptr_ref(reg ptr u64[80] W, inline int t) -> reg ptr u64[80
 fn _SHA512_blocks_1_ref(reg ptr u64[8] _H, reg ptr u64[32] sblocks, reg u64 nblocks) -> reg ptr u64[8], reg ptr u64[32]
 {
   inline int t;
-  reg u64 T1 T2 a b c d e f g h r v;
-  stack u64[80] W;
-  reg ptr u64[80] Kp;
+  stack u8[128] W;
   stack ptr u64[8] Hp;
   reg ptr u64[8] H;
   stack ptr u64[32] s_sblocks;
-  reg u64 i oblocks tr;
+  reg u64 i oblocks;
 
-  Kp = SHA512_K;
   Hp = _H;
   i = 0;
 
@@ -229,62 +226,13 @@ fn _SHA512_blocks_1_ref(reg ptr u64[8] _H, reg ptr u64[32] sblocks, reg u64 nblo
   while(i < nblocks)
   {
     () = #spill(i);
-    oblocks = i << 4;
-    for t=0 to 16
-    { v = sblocks[oblocks + t];
-      v = #BSWAP_64(v);
-      W[t] = v;
+    oblocks = i << 7;
+    for t=0 to 16 {
+      W[:u64 t] = sblocks.[:u64 oblocks + 8*t];
     }
     s_sblocks = sblocks;
-
-    for t=16 to 80
-    { W = __SHA512_Wt_ref(W, t); }
-
-    a, b, c, d, e, f, g, h, H = __SHA512_load_H_ref(H);
-    Hp = H;
-
-    tr = 0;
-    while(tr < 80)
-    {
-      //T1 = h + BSIG1(e) + CH(e,f,g) + Kt + Wt
-      T1  = h;
-      r   = __SHA512_BSIG1_ref(e);
-      T1 += r;
-      r   = __SHA512_CH_ref(e,f,g);
-      T1 += r;
-      T1 += Kp[tr];
-      T1 += W[tr];
-
-      //T2 = BSIG0(a) + MAJ(a,b,c)
-      T2  = __SHA512_BSIG0_ref(a);
-      r   = __SHA512_MAJ_ref(a,b,c);
-      T2 += r;
-
-      h  = g;
-      g  = f;
-      f  = e;
-      e  = d;
-      e += T1;
-      d  = c;
-      c  = b;
-      b  = a;
-      a  = T1;
-      a += T2;
-
-      tr+= 1;
-    }
-
-    H = Hp;
-    a += H[0];
-    b += H[1];
-    c += H[2];
-    d += H[3];
-    e += H[4];
-    f += H[5];
-    g += H[6];
-    h += H[7];
-
-    H = __SHA512_store_H_ref(H,a,b,c,d,e,f,g,h);
+    
+    H = sha512::sha512_compress(H, W);
 
     sblocks = s_sblocks;
     () = #unspill(i);

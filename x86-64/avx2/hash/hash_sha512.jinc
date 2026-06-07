@@ -42,7 +42,7 @@ fn H_msg(
     buf[2*SPX_N : SPX_N] = __copy_nbytes(buf[2*SPX_N : SPX_N], pkroot);
 
     // compute the inner hash value = sha512(R || PK.seed || PK.root || M)
-    seed[2*SPX_N : SHA512_OUT] = sha512_mgf1_msg::__sha512_absorb(seed[2*SPX_N : SHA512_OUT], buf, ctx_ptr, ctx_len, msg_ptr, msg_len);
+    seed[2*SPX_N : SHA512_OUT] = sha512_mgf1_msg::sha512_absorb(seed[2*SPX_N : SHA512_OUT], buf, ctx_ptr, ctx_len, msg_ptr, msg_len);
 
     // set the first three of the four bytes of the counter to 0
     // (for all approved parameter sets, we will never need > 255 hash output concatenations)
@@ -54,7 +54,7 @@ fn H_msg(
         seed[2*SPX_N + SHA512_OUT + 3] = (8u) hash_nr;
         
         // compute sha512(seed), where seed includes the counter
-        concat[hash_nr*SHA512_OUT : SHA512_OUT] = sha512_mgf1_seed::__sha512(concat[hash_nr*SHA512_OUT : SHA512_OUT], seed);
+        concat[hash_nr*SHA512_OUT : SHA512_OUT] = sha512_mgf1_seed::sha512(concat[hash_nr*SHA512_OUT : SHA512_OUT], seed);
     }
     
     () = #unspill(out);
@@ -140,10 +140,10 @@ fn PRF_msg(
     ibuf[SHA512_IN : SPX_N] = __copy_nbytes(ibuf[SHA512_IN : SPX_N], optrand);
 
     // compute inner = sha512((key xor ipad) || optrand || M)
-    obuf[SHA512_IN : SHA512_OUT] = sha512_hmac_inner::__sha512_absorb(obuf[SHA512_IN : SHA512_OUT], ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
+    obuf[SHA512_IN : SHA512_OUT] = sha512_hmac_inner::sha512_absorb(obuf[SHA512_IN : SHA512_OUT], ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
 
     // compute hmac = sha512((key xor opad) || inner)
-    hmac = sha512_hmac_outer::__sha512(hmac, obuf);
+    hmac = sha512_hmac_outer::sha512(hmac, obuf);
 
     () = #unspill(out);
 

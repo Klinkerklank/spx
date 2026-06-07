@@ -1,3 +1,4 @@
+require "sha512_avx/sha512_compress_avx.jinc"
 require "common/sha512_common.jinc"
 
 namespace sha512_hmac_inner {
