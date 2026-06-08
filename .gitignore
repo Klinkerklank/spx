@@ -1,4 +1,5 @@
 *.log
+/logs
 
 jasmin/compiler/_build/
 jasmin/compiler/jasmin-ct

@@ -54,7 +54,8 @@ clean:
 		bench/slh_dsa_bench \
 		bench/impls/*.a \
 		bench/results \
-		sphincsplus/ref/*.o
+		sphincsplus/ref/*.o \
+		logs
 
 # ---------------------------------------------------------------- #
 #  PARAMETER HANDLING                                              #
@@ -248,9 +249,9 @@ $(OPENSSL_BUILD)/lib64/libcrypto.so:
 	@cd $(OPENSSL_SRC) && \
 	./Configure linux-x86_64 \
 	    --prefix=$(OPENSSL_BUILD) \
-	    -O3 -march=native no-tests > /tmp/openssl_config.log 2>&1 && \
-	make -j2 -s > /tmp/openssl_build.log 2>&1 && \
-	make install_sw -s > /tmp/openssl_install.log && \
+	    -O3 -march=native no-tests > ../logs/openssl_config.log 2>&1 && \
+	make -j2 -s > ../logs/openssl_build.log 2>&1 && \
+	make install_sw -s > ../logs/openssl_install.log && \
 	printf "\033[36mOpenSSL installed\033[0m\n"
 
 # ---------------------------------------------------------------- #
