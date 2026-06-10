@@ -349,9 +349,11 @@ $(BENCH): \
 	@rm -rf sphincsplus/ref/*.o
 
 # execute the benchmarking
+# force OpenSSL to use implementations with only the AVX bit enabled (as there is no true AVX2 SHA2 available in Jasmin yet)
+# force the program to run on just one core using taskset (to reduce variability as a result of thread switching)
 .PHONY: bench
 bench: $(BENCH)
-	@./$(BENCH) $(PARAMETER_SET)
+	@OPENSSL_ia32cap="0x2000000000000000" taskset -c 0 ./$(BENCH) $(PARAMETER_SET)
 
 # run benchmarking for all NIST-approved parameter sets
 .PHONY: bench-all
