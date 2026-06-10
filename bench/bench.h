@@ -145,4 +145,71 @@ static inline void cleanup_fclose(FILE **fpp) {
         printf("Benchmark results for %d executions written to '%s'\n", (N), (filename));    \
     } while (0)
 
+#define BENCHMARK_INTERLEAVED_ABCD(N, action, file_a, func_call_a, file_b, func_call_b, file_c, func_call_c, file_d, func_call_d) \
+    do {                                                                                    \
+        /* ensure output directory exists */                                                \
+        char _cmd[512];                                                                     \
+        snprintf(_cmd, sizeof(_cmd), "mkdir -p $(dirname %s)", file_a);                     \
+        system(_cmd);                                                                       \
+                                                                                            \
+        snprintf(_cmd, sizeof(_cmd), "mkdir -p $(dirname %s)", file_b);                     \
+        system(_cmd);                                                                       \
+                                                                                            \
+        snprintf(_cmd, sizeof(_cmd), "mkdir -p $(dirname %s)", file_c);                     \
+        system(_cmd);                                                                       \
+                                                                                            \
+        snprintf(_cmd, sizeof(_cmd), "mkdir -p $(dirname %s)", file_d);                     \
+        system(_cmd);                                                                       \
+                                                                                            \
+        FILE *fp_a __attribute__((cleanup(cleanup_fclose))) = fopen(file_a, "w");           \
+        FILE *fp_b __attribute__((cleanup(cleanup_fclose))) = fopen(file_b, "w");           \
+        FILE *fp_c __attribute__((cleanup(cleanup_fclose))) = fopen(file_c, "w");           \
+        FILE *fp_d __attribute__((cleanup(cleanup_fclose))) = fopen(file_d, "w");           \
+                                                                                            \
+        if (fp_a == NULL || fp_b == NULL || fp_c == NULL || fp_d == NULL) {                 \
+            fprintf(stderr, "Failed to open benchmark output files\n");                     \
+            perror("");                                                                     \
+            break;                                                                          \
+        }                                                                                   \
+                                                                                            \
+        /* cold start (without measuring) to hopefully reduce variability */                \
+        for (int i = 0; i < (5); ++i) {                                                     \
+            func_call_a;                                                                    \
+            func_call_b;                                                                    \
+            func_call_c;                                                                    \
+            func_call_d;                                                                    \
+        }                                                                                   \
+                                                                                            \
+        for (int i = 0; i < (N); ++i) {                                                     \
+            unsigned long long start_cycles, end_cycles;                                    \
+                                                                                            \
+            /* ---- A ---- */                                                               \
+            start_cycles = cpucycles();                                                     \
+            func_call_a;                                                                    \
+            end_cycles = cpucycles();                                                       \
+            fprintf(fp_a, "%llu\n", end_cycles - start_cycles);                             \
+                                                                                            \
+            /* ---- B ---- */                                                               \
+            start_cycles = cpucycles();                                                     \
+            func_call_b;                                                                    \
+            end_cycles = cpucycles();                                                       \
+            fprintf(fp_b, "%llu\n", end_cycles - start_cycles);                             \
+                                                                                            \
+            /* ---- C ---- */                                                               \
+            start_cycles = cpucycles();                                                     \
+            func_call_c;                                                                    \
+            end_cycles = cpucycles();                                                       \
+            fprintf(fp_c, "%llu\n", end_cycles - start_cycles);                             \
+                                                                                            \
+            /* ---- D ---- */                                                               \
+            start_cycles = cpucycles();                                                     \
+            func_call_d;                                                                    \
+            end_cycles = cpucycles();                                                       \
+            fprintf(fp_d, "%llu\n", end_cycles - start_cycles);                             \
+        }                                                                                   \
+                                                                                            \
+        printf("Interleaved benchmarking (%d rounds) written for action '%s'\n",            \
+               (N), (action));                                                              \
+    } while (0)
+
 #endif  // BENCHMARK_H
