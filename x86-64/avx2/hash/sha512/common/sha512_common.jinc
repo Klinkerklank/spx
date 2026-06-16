@@ -232,7 +232,7 @@ fn _SHA512_blocks_1_ref(reg ptr u64[8] _H, reg ptr u64[32] sblocks, reg u64 nblo
     }
     s_sblocks = sblocks;
     
-    H = sha512::sha512_compress(H, W);
+    H = sha512_avx::sha512_compress_avx(H, W);
 
     sblocks = s_sblocks;
     () = #unspill(i);

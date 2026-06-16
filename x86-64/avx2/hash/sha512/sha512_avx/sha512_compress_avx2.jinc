@@ -1,6 +1,6 @@
 // adapted from https://github.com/strub/sha256/tree/main
 
-namespace sha512 {
+namespace sha512_avx2 {
   param int STATE_u64_SIZE  = 8;
   param int STATE_u8_SIZE   = 8 * STATE_u64_SIZE;
   param int STATE_u128_SIZE = STATE_u64_SIZE / 2;
@@ -363,9 +363,9 @@ namespace sha512 {
     return out;
   }
 
-  fn sha512_compress(
+  fn sha512_compress_avx2(
     reg ptr u64[STATE_u64_SIZE] state,
-    reg ptr u8[BLOCK_SIZE] data
+    reg ptr u8[2*BLOCK_SIZE] data
   )
   ->
     reg ptr u64[STATE_u64_SIZE]
@@ -373,12 +373,23 @@ namespace sha512 {
     stack u64[STATE_u64_SIZE] cstate;
     stack u64[SCHEDULE_u64_SIZE] sch;
     reg u128[BLOCK_VEC_SIZE] x;
+    
+    reg ptr u8[BLOCK_SIZE] data_one_block;
 
     cstate = copy_state(cstate, state);
-    x, sch = load_data(data, sch);
+
+    data_one_block = data[0 : BLOCK_SIZE];
+    x, sch = load_data(data_one_block, sch);
     cstate, sch = round_0_63(cstate, x, sch);
     cstate = round_64_79(cstate, sch);
     state = accumulate_state(state, cstate);
+
+    data_one_block = data[BLOCK_SIZE : BLOCK_SIZE];
+    x, sch = load_data(data_one_block, sch);
+    cstate, sch = round_0_63(cstate, x, sch);
+    cstate = round_64_79(cstate, sch);
+    state = accumulate_state(state, cstate);
+
     return state;
   }
 }

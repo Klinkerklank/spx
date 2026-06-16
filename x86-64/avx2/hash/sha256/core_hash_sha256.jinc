@@ -1,4 +1,5 @@
 require "sha256_avx/sha256_compress_avx.jinc"
+require "sha256_avx/sha256_compress_avx2.jinc"
 require "common/sha256_common.jinc"
 
 namespace sha256_hmac_inner {

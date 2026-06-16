@@ -1,6 +1,6 @@
 // adapted from https://github.com/strub/sha256/tree/main
 
-namespace sha256 {
+namespace sha256_avx {
   param int STATE_u32_SIZE  = 8;
   param int STATE_u8_SIZE   = 4 * STATE_u32_SIZE;
   param int STATE_u128_SIZE = STATE_u32_SIZE / 4;
@@ -345,7 +345,7 @@ namespace sha256 {
     return out;
   }
 
-  fn sha256_compress(
+  fn sha256_compress_avx(
     reg ptr u32[STATE_u32_SIZE] state,
     reg ptr u8[BLOCK_SIZE] data
   )

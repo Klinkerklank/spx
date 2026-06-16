@@ -20,20 +20,6 @@ fn _blocks_0_ref_array(
   Hp = _H;
   H = Hp;
 
-  // NOTE:
-  // The function _blocks_0_ref_array requires that the length of in is at least 64 bytes (it processes 64 byte blocks).
-  // If we want to compute the hash of a bytestring < 64 bytes, this function does nothing (i.e. the while loop is not run)
-  // => Only __lastblocks_ref_array and _blocks_1_ref do useful computation
-  // 
-  // Because the value of INLEN is known at compile time, this if [ if (INLEN >= 64) ] allows the compiler to remove 
-  // the while loop if INLEN < 64 (because this if statement is statically resolved)
-  //
-  // In other words, this if statement allows us to write a sha2 impl that works for all values of INLEN instead of having
-  // to implement two different versions 
-  //      1) A impl where INLEN >= 64 where we call _blocks_0_ref_array
-  //      2) A impl where INLEN <  64 where we only call __lastblocks_ref_array and _blocks_1_ref
-  // but while loop will only be in the impl where it is in fact needed (when INLEN >= 64). In the other case, 
-  // (when INLEN < 64), the while loop will be removed by the compiler
   if (INLEN >= 64) {
     while(inlen >= 64) {
       for t=0 to 8 {
@@ -42,7 +28,7 @@ fn _blocks_0_ref_array(
 
       () = #spill(in, offset, inlen);
 
-      H = sha256::sha256_compress(H, W);
+      H = sha256_avx::sha256_compress_avx(H, W);
 
       () = #unspill(in, offset, inlen);
       offset += 64;
@@ -121,8 +107,11 @@ fn sha256(reg ptr u8[32] out, reg ptr u8[INLEN] in) -> reg ptr u8[32]
   () = #spill(in);
   Hp = H;
 
-  for i=0 to INLEN/64 {
-    Hp = sha256::sha256_compress(Hp, in[i*64 : 64]);
+  for i=0 to INLEN/128 {
+    Hp = sha256_avx2::sha256_compress_avx2(Hp, in[i*128 : 128]);
+  }
+  for i=(INLEN/128)*2 to INLEN/64 {
+    Hp = sha256_avx::sha256_compress_avx(Hp, in[i*64 : 64]);
   }
   offset = (INLEN/64)*64;
 

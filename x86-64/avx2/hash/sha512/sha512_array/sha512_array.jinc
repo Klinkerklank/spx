@@ -28,7 +28,7 @@ fn _SHA512_blocks_0_ref_array(
 
       () = #spill(in, offset, inlen);
 
-      H = sha512::sha512_compress(H, W);
+      H = sha512_avx::sha512_compress_avx(H, W);
 
       () = #unspill(in, offset, inlen);
       offset += 128;
@@ -107,8 +107,11 @@ fn sha512(reg ptr u8[64] out, reg ptr u8[INLEN] in) -> reg ptr u8[64]
   () = #spill(in);
   Hp = H;
 
-  for i=0 to INLEN/128 {
-    Hp = sha512::sha512_compress(Hp, in[i*128 : 128]);
+  for i=0 to INLEN/256 {
+    Hp = sha512_avx2::sha512_compress_avx2(Hp, in[i*256 : 256]);
+  }
+  for i=(INLEN/256)*2 to INLEN/128 {
+    Hp = sha512_avx::sha512_compress_avx(Hp, in[i*128 : 128]);
   }
   offset = (INLEN/128)*128;
 

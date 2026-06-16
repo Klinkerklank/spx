@@ -1,6 +1,6 @@
 // adapted from https://github.com/strub/sha256/tree/main
 
-namespace sha512 {
+namespace sha512_avx {
   param int STATE_u64_SIZE  = 8;
   param int STATE_u8_SIZE   = 8 * STATE_u64_SIZE;
   param int STATE_u128_SIZE = STATE_u64_SIZE / 2;
@@ -363,7 +363,7 @@ namespace sha512 {
     return out;
   }
 
-  fn sha512_compress(
+  fn sha512_compress_avx(
     reg ptr u64[STATE_u64_SIZE] state,
     reg ptr u8[BLOCK_SIZE] data
   )

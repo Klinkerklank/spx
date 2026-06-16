@@ -228,7 +228,7 @@ fn _blocks_1_ref(reg ptr u32[8] _H, reg ptr u32[32] sblocks, reg u64 nblocks) ->
     }
     s_sblocks = sblocks;
     
-    H = sha256::sha256_compress(H, W);
+    H = sha256_avx::sha256_compress_avx(H, W);
 
     sblocks = s_sblocks;
     () = #unspill(i);
