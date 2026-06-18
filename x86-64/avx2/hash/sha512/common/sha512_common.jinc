@@ -212,31 +212,34 @@ inline fn __SHA512_Wt_ptr_ref(reg ptr u64[80] W, inline int t) -> reg ptr u64[80
 fn _SHA512_blocks_1_ref(reg ptr u64[8] _H, reg ptr u64[32] sblocks, reg u64 nblocks) -> reg ptr u64[8], reg ptr u64[32]
 {
   inline int t;
-  stack u8[128] W;
+  stack u8[128] W1;
+  stack u8[256] W2;
   stack ptr u64[8] Hp;
   reg ptr u64[8] H;
   stack ptr u64[32] s_sblocks;
-  reg u64 i oblocks;
 
   Hp = _H;
-  i = 0;
 
   H = Hp;
 
-  while(i < nblocks)
-  {
-    () = #spill(i);
-    oblocks = i << 7;
+  if (nblocks == 1) {
     for t=0 to 16 {
-      W[:u64 t] = sblocks.[:u64 oblocks + 8*t];
+      W1[:u64 t] = sblocks.[:u64 8*t];
     }
     s_sblocks = sblocks;
     
-    H = sha512_avx::sha512_compress_avx(H, W);
+    H = sha512_avx::sha512_compress_avx(H, W1);
 
     sblocks = s_sblocks;
-    () = #unspill(i);
-    i += 1;
+  } else { // nblocks == 2
+    for t=0 to 32 {
+      W2[:u64 t] = sblocks.[:u64 8*t];
+    }
+    s_sblocks = sblocks;
+    
+    H = sha512_avx2::sha512_compress_avx2(H, W2);
+
+    sblocks = s_sblocks;
   }
 
   _H = H;

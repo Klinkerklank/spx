@@ -28,55 +28,55 @@ namespace sha512_avx2 {
   param int SCHEDULE_u64_SIZE  = 16;
   param int SCHEDULE_u8_SIZE   = 8 * SCHEDULE_u64_SIZE;
 
-  u128[ROUNDS_NUM / 2] k512 = {
-    (2u64)[0x7137449123ef65cd, 0x428a2f98d728ae22],
-    (2u64)[0xe9b5dba58189dbbc, 0xb5c0fbcfec4d3b2f],
-    (2u64)[0x59f111f1b605d019, 0x3956c25bf348b538],
-    (2u64)[0xab1c5ed5da6d8118, 0x923f82a4af194f9b],
-    (2u64)[0x12835b0145706fbe, 0xd807aa98a3030242],
-    (2u64)[0x550c7dc3d5ffb4e2, 0x243185be4ee4b28c],
-    (2u64)[0x80deb1fe3b1696b1, 0x72be5d74f27b896f],
-    (2u64)[0xc19bf174cf692694, 0x9bdc06a725c71235],
-    (2u64)[0xefbe4786384f25e3, 0xe49b69c19ef14ad2],
-    (2u64)[0x240ca1cc77ac9c65, 0x0fc19dc68b8cd5b5],
-    (2u64)[0x4a7484aa6ea6e483, 0x2de92c6f592b0275],
-    (2u64)[0x76f988da831153b5, 0x5cb0a9dcbd41fbd4],
-    (2u64)[0xa831c66d2db43210, 0x983e5152ee66dfab],
-    (2u64)[0xbf597fc7beef0ee4, 0xb00327c898fb213f],
-    (2u64)[0xd5a79147930aa725, 0xc6e00bf33da88fc2],
-    (2u64)[0x142929670a0e6e70, 0x06ca6351e003826f],
-    (2u64)[0x2e1b21385c26c926, 0x27b70a8546d22ffc],
-    (2u64)[0x53380d139d95b3df, 0x4d2c6dfc5ac42aed],
-    (2u64)[0x766a0abb3c77b2a8, 0x650a73548baf63de],
-    (2u64)[0x92722c851482353b, 0x81c2c92e47edaee6],
-    (2u64)[0xa81a664bbc423001, 0xa2bfe8a14cf10364],
-    (2u64)[0xc76c51a30654be30, 0xc24b8b70d0f89791],
-    (2u64)[0xd69906245565a910, 0xd192e819d6ef5218],
-    (2u64)[0x106aa07032bbd1b8, 0xf40e35855771202a],
-    (2u64)[0x1e376c085141ab53, 0x19a4c116b8d2d0c8],
-    (2u64)[0x34b0bcb5e19b48a8, 0x2748774cdf8eeb99],
-    (2u64)[0x4ed8aa4ae3418acb, 0x391c0cb3c5c95a63],
-    (2u64)[0x682e6ff3d6b2b8a3, 0x5b9cca4f7763e373],
-    (2u64)[0x78a5636f43172f60, 0x748f82ee5defb2fc],
-    (2u64)[0x8cc702081a6439ec, 0x84c87814a1f0ab72],
-    (2u64)[0xa4506cebde82bde9, 0x90befffa23631e28],
-    (2u64)[0xc67178f2e372532b, 0xbef9a3f7b2c67915],
-    (2u64)[0xd186b8c721c0c207, 0xca273eceea26619c],
-    (2u64)[0xf57d4f7fee6ed178, 0xeada7dd6cde0eb1e],
-    (2u64)[0x0a637dc5a2c898a6, 0x06f067aa72176fba],
-    (2u64)[0x1b710b35131c471b, 0x113f9804bef90dae],
-    (2u64)[0x32caab7b40c72493, 0x28db77f523047d84],
-    (2u64)[0x431d67c49c100d4c, 0x3c9ebe0a15c9bebc],
-    (2u64)[0x597f299cfc657e2a, 0x4cc5d4becb3e42b6],
-    (2u64)[0x6c44198c4a475817, 0x5fcb6fab3ad6faec]
+  u256[ROUNDS_NUM / 2] k512 = {
+    (4u64)[0x7137449123ef65cd, 0x428a2f98d728ae22, 0x7137449123ef65cd, 0x428a2f98d728ae22],
+    (4u64)[0xe9b5dba58189dbbc, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc, 0xb5c0fbcfec4d3b2f],
+    (4u64)[0x59f111f1b605d019, 0x3956c25bf348b538, 0x59f111f1b605d019, 0x3956c25bf348b538],
+    (4u64)[0xab1c5ed5da6d8118, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118, 0x923f82a4af194f9b],
+    (4u64)[0x12835b0145706fbe, 0xd807aa98a3030242, 0x12835b0145706fbe, 0xd807aa98a3030242],
+    (4u64)[0x550c7dc3d5ffb4e2, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2, 0x243185be4ee4b28c],
+    (4u64)[0x80deb1fe3b1696b1, 0x72be5d74f27b896f, 0x80deb1fe3b1696b1, 0x72be5d74f27b896f],
+    (4u64)[0xc19bf174cf692694, 0x9bdc06a725c71235, 0xc19bf174cf692694, 0x9bdc06a725c71235],
+    (4u64)[0xefbe4786384f25e3, 0xe49b69c19ef14ad2, 0xefbe4786384f25e3, 0xe49b69c19ef14ad2],
+    (4u64)[0x240ca1cc77ac9c65, 0x0fc19dc68b8cd5b5, 0x240ca1cc77ac9c65, 0x0fc19dc68b8cd5b5],
+    (4u64)[0x4a7484aa6ea6e483, 0x2de92c6f592b0275, 0x4a7484aa6ea6e483, 0x2de92c6f592b0275],
+    (4u64)[0x76f988da831153b5, 0x5cb0a9dcbd41fbd4, 0x76f988da831153b5, 0x5cb0a9dcbd41fbd4],
+    (4u64)[0xa831c66d2db43210, 0x983e5152ee66dfab, 0xa831c66d2db43210, 0x983e5152ee66dfab],
+    (4u64)[0xbf597fc7beef0ee4, 0xb00327c898fb213f, 0xbf597fc7beef0ee4, 0xb00327c898fb213f],
+    (4u64)[0xd5a79147930aa725, 0xc6e00bf33da88fc2, 0xd5a79147930aa725, 0xc6e00bf33da88fc2],
+    (4u64)[0x142929670a0e6e70, 0x06ca6351e003826f, 0x142929670a0e6e70, 0x06ca6351e003826f],
+    (4u64)[0x2e1b21385c26c926, 0x27b70a8546d22ffc, 0x2e1b21385c26c926, 0x27b70a8546d22ffc],
+    (4u64)[0x53380d139d95b3df, 0x4d2c6dfc5ac42aed, 0x53380d139d95b3df, 0x4d2c6dfc5ac42aed],
+    (4u64)[0x766a0abb3c77b2a8, 0x650a73548baf63de, 0x766a0abb3c77b2a8, 0x650a73548baf63de],
+    (4u64)[0x92722c851482353b, 0x81c2c92e47edaee6, 0x92722c851482353b, 0x81c2c92e47edaee6],
+    (4u64)[0xa81a664bbc423001, 0xa2bfe8a14cf10364, 0xa81a664bbc423001, 0xa2bfe8a14cf10364],
+    (4u64)[0xc76c51a30654be30, 0xc24b8b70d0f89791, 0xc76c51a30654be30, 0xc24b8b70d0f89791],
+    (4u64)[0xd69906245565a910, 0xd192e819d6ef5218, 0xd69906245565a910, 0xd192e819d6ef5218],
+    (4u64)[0x106aa07032bbd1b8, 0xf40e35855771202a, 0x106aa07032bbd1b8, 0xf40e35855771202a],
+    (4u64)[0x1e376c085141ab53, 0x19a4c116b8d2d0c8, 0x1e376c085141ab53, 0x19a4c116b8d2d0c8],
+    (4u64)[0x34b0bcb5e19b48a8, 0x2748774cdf8eeb99, 0x34b0bcb5e19b48a8, 0x2748774cdf8eeb99],
+    (4u64)[0x4ed8aa4ae3418acb, 0x391c0cb3c5c95a63, 0x4ed8aa4ae3418acb, 0x391c0cb3c5c95a63],
+    (4u64)[0x682e6ff3d6b2b8a3, 0x5b9cca4f7763e373, 0x682e6ff3d6b2b8a3, 0x5b9cca4f7763e373],
+    (4u64)[0x78a5636f43172f60, 0x748f82ee5defb2fc, 0x78a5636f43172f60, 0x748f82ee5defb2fc],
+    (4u64)[0x8cc702081a6439ec, 0x84c87814a1f0ab72, 0x8cc702081a6439ec, 0x84c87814a1f0ab72],
+    (4u64)[0xa4506cebde82bde9, 0x90befffa23631e28, 0xa4506cebde82bde9, 0x90befffa23631e28],
+    (4u64)[0xc67178f2e372532b, 0xbef9a3f7b2c67915, 0xc67178f2e372532b, 0xbef9a3f7b2c67915],
+    (4u64)[0xd186b8c721c0c207, 0xca273eceea26619c, 0xd186b8c721c0c207, 0xca273eceea26619c],
+    (4u64)[0xf57d4f7fee6ed178, 0xeada7dd6cde0eb1e, 0xf57d4f7fee6ed178, 0xeada7dd6cde0eb1e],
+    (4u64)[0x0a637dc5a2c898a6, 0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x06f067aa72176fba],
+    (4u64)[0x1b710b35131c471b, 0x113f9804bef90dae, 0x1b710b35131c471b, 0x113f9804bef90dae],
+    (4u64)[0x32caab7b40c72493, 0x28db77f523047d84, 0x32caab7b40c72493, 0x28db77f523047d84],
+    (4u64)[0x431d67c49c100d4c, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c, 0x3c9ebe0a15c9bebc],
+    (4u64)[0x597f299cfc657e2a, 0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x4cc5d4becb3e42b6],
+    (4u64)[0x6c44198c4a475817, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817, 0x5fcb6fab3ad6faec]
   };
 
-  u128 gshufmask =
-    (4u32)[0x08090a0b, 0x0c0d0e0f, 0x00010203, 0x04050607];
+  u256 gshufmask =
+    (8u32)[0x08090a0b, 0x0c0d0e0f, 0x00010203, 0x04050607, 0x08090a0b, 0x0c0d0e0f, 0x00010203, 0x04050607];
 
   inline
-  fn rotate(reg u128[BLOCK_VEC_SIZE] in) -> reg u128[BLOCK_VEC_SIZE] {
-    reg u128 tmp;
+  fn rotate(reg u256[BLOCK_VEC_SIZE] in) -> reg u256[BLOCK_VEC_SIZE] {
+    reg u256 tmp;
 
     tmp   = in[0];
     in[0] = in[1];
@@ -91,70 +91,77 @@ namespace sha512_avx2 {
   }
 
   inline
-  fn update(reg u128[BLOCK_VEC_SIZE] x, reg u128 k) -> reg u128[BLOCK_VEC_SIZE], reg u128 {
-    reg u128[4] t;
-    reg u128 tmp;
+  fn update(reg u256[BLOCK_VEC_SIZE] x, reg u256 k) -> reg u256[BLOCK_VEC_SIZE], reg u256 {
+    reg u256[4] t;
+    reg u256 tmp;
 
     /* sigma0 input: W[t-15..t-14] */
-    t[0] = #VPALIGNR_128(x[1], x[0], 8);
+    t[0] = #VPALIGNR_256(x[1], x[0], 8);
     /* W[t-7..t-6] addend */
-    t[3] = #VPALIGNR_128(x[5], x[4], 8);
+    t[3] = #VPALIGNR_256(x[5], x[4], 8);
 
     /* sigma0(x) = ROTR^1(x) ^ ROTR^8(x) ^ SHR^7(x)
        decomposed as shift pairs: (>>1,<<63) ^ (>>8,<<56) ^ >>7 */
-    t[2] = #VPSRL_2u64(t[0], sigma0_r0);
-    x[0] = #VPADD_2u64(x[0], t[3]);
-    t[3] = #VPSRL_2u64(t[0], sigma0_s);
-    t[1] = #VPSLL_2u64(t[0], 64 - sigma0_r1);
+    t[2] = #VPSRL_4u64(t[0], sigma0_r0);
+    x[0] = #VPADD_4u64(x[0], t[3]);
+    t[3] = #VPSRL_4u64(t[0], sigma0_s);
+    t[1] = #VPSLL_4u64(t[0], 64 - sigma0_r1);
 
     t[0] = t[3] ^ t[2];
-    t[2] = #VPSRL_2u64(t[2], sigma0_r1 - sigma0_r0);
+    t[2] = #VPSRL_4u64(t[2], sigma0_r1 - sigma0_r0);
     t[0] = t[0] ^ t[1];
     t[0] = t[0] ^ t[2];
 
-    t[1] = #VPSLL_2u64(t[1], sigma0_r1 - sigma0_r0);
+    t[1] = #VPSLL_4u64(t[1], sigma0_r1 - sigma0_r0);
 
     /* sigma1(x) = ROTR^19(x) ^ ROTR^61(x) ^ SHR^6(x)
        decomposed as shift pairs: (>>19,<<45) ^ (>>61,<<3) ^ >>6
        SHR cascade: >>19 → >>61, SHL cascade: <<3 → <<45 */
-    t[2] = #VPSRL_2u64(x[7], sigma1_s);
+    t[2] = #VPSRL_4u64(x[7], sigma1_s);
 
-    t[3] = #VPSLL_2u64(x[7], 64 - sigma1_r1);
+    t[3] = #VPSLL_4u64(x[7], 64 - sigma1_r1);
     tmp  = t[0] ^ t[1];
-    x[0] = #VPADD_2u64(x[0], tmp);
+    x[0] = #VPADD_4u64(x[0], tmp);
 
     t[2] = t[2] ^ t[3];
-    t[1] = #VPSRL_2u64(x[7], sigma1_r0);
-    t[3] = #VPSLL_2u64(t[3], sigma1_r1 - sigma1_r0);
+    t[1] = #VPSRL_4u64(x[7], sigma1_r0);
+    t[3] = #VPSLL_4u64(t[3], sigma1_r1 - sigma1_r0);
     t[2] = t[2] ^ t[1];
-    t[1] = #VPSRL_2u64(t[1], sigma1_r1 - sigma1_r0);
+    t[1] = #VPSRL_4u64(t[1], sigma1_r1 - sigma1_r0);
     t[2] = t[2] ^ t[3];
     tmp  = t[2] ^ t[1];
-    x[0] = #VPADD_2u64(x[0], tmp);
+    x[0] = #VPADD_4u64(x[0], tmp);
 
     x = rotate(x);
 
-    tmp = #VPADD_2u64(x[7], k);
+    tmp = #VPADD_4u64(x[7], k);
 
     return x, tmp;
   }
 
   inline
   fn load_data(
-    reg ptr u8[BLOCK_SIZE] data,
-    reg ptr u64[SCHEDULE_u64_SIZE] sch
-  ) -> reg u128[BLOCK_VEC_SIZE], reg ptr u64[SCHEDULE_u64_SIZE] {
-    reg u128[BLOCK_VEC_SIZE] x;
-    reg u128 k;
+    reg ptr u8[2*BLOCK_SIZE] data,
+    reg ptr u64[2*SCHEDULE_u64_SIZE] sch
+  ) -> reg u256[BLOCK_VEC_SIZE], reg ptr u64[2*SCHEDULE_u64_SIZE] {
+    reg u256[BLOCK_VEC_SIZE] x;
+    reg u256 k t;
+    reg u128 lo, hi;
 
     inline int i;
 
     for i = 0 to BLOCK_VEC_SIZE {
-      x[i] = data[:u128 i];
-      x[i] = #VPSHUFB_128(x[i], gshufmask);
+      // pack the data from the first block into the lower 128 bits,
+      // and the data from the second block into the higher 128 bits
+      lo = data[:u128 i];
+      hi = data[:u128 (BLOCK_SIZE/16 + i)];
+      x[i] = (256u) lo;
+      x[i] = #VINSERTI128(x[i], hi, 1);
+
+      x[i] = #VPSHUFB_256(x[i], gshufmask);
       k = k512[i];
-      k = #VPADD_2u64(x[i], k);
-      sch[:u128 i] = k;
+      k = #VPADD_4u64(x[i], k);
+      sch[:u256 i] = k;
     }
 
     return x, sch;
@@ -301,14 +308,15 @@ namespace sha512_avx2 {
   inline
   fn round_0_63(
     reg ptr u64[STATE_u64_SIZE] state,
-    reg u128[BLOCK_VEC_SIZE] x,
-    reg ptr u64[SCHEDULE_u64_SIZE] sch
+    reg u256[BLOCK_VEC_SIZE] x,
+    reg ptr u64[2*SCHEDULE_u64_SIZE] sch,
+    inline int sch_i
   ) ->
     reg ptr u64[STATE_u64_SIZE],
-    reg ptr u64[SCHEDULE_u64_SIZE]
+    reg ptr u64[2*SCHEDULE_u64_SIZE]
   {
-    reg u128 k, y;
-    reg ptr u128[ROUNDS_NUM / 2] k512p;
+    reg u256 k, y;
+    reg ptr u256[ROUNDS_NUM / 2] k512p;
 
     reg u64 j;
     inline int i;
@@ -318,13 +326,13 @@ namespace sha512_avx2 {
     for i = 0 to 4 {
       j = 0;
       while (j < 16 * BLOCK_VEC_SIZE) {
-        k     = k512p.[:u128 j + 16 * BLOCK_VEC_SIZE * (i + 1)];
+        k     = k512p.[:u256 j + 16 * BLOCK_VEC_SIZE * (i + 1)];
         x, y  = update(x, k);
 
-        state = sha_round(state, sch.[:u64 (j     )], 0);
-        state = sha_round(state, sch.[:u64 (j +  8)], 0);
+        state = sha_round(state, sch.[:u64 (j     ) + 8*sch_i], 0);
+        state = sha_round(state, sch.[:u64 (j +  8) + 8*sch_i], 0);
 
-        sch.[:u128 j] = y;
+        sch.[:u256 j] = y;
 
         j += 16;
       }
@@ -336,7 +344,8 @@ namespace sha512_avx2 {
   inline
   fn round_64_79(
     reg ptr u64[STATE_u64_SIZE] state,
-    reg ptr u64[SCHEDULE_u64_SIZE] sch
+    reg ptr u64[2*SCHEDULE_u64_SIZE] sch,
+    inline int sch_i
   ) -> reg ptr u64[STATE_u64_SIZE] {
     inline int i;
     reg u64 x;
@@ -371,24 +380,21 @@ namespace sha512_avx2 {
     reg ptr u64[STATE_u64_SIZE]
   {
     stack u64[STATE_u64_SIZE] cstate;
-    stack u64[SCHEDULE_u64_SIZE] sch;
-    reg u128[BLOCK_VEC_SIZE] x;
-    
-    reg ptr u8[BLOCK_SIZE] data_one_block;
+    stack u64[2*SCHEDULE_u64_SIZE] sch;
+    reg u256[BLOCK_VEC_SIZE] x;
+
+
+    x, sch = load_data(data, sch);
 
     cstate = copy_state(cstate, state);
-
-    data_one_block = data[0 : BLOCK_SIZE];
-    x, sch = load_data(data_one_block, sch);
-    cstate, sch = round_0_63(cstate, x, sch);
-    cstate = round_64_79(cstate, sch);
+    cstate, sch = round_0_63(cstate, x, sch, 0);
+    cstate = round_64_79(cstate, sch, 0);
     state = accumulate_state(state, cstate);
 
-    data_one_block = data[BLOCK_SIZE : BLOCK_SIZE];
-    x, sch = load_data(data_one_block, sch);
-    cstate, sch = round_0_63(cstate, x, sch);
-    cstate = round_64_79(cstate, sch);
-    state = accumulate_state(state, cstate);
+    // cstate = copy_state(cstate, state);
+    // cstate, sch = round_0_63(cstate, x, sch, 1);
+    // cstate = round_64_79(cstate, sch, 1);
+    // state = accumulate_state(state, cstate);
 
     return state;
   }
