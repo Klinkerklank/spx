@@ -5,7 +5,8 @@ fn _blocks_0_ref_array(
 {
   inline int t;
   reg u64 offset;
-  stack u8[64] W;
+  stack u8[64]  W1;
+  stack u8[128] W2;
   reg ptr u32[64] Kp;
   stack ptr u32[8] Hp;
   reg ptr u32[8] H;
@@ -20,20 +21,35 @@ fn _blocks_0_ref_array(
   Hp = _H;
   H = Hp;
 
-  if (INLEN >= 64) {
-    while(inlen >= 64) {
-      for t=0 to 8 {
-        W[:u64 t] = in.[:u64 offset + 8*t];
+  // consume as many pairs of consecutive input blocks using AVX2 as possible
+  if (INLEN >= 128) {
+    while(inlen >= 128) {
+      for t=0 to 16 {
+        W2[:u64 t] = in.[:u64 offset + 8*t];
       }
 
       () = #spill(in, offset, inlen);
 
-      H = sha256_avx::sha256_compress_avx(H, W);
+      H = sha256_avx2::sha256_compress_avx2(H, W2);
 
       () = #unspill(in, offset, inlen);
-      offset += 64;
-      inlen -= 64;
+      offset += 128;
+      inlen -= 128;
     }
+  }
+
+  // if one full block remains, consume using AVX
+  if (INLEN%128 >= 64) {
+    for t=0 to 8 {
+      W1[:u64 t] = in.[:u64 offset + 8*t];
+    }
+
+    () = #spill(in, offset, inlen);
+
+    H = sha256_avx::sha256_compress_avx(H, W1);
+
+    () = #unspill(in, offset, inlen);
+    offset += 64;
   }
 
   _H = H;

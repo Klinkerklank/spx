@@ -22,11 +22,10 @@ namespace sha512_avx2 {
   param int Sigma1_1 = 18;
   param int Sigma1_2 = 41;
 
-  param int BLOCK_SIZE         = 128;
-  param int BLOCK_VEC_SIZE     = BLOCK_SIZE / 16; // 8 = eight 128-bit chunks per block
+  param int BLOCK_SIZE     = 128;
+  param int BLOCK_VEC_SIZE = BLOCK_SIZE / 16; // 8 = eight 128-bit chunks per block
 
-  param int SCHEDULE_u64_SIZE  = 16; // 16-entry ring buffer per block
-  param int SCHEDULE_u8_SIZE   = 8 * SCHEDULE_u64_SIZE;
+  param int SCHEDULE_u64_SIZE = 16; // 16-entry ring buffer for block 1
 
   // each u256 entry has the same two u64 constants K[2i+1], K[2i] in both
   // 128-bit halves so that one VPADD_4u64 adds K[2i],K[2i+1] to both blocks
@@ -93,6 +92,7 @@ namespace sha512_avx2 {
     in[5] = in[6];
     in[6] = in[7];
     in[7] = tmp;
+
     return in;
   }
 
@@ -163,10 +163,8 @@ namespace sha512_avx2 {
     inline int i;
 
     for i = 0 to BLOCK_VEC_SIZE {
-      // load 16 bytes from block 1 (bytes 0..127)
-      lo = data[:u128 i];
-      // load 16 bytes from block 2 (bytes 128..255)
-      hi = data[:u128 (BLOCK_VEC_SIZE + i)];
+      lo = data[:u128 i];                    // load 16 bytes from block 1
+      hi = data[:u128 (BLOCK_VEC_SIZE + i)]; // load 16 bytes from block 2
 
       // pack block1 into the low half, block2 into the high half
       x[i] = (256u) lo;
@@ -380,7 +378,7 @@ namespace sha512_avx2 {
     for i = 0 to 4 {
       j = 0;
       while (j < 16 * BLOCK_VEC_SIZE) {
-        // fetch next round-constant pair for both blocks.
+        // fetch next round-constant pair for both blocks
         // k512_byte advances by 32 per step (one u256 entry = 32 bytes)
         k = k512p.[:u256 k512_byte];
         k512_byte += 32;
@@ -397,8 +395,7 @@ namespace sha512_avx2 {
         state = sha_round(state, sch1.[:u64 (j    )], 0);
         state = sha_round(state, sch1.[:u64 (j + 8)], 0);
 
-        // demux the freshly computed W+K pair into both ring buffers
-        // the just-consumed ring slots can now be safely overwritten
+        // demux y and refill/write
         lo = #VEXTRACTI128(y, 0); // block 1 new words
         hi = #VEXTRACTI128(y, 1); // block 2 new words
 
@@ -406,7 +403,7 @@ namespace sha512_avx2 {
         sch1.[:u128 j] = lo;
 
         // block 2: write linearly at sch2_byte
-        // sch2_byte advances by 16 per step (one u128 = two u64s per step).
+        // sch2_byte advances by 16 per step (one u128 = two u64s per step)
         sch2.[:u128 sch2_byte] = hi;
         sch2_byte += 16;
 
@@ -454,11 +451,8 @@ namespace sha512_avx2 {
   ->
     reg ptr u64[STATE_u64_SIZE]
   {
-    // block 1: 16-slot ring buffer (same as AVX)
-    stack u64[SCHEDULE_u64_SIZE] sch1;
-    // block 2: full 80-word linear buffer (indexed 0..79 directly)
-    // W[0..15]+K filled by load_data, W[16..79]+K filled by round_0_63
-    stack u64[ROUNDS_NUM] sch2;
+    stack u64[SCHEDULE_u64_SIZE] sch1; // block 1: 16-slot ring buffer
+    stack u64[ROUNDS_NUM] sch2;        // block 2: 80-word linear buffer
 
     stack u64[STATE_u64_SIZE] cstate;
 
@@ -468,7 +462,7 @@ namespace sha512_avx2 {
     x, sch1, sch2 = load_data(data, sch1, sch2);
 
     // block 1 compression (rounds 0-79)
-    // SIMD expansion fills sch2[16..79] for block 2 as a side-effect
+    // SIMD expansion fills sch2[16..79] for block 2
     cstate = copy_state(cstate, state);
     cstate, sch1, sch2 = round_0_63(cstate, x, sch1, sch2);
     cstate = round_64_79_b1(cstate, sch1);
