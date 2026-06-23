@@ -25,6 +25,4 @@ cli
 /bench/impls
 /bench/slh_dsa_bench
 /bench/results
-
-/openssl
-/sphincsplus
+/bench/figures/*.pdf
