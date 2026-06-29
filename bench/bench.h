@@ -1,3 +1,5 @@
+// modified from https://github.com/formosa-crypto/formosa-xmss/blob/52beaa1c7669d479aceb6d9b2b998f701b6c9418/bench/common/bench.h
+
 #ifndef BENCHMARK_H
 #define BENCHMARK_H
 
@@ -120,7 +122,6 @@ static inline void cleanup_fclose(FILE **fpp) {
  * Usage:
  *   BENCHMARK_N_TIMES(1000, "results.txt", my_function(arg1));
  */
-
 #define BENCHMARK_N_TIMES(N, filename, func_call)                                            \
     do {                                                                                     \
         /* ensure output directory exists */                                                 \
@@ -145,6 +146,8 @@ static inline void cleanup_fclose(FILE **fpp) {
         printf("Benchmark results for %d executions written to '%s'\n", (N), (filename));    \
     } while (0)
 
+// performs the given functions in an interleaved fashion and with a cache-warmed start,
+// and writes the measured clock cycles to their respective files
 #define BENCHMARK_INTERLEAVED_ABCD(N, action, file_a, func_call_a, file_b, func_call_b, file_c, func_call_c, file_d, func_call_d) \
     do {                                                                                    \
         /* ensure output directory exists */                                                \
@@ -173,7 +176,7 @@ static inline void cleanup_fclose(FILE **fpp) {
         }                                                                                   \
                                                                                             \
         /* cold start (without measuring) to hopefully reduce variability */                \
-        for (int i = 0; i < (5); ++i) {                                                     \
+        for (int i = 0; i < (10); ++i) {                                                    \
             func_call_a;                                                                    \
             func_call_b;                                                                    \
             func_call_c;                                                                    \
