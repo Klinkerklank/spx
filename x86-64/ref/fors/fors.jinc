@@ -28,7 +28,7 @@ fn __forest_label(
     // is the label of the leftmost node in the target layer
     // i is the index in the target layer, but we need to account for the
     // fact that a horizontal index in FORS runs over all trees in the forest,
-    // so the label we are looking for is 2^(h'+1) - 2^(h'+1-z) + (i mod 2^(a-z))
+    // so the label we are looking for is 2^(a+1) - 2^(a+1-z) + (i mod 2^(a-z))
 
     // compute label = 2^(a+1)
     exp = SPX_A+1; // exp = a + 1
