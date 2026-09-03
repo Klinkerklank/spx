@@ -4,14 +4,22 @@
 
 This repository tries to have as few dependencies as possible, as to make using it more reliable and (hopefully) errorless. To this end, the following installation instructions are required for a blank Linux (Ubuntu 26.04.1 LTS) machine:
 
-1. install standard packages: ```sudo apt-get install git```, ```sudo apt-get install opam```, ```sudo apt-get install python3-pytest```
-2. clone the repository:
+1. install standard packages:
+   * ```sudo apt-get install git``` (for cloning the repository)
+   * ```sudo apt-get install opam``` (package manager for installing Jasmin dependencies)
+3. clone the repository:
    * all in one: ```git clone --recurse-submodules https://Klinkerklank/spx```
    * or separately: ```git clone https://Klinkerklank/spx; git submodule init; git submodule update```
 4. from the ```spx/jasmin``` folder, install the Jasmin dependencies:
    * ```eval $(opam env --switch=default)```
    * ```opam install ./jasmin.opam --deps-only```
    * ```eval $(opam env)```
+5. only if you want to run the known-answer tests:
+   * ```sudo apt-get install python3-pytest```
+5. only if you want to visualise any benchmarking results:
+   * ```sudo apt-get install jupyter-core```
+   * ```sudo apt-get install python3-ipykernel```
+   * ```sudo apt-get install python3-notebook```
 
 The first time any of the available ```make``` commands listed below is executed, the Jasmin compiler file (```spx/jasmin/compiler/jasminc```)  will automatically be created. This may take a while.
 
@@ -27,11 +35,17 @@ For example, one can run ```make PARAMSET=sha2-192s```. This produces the assemb
 
 ## Known-Answer Tests (KATs)
 
-Some scripts are included to run the implementation against a set of NIST-provided ACVP server KATs.
+Some Python scripts are included to run the implementation against a set of NIST-provided ACVP server KATs.
 
-Running all KAT tests for all parameter sets can be done with ```make acvp-kat-test-all```.
+Running all KAT tests for all parameter sets can be done with ```make acvp-kat-test-all```. Running the KAT tests only for a specific parameter set instead is done with e.g. ```make acvp-kat-test PARAMSET=sha2-128f```.
 
-Running the KAT tests only for a specific parameter set instead is done with e.g. ```make acvp-kat-test PARAMSET=sha2-128f```.
+## Benchmarking
+
+Some C scripts are included to benchmark not only the Jasmin implementations, but also the OpenSSL and NIST C reference implementations as a frame of reference.
+
+One can benchmark all of the implementations with ```make bench-all```. Running the benchmarking only for a specific parameter set instead is done with e.g. ```make bench PARAMSET=sha2-128f```. The first time benchmarking is done, the OpenSSL crypto suite is installed as part of the implementations to compare against. This will take a while.
+
+After ```make bench-all```, there is the option to plot the results in violin plots using the ```spx/bench/plot_bench_results.ipynb``` Python notebook. If you followed step 5 from the dependencies section, you can run ```jupyter execute bench/plot_bench_results.ipynb``` and find the figures in the ```bench/figures``` folder. Alternatively, open the notebook in a Jupyter browser window and 'run all' from there. The figures are plotted underneath their respective cells as well as being output to the aforementioned folder.
 
 ## Command-Line Interface (CLI) ./slh_dsa_cli
 
