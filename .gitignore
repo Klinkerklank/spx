@@ -1,6 +1,8 @@
 *.log
 /logs
 
+.vscode
+
 jasmin/compiler/_build/
 jasmin/compiler/jasmin-ct
 jasmin/compiler/jasmin2ec
