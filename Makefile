@@ -174,11 +174,11 @@ slh_dsa_$(PARAMETER_SET)_avx2_$(ARCHITECTURE).o: slh_dsa_$(PARAMETER_SET)_avx2_$
 
 # compile assembly and C into a CLI executable
 $(CLI): \
-	slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o \
-	slh_dsa_cli.c \
-	$(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o
+	slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).o \
+	$(ARCHITECTURE)/ref/misc/jasmin_syscall.o \
+	$(PARAM_HEADER)
 
-	@$(CC) slh_dsa_$(PARAMETER_SET)_$(IMPLEMENTATION_TYPE)_$(ARCHITECTURE).o slh_dsa_cli.c $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o -o $(CLI) -no-pie
+	@$(CC) slh_dsa_$(PARAMETER_SET)_ref_$(ARCHITECTURE).o slh_dsa_cli.c $(ARCHITECTURE)/$(IMPLEMENTATION_TYPE)/misc/jasmin_syscall.o -o $(CLI) -no-pie
 	@printf "\033[33mCommand-Line Interface compiled, see ./cli --help for usage instructions\033[0m\n"
 
 # ---------------------------------------------------------------- #

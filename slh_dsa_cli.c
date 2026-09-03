@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 
 #include "params/params.h" // contains SPX_N and SPX_SIG_BYTES
-#include "slh_dsa_api.h"   // declare the Jasmin export function signatures in spx.jazz
+#include "slh_dsa_api_ref.h" // contains the Jasmin export function signatures in spx.jazz
 
 #define ANSI_COLOR_RESET  "\x1b[0m"
 #define ANSI_COLOR_RED    "\x1b[31m"
@@ -106,7 +106,7 @@ int keygen() {
     write_file("outputs/sk.bin", sk, sizeof(sk)); // write sk to sk.bin
     write_file("outputs/pk.bin", pk, sizeof(pk)); // write pk to pk.bin
 
-    printf("Keys written to outputs/sk.bin and outputs/pk.bin\n");
+    printf("Keys written to outputs/sk.bin and outputs/pk.bin\n\n");
 
     return 0;
 }
@@ -133,7 +133,7 @@ int sign(uint8_t *ctx_ptr, size_t ctx_len, uint8_t *msg_ptr, size_t msg_len, boo
     mkdir("outputs", 0700); // ensure output directory exists
     write_file("outputs/sig.bin", sig, sizeof(sig)); // write sig to sig.bin
 
-    printf("Signature written to outputs/sig.bin\n");
+    printf("Signature written to outputs/sig.bin\n\n");
     
     return 0;
 }
