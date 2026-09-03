@@ -16,7 +16,7 @@ def pytest_addoption(parser):
         action="store",
         default="amd64",
         help="CPU architecture: x86-64",
-        choices=("x86-64"),
+        choices=("x86-64",),
     )
     parser.addoption(
         "--implementation-type",
