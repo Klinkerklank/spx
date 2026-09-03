@@ -137,7 +137,7 @@ $(PARAM_HEADER):
 $(JASMINC):
 	@printf "\033[36mBuilding Jasmin compiler\033[0m\n"
 	@cd jasmin/compiler && \
-	make -s > jasmin_build.log 2>&1 && \
+	make -s > ../../logs/jasmin_build.log 2>&1 && \
 	printf "\033[36mJasmin compiler built\033[0m\n"
 
 # compile assembly file
@@ -236,8 +236,6 @@ acvp-kat-test-all:
 OPENSSL_BUILD := $(CURDIR)/bench/impls/openssl
 OPENSSL_SRC   := $(CURDIR)/openssl
 
-CFLAGS += -I$(OPENSSL_BUILD)/include
-
 LDFLAGS += \
     -L$(OPENSSL_BUILD)/lib64 \
     -Wl,-rpath,$(OPENSSL_BUILD)/lib64
@@ -245,7 +243,7 @@ LDFLAGS += \
 LDLIBS += -lcrypto
 
 $(OPENSSL_BUILD)/lib64/libcrypto.so:
-	@printf "\033[36mInstalling OpenSSL (this may take a while)\033[0m\n"
+	@printf "\033[36mInstalling OpenSSL (this will take a while)\033[0m\n"
 	@cd $(OPENSSL_SRC) && \
 	./Configure linux-x86_64 \
 	    --prefix=$(OPENSSL_BUILD) \
@@ -330,7 +328,8 @@ $(BENCH): \
 	bench/impls/impl_jasmin_$(ARCHITECTURE)_ref_$(PARAMETER_SET).a \
 	bench/impls/impl_jasmin_$(ARCHITECTURE)_avx2_$(PARAMETER_SET).a \
 	bench/impls/impl_c_ref_$(PARAMETER_SET).a \
-	$(OPENSSL_BUILD)/lib64/libcrypto.so
+	$(OPENSSL_BUILD)/lib64/libcrypto.so \
+	$(PARAM_HEADER)
 
 	@printf "\033[33mRunning benchmarking of %s\033[0m\n" "$(PARAMETER_SET)";
 	@$(CC) \
@@ -344,7 +343,7 @@ $(BENCH): \
 		bench/impls/impl_c_ref_$(PARAMETER_SET).a \
 		-o $(BENCH) \
 		-no-pie \
-		$(LDFLAGS) $(LDLIBS) \
+		-I$(OPENSSL_BUILD)/include $(LDFLAGS) $(LDLIBS) \
 		-DOPENSSL_PARAMSET=\"SLH-DSA-$(subst sha2,SHA2,$(subst shake,SHAKE,$(PARAMETER_SET)))\"
 	@rm -rf sphincsplus/ref/*.o
 

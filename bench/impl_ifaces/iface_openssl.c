@@ -1,5 +1,6 @@
 #include <openssl/evp.h>
 #include <openssl/core_names.h>
+#include <openssl/err.h>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -21,14 +22,10 @@ static EVP_MD_CTX *verify_md_ctx = NULL;
 
 void openssl_cleanup(void)
 {
-    EVP_PKEY_free(openssl_pkey);
-    EVP_PKEY_CTX_free(pk_ctx);
-    EVP_MD_CTX_free(sign_md_ctx);
-    EVP_MD_CTX_free(verify_md_ctx);
-    openssl_pkey = NULL;
-    pk_ctx = NULL;
-    sign_md_ctx = NULL;
-    verify_md_ctx = NULL;
+    if (openssl_pkey != NULL)  {EVP_PKEY_free(openssl_pkey);    openssl_pkey = NULL;}
+    if (pk_ctx != NULL)        {EVP_PKEY_CTX_free(pk_ctx);      pk_ctx = NULL;}
+    if (sign_md_ctx != NULL)   {EVP_MD_CTX_free(sign_md_ctx);   sign_md_ctx = NULL;}
+    if (verify_md_ctx != NULL) {EVP_MD_CTX_free(verify_md_ctx); verify_md_ctx = NULL;}
 }
 
 int openssl_init(void)
@@ -37,40 +34,47 @@ int openssl_init(void)
     
     if (!paramset) {
         printf("ERROR: unsupported paramset: %s\n", OPENSSL_PARAMSET);
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
     pk_ctx = EVP_PKEY_CTX_new_from_name(NULL, paramset, NULL);
     if (!pk_ctx) {
         printf("ERROR: EVP_PKEY_CTX_new_from_name: %s\n", paramset);
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
     if (EVP_PKEY_keygen_init(pk_ctx) <= 0) {
         printf("ERROR: EVP_PKEY_keygen_init\n");
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
-    if (EVP_PKEY_CTX_set_group_name(pk_ctx, paramset) <= 0) {
-        printf("ERROR: EVP_PKEY_CTX_set_group_name: %s\n", paramset);
-        goto err;
-    }
+    // if (EVP_PKEY_CTX_set_group_name(pk_ctx, paramset) <= 0) {
+    //     printf("ERROR: EVP_PKEY_CTX_set_group_name: %s\n", paramset);
+    //     ERR_print_errors_fp(stderr);
+    //     goto err;
+    // }
 
     // ensure there is a valid key in pk_ctx, in case keygen is not run before sign or verify
     if (EVP_PKEY_keygen(pk_ctx, &openssl_pkey) <= 0) {
         printf("ERROR: initial EVP_PKEY_keygen\n");
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
     sign_md_ctx = EVP_MD_CTX_new();
     if (!sign_md_ctx) {
         printf("ERROR: EVP_MD_CTX_new\n");
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
     verify_md_ctx = EVP_MD_CTX_new();
     if (!verify_md_ctx) {
         printf("ERROR: EVP_MD_CTX_new\n");
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
@@ -91,6 +95,7 @@ static int openssl_keygen(
 
     if (EVP_PKEY_keygen(pk_ctx, &tmp_pkey) <= 0) {
         printf("ERROR: EVP_PKEY_keygen\n");
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
@@ -100,7 +105,6 @@ static int openssl_keygen(
 
 err:
     EVP_PKEY_free(tmp_pkey);
-    openssl_cleanup();
     return -1;
 }
 
@@ -127,6 +131,7 @@ static int openssl_sign(
             openssl_pkey,
             NULL) <= 0) {
         printf("ERROR: EVP_DigestSignInit_ex\n");
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
@@ -137,13 +142,13 @@ static int openssl_sign(
             msg_ptr,
             msg_len) <= 0) {
         printf("ERROR: EVP_DigestSign\n");
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
     return 0;
 
 err:
-    openssl_cleanup();
     return -1;
 }
 
@@ -167,6 +172,7 @@ static int openssl_verify(
             openssl_pkey,
             NULL) <= 0) {
         printf("ERROR: EVP_DigestVerifyInit_ex\n");
+        ERR_print_errors_fp(stderr);
         goto err;
     }
 
@@ -181,7 +187,6 @@ static int openssl_verify(
     return (ret == 1) ? 0 : -1;
 
 err:
-    openssl_cleanup();
     return -1;
 }
 
