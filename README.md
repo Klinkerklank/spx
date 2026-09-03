@@ -1,5 +1,20 @@
 # SPHINCS+ Jasmin Implementation
 
+## Dependencies
+
+This repository tries to have as few dependencies as possible, as to make using it more reliable and (hopefully) errorless. To this end, the following installation instructions are required for a blank Linux (Ubuntu 26.04.1 LTS) machine:
+
+1. install standard packages: ```sudo apt-get install git```, ```sudo apt-get install opam```, ```sudo apt-get install python3-pytest```
+2. clone the repository:
+   * all in one: ```git clone --recurse-submodules https://Klinkerklank/spx```
+   * or separately: ```git clone https://Klinkerklank/spx; git submodule init; git submodule update```
+4. from the ```spx/jasmin``` folder, install the Jasmin dependencies:
+   * ```eval $(opam env --switch=default)```
+   * ```opam install ./jasmin.opam --deps-only```
+   * ```eval $(opam env)```
+
+The first time any of the available ```make``` commands listed below is executed, the Jasmin compiler file (```spx/jasmin/compiler/jasminc```)  will automatically be created. This may take a while.
+
 ## Parameter Sets
 
 Compiling any specific implementation is done by setting the ```PARAMSET``` option with ```make```. This Jasmin implementation provides support for all NIST-approved (FIPS 205) parameter sets. That is to say, ```PARAMSET``` may have any of the following values.
