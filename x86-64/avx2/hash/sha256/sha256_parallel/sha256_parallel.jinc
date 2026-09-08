@@ -1,8 +1,8 @@
-// implementation of SHA256 which takes eight independent SPX_N-byte
-// inputs, and produces eight digests by computing SHA256 in parallel
+// implementation of SHA256 which takes eight independent inputs,
+// and produces eight digests by computing SHA256 in parallel
 // using eight-lane AVX2 intrinsics
 
-namespace sha256_avx2_parallel {
+namespace sha256_parallel {
     // SHA-2 parameters
     param int ROUNDS_NUM         = 64;
     param int MSG_BLOCK_u32_SIZE = 16;
@@ -26,7 +26,7 @@ namespace sha256_avx2_parallel {
     param int Sigma1_2 = 25;
 
     // round constants
-    u256[ROUNDS_NUM] k = {
+    u256[ROUNDS_NUM] sha256_k = {
         (8u32)[0x428a2f98, 0x428a2f98, 0x428a2f98, 0x428a2f98, 0x428a2f98, 0x428a2f98, 0x428a2f98, 0x428a2f98],
         (8u32)[0x71374491, 0x71374491, 0x71374491, 0x71374491, 0x71374491, 0x71374491, 0x71374491, 0x71374491],
         (8u32)[0xb5c0fbcf, 0xb5c0fbcf, 0xb5c0fbcf, 0xb5c0fbcf, 0xb5c0fbcf, 0xb5c0fbcf, 0xb5c0fbcf, 0xb5c0fbcf],
@@ -94,7 +94,7 @@ namespace sha256_avx2_parallel {
     };
 
     // initialisation vector for state variables
-    u256[STATE_u32_SIZE] iv = {
+    u256[STATE_u32_SIZE] sha256_iv = {
         (8u32)[0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667],
         (8u32)[0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85],
         (8u32)[0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372],
@@ -105,14 +105,9 @@ namespace sha256_avx2_parallel {
         (8u32)[0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19]
     }
 
-    // separator word
-    u256 sep_word   = (8u32)[0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000];
-    // length encoding
-    u256 length_enc = (8u32)[0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080];
-
     // rotate right
     inline
-    fn rrot(
+    fn rotate(
         reg u256 w,
         inline int i
     ) -> reg u256
@@ -188,11 +183,11 @@ namespace sha256_avx2_parallel {
         u   = w; // u = w
         w >>= sigma0_2; // w = w >> 3
 
-        u   = rrot(u, sigma0_0); // u = w rrot 7
-        w  ^= u; // w = (w rrot 7) ^ (w >> 3)
+        u   = rotate(u, sigma0_0); // u = w rotate 7
+        w  ^= u; // w = (w rotate 7) ^ (w >> 3)
 
-        u   = rrot(u, sigma0_1-sigma0_0); // u = w rrot 18
-        w  ^= u; // w = (w rrot 7) ^ (w rrot 18) ^ (w >> 3)
+        u   = rotate(u, sigma0_1-sigma0_0); // u = w rotate 18
+        w  ^= u; // w = (w rotate 7) ^ (w rotate 18) ^ (w >> 3)
 
         return w;
     }
@@ -208,11 +203,11 @@ namespace sha256_avx2_parallel {
         u   = w; // u = w
         w >>= sigma1_2; // w = w >> 10
 
-        u   = rrot(u, sigma1_0); // u = w rrot 17
-        w  ^= u; // w = (w rrot 17) ^ (w >> 10)
+        u   = rotate(u, sigma1_0); // u = w rotate 17
+        w  ^= u; // w = (w rotate 17) ^ (w >> 10)
 
-        u   = rrot(u, sigma1_1-sigma1_0); // u = w rrot 19
-        w  ^= u; // w = (w rrot 17) ^ (w rrot 19) ^ (w >> 10)
+        u   = rotate(u, sigma1_1-sigma1_0); // u = w rotate 19
+        w  ^= u; // w = (w rotate 17) ^ (w rotate 19) ^ (w >> 10)
 
         return w;
     }
@@ -227,14 +222,14 @@ namespace sha256_avx2_parallel {
         reg u256 v;
 
         u  = w; // u = w
-        u  = rrot(u, Sigma0_0); // u = w rrot 2
+        u  = rotate(u, Sigma0_0); // u = w rotate 2
 
         v  = w; // v = w
-        v  = rrot(v, Sigma0_1); // v = w rrot 13
-        u ^= v; // u = (w rrot 2) ^ (w rrot 13)
+        v  = rotate(v, Sigma0_1); // v = w rotate 13
+        u ^= v; // u = (w rotate 2) ^ (w rotate 13)
 
-        v  = rrot(u, Sigma0_2-Sigma0_1); // v = w rrot 22
-        u ^= v; // w = (w rrot 2) ^ (w rrot 13) ^ (w rrot 22)
+        v  = rotate(u, Sigma0_2-Sigma0_1); // v = w rotate 22
+        u ^= v; // w = (w rotate 2) ^ (w rotate 13) ^ (w rotate 22)
 
         return u;
     }
@@ -249,22 +244,62 @@ namespace sha256_avx2_parallel {
         reg u256 v;
 
         u  = w; // u = w
-        u  = rrot(u, Sigma1_0); // u = w rrot 6
+        u  = rotate(u, Sigma1_0); // u = w rotate 6
 
         v  = w; // v = w
-        v  = rrot(v, Sigma1_1); // v = w rrot 11
-        u ^= v; // u = (w rrot 6) ^ (w rrot 11)
+        v  = rotate(v, Sigma1_1); // v = w rotate 11
+        u ^= v; // u = (w rotate 6) ^ (w rotate 11)
 
-        v  = rrot(u, Sigma1_2-Sigma1_1); // v = w rrot 25
-        u ^= v; // w = (w rrot 6) ^ (w rrot 11) ^ (w rrot 25)
+        v  = rotate(u, Sigma1_2-Sigma1_1); // v = w rotate 25
+        u ^= v; // w = (w rotate 6) ^ (w rotate 11) ^ (w rotate 25)
 
         return u;
     }
 
+    // initialise the vectorised SHA256 state from scratch
+    fn init_iv() -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        // register variables
+        reg u256[STATE_u32_SIZE] state // Intermediate Hash Values (IHVs)
+        reg u64 sch_idx                // byte index of current position in message schedule
+        reg u64 bits                   // number of bits processed
+
+        // stack variables
+        stack u256[ROUNDS_NUM] schedule // message schedule
+
+        inline int i;
+
+        for i=0 to STATE_u32_SIZE {
+            state[i] = sha256_iv[i];
+        }
+
+        sch_idx = 0;
+        bits = 0;
+
+        return state, schedule, sch_idx, bits;
+    }
+
+    // initialise the vectorised SHA256 state from a cached state
+    fn init_cache(
+        reg u256[STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
+        reg u64 bits                    // number of bits processed
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        // register variables
+        reg u64 sch_idx // byte index of current position in message schedule
+
+        // stack variables
+        stack u256[ROUNDS_NUM] schedule // message schedule
+
+        sch_idx = 0;
+
+        return state, schedule, sch_idx, bits;
+    }
+
     // function for computing and storing one word in the message schedule
     inline fn compute_word(
-        stack u256[ROUNDS_NUM] sch,
-        inline int i
+        stack u256[ROUNDS_NUM] sch, // message schedule
+        inline int i                // word index in the message schedule
     )
     {
         reg u256 v w;
@@ -286,203 +321,42 @@ namespace sha256_avx2_parallel {
         sch[i] = w;
     }
 
-    // function for computing the message schedule
-    inline fn compute_schedule(
-        reg ptr u256[MSG_u32_SIZE] msg // messages in eight-lane vector format
-    ) -> stack u256[ROUNDS_NUM] // -> sch
+    // compress the message schedule into the state
+    fn compress(
+        reg u256[STATE_u32_SIZE] state,   // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule // (filled) message schedule
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule // schedule is only returned because it needs to be writable
     {
-        reg u256 word; // working variable for formatting and setting the words in the schedule
 
-        stack u256[ROUNDS_NUM] sch; // message schedule
 
-        inline int i;
-
-        // absorb all messages (one word at a time)
-        for i=0 to MSG_u32_SIZE {
-            // set i-th word of input data
-            sch[i] = msg[i];
-        }
-
-        // set the word containing the separator bit and zero-padding
-        word = sep_word;
-        sch[MSG_u32_SIZE] = word;
-
-        // set more zero-padding
-        word = 0x0;
-        for i=MSG_u32_SIZE+1 to MSG_BLOCK_u32_SIZE-1 {
-            sch[i] = word;
-        }
-
-        // set the word containing the length encoding
-        // (the length encoding actually starts at sch[MSG_BLOCK_u32_SIZE-2] but SPX_N is so
-        //  small that the first 32 bits of length encoding are always zero)
-        word = length_enc;
-        sch[MSG_BLOCK_u32_SIZE-1] = word;
-
-        // compute the rest of the schedule using compute_word
-        for i=MSG_BLOCK_u32_SIZE to ROUND_NUM {
-            compute_word(sch, i);
-        }
-
-        return sch;
+        return state, schedule;
     }
 
-    // round function
-    inline
-    fn round(
-        reg u256 ta tb tc td te tf tg th, // IHV working variables
-        reg ptr u256[ROUNDS_NUM] sch,     // message schedule
-        inline int i
-    ) -> reg u256, reg u256, reg u256, reg u256, reg u256, reg u256, reg u256, reg u256 // -> ta, tb, tc, td, te, tf, tg, th
+    // absorb eight independent (but same-length) fixed-size pointer inputs
+    fn absorb_fixed(
+        reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
+        reg u64 sch_idx,                   // byte index of current position in message schedule
+        reg u64 bits,                      // number of bits processed
+        reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 in4 in5 in6 in7 // inputs
+    ) reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
     {
-        reg u256 t1; // intermediate value t1
-        reg u256 t2; // intermediate value t2
-        reg u256 t;  // temporary variable
+        
 
-        // set initial value of t1
-        t1 = th; // t1 = th
-
-        // add relevant message schedule word
-        t  = sch[i]; // t = sch[i]
-        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i]
-
-        // add relevant round constant
-        t  = k[i]; // t = k[i]
-        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i] + k[i]
-
-        // add choice(te, tf, tg)
-        t  = choice(te, tf, tg); // t = choice(te, tf, tg)
-        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i] + k[i] + choice(te, tf, tg)
-
-        // add Σ1(te)
-        t  = Sigma1(te); // t = Σ1(te)
-        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i] + k[i] + choice(te, tf, tg) + Σ1(te)
-
-        // update te, tf, tg, and th
-        th = tg; tg = tf; tf = te;
-        te = td; te = #VPADD_8u32(te, t1); // te = td + t1
-
-        // set initial value of t2
-        t2 = t1; // t2 = t1
-
-        // add majority(ta, tb, tc)
-        t  = majority(ta, tb, tc); // t = majority(ta, tb, tc)
-        t2 = #VPADD_8u32(t2, t); // t2 = t1 + majority(ta, tb, tc)
-
-        // add Σ1(ta)
-        t  = Sigma0(ta); // t = Σ0(ta)
-        t2 = #VPADD_8u32(t2, t); // t2 = t1 + majority(ta, tb, tc) + Σ0(ta)
-
-        // update ta, tb, tc, and td
-        td = tc; tc = tb; tb = ta; ta = t2;
-
-        return t1, tb, tc, td, te, tf, tg, th;
+        return state, schedule, sch_idx, bits;
     }
 
-    // main loop function
-    inline
-    fn loop(
-        reg u256 ta tb tc td te tf tg th, // IHV working variables
-        reg ptr u256[ROUNDS_NUM] sch      // message schedule
-    ) -> reg u256, reg u256, reg u256, reg u256, reg u256, reg u256, reg u256, reg u256 // -> ta, tb, tc, td, te, tf, tg, th
+    // finalise the SHA256 computation,
+    // i.e. add zero padding, add the length encoding, and run the final compression(s)
+    fn finalise(
+        reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
+        reg u64 sch_idx,                   // byte index of current position in message schedule
+        reg u64 bits                       // number of bits processed
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule // schedule is only returned because it needs to be writable
     {
-        reg u256 tmp; // temporary working variable
 
-        inline int i;
 
-        // set intermediate hash values to initialisation vectors 
-        ta = iv[0]; tb = iv[1]; tc = iv[2]; td = iv[3];
-        te = iv[4]; tf = iv[5]; tg = iv[6]; th = iv[7];
-
-        // run all loop iterations, and compute and update the working variables
-        for i=0 to ROUNDS_NUM {
-            ta, tb, tc, td, te, tf, tg, th = round(ta, tb, tc, td, te, tf, tg, th, sch, i);
-        }
-
-        // finalise the intermediate hash values by adding the working variables
-        tmp = iv[0]; ta = #VPADD_8u32(ta, tmp);
-        tmp = iv[1]; tb = #VPADD_8u32(tb, tmp);
-        tmp = iv[2]; tc = #VPADD_8u32(tc, tmp);
-        tmp = iv[3]; td = #VPADD_8u32(td, tmp);
-        tmp = iv[4]; te = #VPADD_8u32(te, tmp);
-        tmp = iv[5]; tf = #VPADD_8u32(tf, tmp);
-        tmp = iv[6]; tg = #VPADD_8u32(tg, tmp);
-        tmp = iv[7]; th = #VPADD_8u32(th, tmp);
-
-        return ta, tb, tc, td, te, tf, tg, th;
-    }
-
-    // load the data from independent pointers into eight-lane vectors
-    inline
-    fn load_inputs(
-        reg ptr u8[SPX_N] in0 in1 in2 in3 in4 in5 in6 in7 // input pointers
-    )
-    {
-        reg u256[MSG_u32_SIZE] vectors; // eight-lane vectors
-        reg u256 vector;                // temporary variable for assembling an eight-lane vector
-
-        inline int i;
-
-        // absorb all messages (one word at a time)
-        for i=0 to MSG_u32_SIZE {
-            // take one 32-bit word from one input,
-            // and left-shift to make place for the next 
-            vector  = in0[:u32 i]; vector <<= 32;
-            vector += in1[:u32 i]; vector <<= 32;
-            vector += in2[:u32 i]; vector <<= 32;
-            vector += in3[:u32 i]; vector <<= 32;
-            vector += in4[:u32 i]; vector <<= 32;
-            vector += in5[:u32 i]; vector <<= 32;
-            vector += in6[:u32 i]; vector <<= 32;
-            vector += in7[:u32 i];
-
-            vectors[i] = vector;
-        }
-
-        return vectors;
-    }
-
-    // write the data from eight-lane vectors into the independent output pointers
-    inline
-    fn write_outputs(
-        reg ptr u8[SPX_N] out0 out1 out2 out3 out4 out5 out6 out7, // output pointers
-        reg u256          ihv0 ihv1 ihv2 ihv3 ihv4 ihv5 ihv6 ihv7  // digest vectors
-    )
-    {
-        // write all digests (one word at a time)
-        for i=0 to MSG_u32_SIZE {
-            out0[:u32 i] = ihv0[:u32 i];
-            out1[:u32 i] = ihv1[:u32 i];
-            out2[:u32 i] = ihv2[:u32 i];
-            out3[:u32 i] = ihv3[:u32 i];
-            out4[:u32 i] = ihv4[:u32 i];
-            out5[:u32 i] = ihv5[:u32 i];
-            out6[:u32 i] = ihv6[:u32 i];
-            out7[:u32 i] = ihv7[:u32 i];
-        }
-    }
-
-    // main loop function
-    fn sha256_parallel(
-        reg ptr u8[SPX_N]  in0  in1  in2  in3  in4  in5  in6  in7, // inputs
-        reg ptr u8[SPX_N] out0 out1 out2 out3 out4 out5 out6 out7  // outputs
-    )
-    {
-        reg u256 ihv0 ihv1 ihv2 ihv3 ihv4 ihv5 ihv6 ihv7; // intermediate hash values
-        reg u256[MSG_u32_SIZE] msg; // temporary array for converting the inputs to an AVX2-compatible variant
-
-        stack u256[ROUNDS_NUM] sch; // message schedule
-
-        // convert the independent register pointers to eight-lane vectorised inputs
-        msg = load_inputs(in0, in1, in2, in3, in4, in5, in6, in7);
-
-        // compute the message schedule
-        sch = compute_schedule(msg);
-
-        // compute the digests by use of the loop function
-        ihv0, ihv1, ihv2, ihv3, ihv4, ihv5, ihv6, ihv7 = loop(ihv0, ihv1, ihv2, ihv3, ihv4, ihv5, ihv6, ihv7, sch);
-
-        // convert the eight-lane vectorised IHVs to the independent output pointers
-        write_outputs(out0, out1, out2, out3, out4, out5, out6, out7, ihv0, ihv1, ihv2, ihv3, ihv4, ihv5, ihv6, ihv7);
+        return state, schedule;
     }
 }
