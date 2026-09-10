@@ -105,6 +105,47 @@ namespace sha256_parallel {
         (8u32)[0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19]
     }
 
+    // initialise the vectorised SHA256 state from scratch
+    fn init_iv(
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        // register variables
+        reg u256[STATE_u32_SIZE] state // Intermediate Hash Values (IHVs)
+        reg u64 sch_idx                // byte index of current position in message schedule
+        reg u64 bits                   // number of bits processed
+
+        // stack variables
+        stack u256[ROUNDS_NUM] schedule // message schedule
+
+        inline int i;
+
+        for i=0 to STATE_u32_SIZE {
+            state[i] = sha256_iv[i];
+        }
+
+        sch_idx = 0;
+        bits = 0;
+
+        return state, schedule, sch_idx, bits;
+    }
+
+    // initialise the vectorised SHA256 state from a cached state
+    fn init_cache(
+        reg u256[STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
+        reg u64 bits                    // number of bits processed
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        // register variables
+        reg u64 sch_idx // byte index of current position in message schedule
+
+        // stack variables
+        stack u256[ROUNDS_NUM] schedule // message schedule
+
+        sch_idx = 0;
+
+        return state, schedule, sch_idx, bits;
+    }
+
     // rotate right
     inline
     fn rotate(
@@ -256,94 +297,122 @@ namespace sha256_parallel {
         return u;
     }
 
-    // initialise the vectorised SHA256 state from scratch
-    fn init_iv() -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
-    {
-        // register variables
-        reg u256[STATE_u32_SIZE] state // Intermediate Hash Values (IHVs)
-        reg u64 sch_idx                // byte index of current position in message schedule
-        reg u64 bits                   // number of bits processed
-
-        // stack variables
-        stack u256[ROUNDS_NUM] schedule // message schedule
-
-        inline int i;
-
-        for i=0 to STATE_u32_SIZE {
-            state[i] = sha256_iv[i];
-        }
-
-        sch_idx = 0;
-        bits = 0;
-
-        return state, schedule, sch_idx, bits;
-    }
-
-    // initialise the vectorised SHA256 state from a cached state
-    fn init_cache(
-        reg u256[STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
-        reg u64 bits                    // number of bits processed
-    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
-    {
-        // register variables
-        reg u64 sch_idx // byte index of current position in message schedule
-
-        // stack variables
-        stack u256[ROUNDS_NUM] schedule // message schedule
-
-        sch_idx = 0;
-
-        return state, schedule, sch_idx, bits;
-    }
-
-    // function for computing and storing one word in the message schedule
-    inline fn compute_word(
-        stack u256[ROUNDS_NUM] sch, // message schedule
-        inline int i                // word index in the message schedule
-    )
+    // compute one word in the message schedule
+    inline
+    fn compute_word(
+        stack u256[ROUNDS_NUM] schedule, // message schedule
+        inline int word_idx              // word index in the message schedule
+    ) -> stack u256[ROUNDS_NUM] // -> schedule
     {
         reg u256 v w;
 
-        w  = sch[i-15]; // w = sch[i-15]
-        w  = sigma0(w); // w = σ0(sch[i-15])
+        w  = schedule[word_idx-15]; // w = sch[i-15]
+        w  = sigma0(w);             // w = σ0(sch[i-15])
 
-        v  = sch[i-2];  // v = sch[i-2]
-        v  = sigma1(v); // v = σ1(sch[i-2])
+        v  = schedule[word_idx-2];  // v = sch[i-2]
+        v  = sigma1(v);             // v = σ1(sch[i-2])
 
-        w = #VPADD_8u32(w, v); // w = σ1(sch[i-2]) + σ0(sch[i-15])
+        w = #VPADD_8u32(w, v);      // w = σ1(sch[i-2]) + σ0(sch[i-15])
 
-        v  = sch[i-7];  // v = sch[i-7]
-        w = #VPADD_8u32(w, v); // w = σ1(sch[i-2]) + sch[i-7] + σ0(sch[i-15])
+        v  = schedule[word_idx-7];  // v = sch[i-7]
+        w = #VPADD_8u32(w, v);      // w = σ1(sch[i-2]) + sch[i-7] + σ0(sch[i-15])
 
-        v  = sch[i-16]; // v = sch[i-16]
-        w = #VPADD_8u32(w, v); // w = σ1(sch[i-2]) + sch[i-7] + σ0(sch[i-15]) + sch[i-16]
+        v  = schedule[word_idx-16]; // v = sch[i-16]
+        w = #VPADD_8u32(w, v);      // w = σ1(sch[i-2]) + sch[i-7] + σ0(sch[i-15]) + sch[i-16]
 
-        sch[i] = w;
+        schedule[word_idx] = w;
+
+        return schedule;
+    }
+
+    // complete the message schedule, assuming the first MSG_BLOCK_u32_SIZE
+    // words of the schedule already contain the message data
+    inline
+    fn complete_schedule(
+        stack u256[ROUNDS_NUM] schedule
+    ) -> stack u256[ROUNDS_NUM] // -> schedule
+    {
+        inline int word_idx; // index of the words in the schedule
+
+        // compute the rest of the schedule one word at a time using compute_word
+        for word_idx=MSG_BLOCK_u32_SIZE to ROUND_NUM {
+            schedule = compute_word(schedule, word_idx);
+        }
+
+        return schedule;
+    }
+
+    // compute one round of the main loop
+    inline
+    fn round(
+        reg u256[STATE_u32_SIZE] state,  // Intermediate Hash Values (IHVs)
+        stack u256[ROUNDS_NUM] schedule, // (filled) message schedule
+        inline int round_nr              // round index
+    ) -> reg u256[STATE_u32_SIZE] // -> state
+    {
+        reg u256 t1; // intermediate value t1
+        reg u256 t2; // intermediate value t2
+        reg u256 t;  // temporary variable
+
+        // set initial value of t1
+        t1 = state[7]; // t1 = th
+
+        // add relevant message schedule word
+        t  = schedule[round_nr]; // t  = sch[i]
+        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i]
+
+        // add relevant round constant
+        t  = sha256_k[round_nr]; // t  = k[i]
+        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i] + k[i]
+
+        // add choice(te, tf, tg)
+        t  = choice(state[4], state[5], state[6]); // t  = choice(te, tf, tg)
+        t1 = #VPADD_8u32(t1, t);                   // t1 = th + sch[i] + k[i] + choice(te, tf, tg)
+
+        // add Σ1(te)
+        t  = Sigma1(state[4]);   // t  = Σ1(te)
+        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i] + k[i] + choice(te, tf, tg) + Σ1(te)
+
+        // update te, tf, tg, and th
+        state[7] = state[6]; // th = tg
+        state[6] = state[5]; // tg = tf
+        state[5] = state[4]; // tf = te
+        state[4] = state[3]; state[4] = #VPADD_8u32(state[4], t1); // te = td + t1
+
+        // set initial value of t2
+        t2 = t1; // t2 = t1
+
+        // add majority(ta, tb, tc)
+        t  = majority(state[0], state[1], state[2]); // t  = majority(ta, tb, tc)
+        t2 = #VPADD_8u32(t2, t);                     // t2 = t1 + majority(ta, tb, tc)
+
+        // add Σ0(ta)
+        t  = Sigma0(state[0]);   // t  = Σ0(ta)
+        t2 = #VPADD_8u32(t2, t); // t2 = t1 + majority(ta, tb, tc) + Σ0(ta)
+
+        // update ta, tb, tc, and td
+        state[3] = state[2]; // td = tc
+        state[2] = state[1]; // tc = tb
+        state[1] = state[0]; // tb = ta
+        state[0] = t2;       // ta = t2
+
+        return state;
     }
 
     // compress the message schedule into the state
+    inline
     fn compress(
-        reg u256[STATE_u32_SIZE] state,   // Intermediate Hash Values (IHVs)
-        reg ptr u256[ROUNDS_NUM] schedule // (filled) message schedule
-    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule // schedule is only returned because it needs to be writable
+        reg u256[STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
+        stack u256[ROUNDS_NUM] schedule // (filled) message schedule
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state
     {
+        inline int round_nr; // round number iterator
 
+        for round_nr=0 to ROUNDS_NUM {
+            state = round(state, schedule, round_nr);
+        }
 
-        return state, schedule;
-    }
-
-    // absorb eight independent (but same-length) fixed-size pointer inputs
-    fn absorb_fixed(
-        reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
-        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
-        reg u64 sch_idx,                   // byte index of current position in message schedule
-        reg u64 bits,                      // number of bits processed
-        reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 in4 in5 in6 in7 // inputs
-    ) reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
-    {
-        
-
-        return state, schedule, sch_idx, bits;
+        return state;
     }
 
     // finalise the SHA256 computation,
@@ -355,7 +424,10 @@ namespace sha256_parallel {
         reg u64 bits                       // number of bits processed
     ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule // schedule is only returned because it needs to be writable
     {
-
+        // TODO set separator byte
+        // TODO set zero padding
+        // TODO set length encoding
+        // TODO run final compression
 
         return state, schedule;
     }

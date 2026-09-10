@@ -1,0 +1,13 @@
+// absorb eight independent (but same-length) fixed-size pointer inputs
+fn absorb_fixed(
+    reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
+    reg ptr u256[ROUNDS_NUM] schedule, // message schedule
+    reg u64 sch_idx,                   // byte index of current position in message schedule
+    reg u64 bits,                      // number of bits processed
+    reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 in4 in5 in6 in7 // inputs
+) reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+{
+    
+
+    return state, schedule, sch_idx, bits;
+}
