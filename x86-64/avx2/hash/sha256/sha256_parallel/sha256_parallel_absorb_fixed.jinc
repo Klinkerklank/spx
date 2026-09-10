@@ -7,7 +7,196 @@ fn absorb_fixed(
     reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 in4 in5 in6 in7 // inputs
 ) reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
-    
+    // register variables
+    reg u256 vector_256;   // placeholder for assembling a 256-bit vector
+    reg u256 mask;         // bitmask for constructing vectors from bytes
+    reg u32 vector_32;     // placeholder for assembling a 32-bit vector
+    reg u64 in_bit_nr;     // the number of bits of input
+    reg u64 in_byte_nr;    // the number of bytes of input
+    reg u64 in_byte_idx;   // byte index in the input pointers
+    reg u64 avail_byte_nr; // the number of bits of input
+    reg u64 idx_word;      // temporary variable for computing a word index in the schedule
+    reg u64 idx_byte;      // temporary variable for computing a byte index within a word
+
+    // stack variables
+    stack u256[ROUNDS_NUM] schedule_st; // message schedule stack space
+
+    () = #spill(bits); // not needed until the end of this function
+
+    schedule_st = schedule;
+    in_byte_idx = 0;
+
+    // compute how many bytes of message space are available in the schedule
+    avail_byte_nr = MSG_BLOCK_u8_SIZE;
+    avail_byte_nr -= sch_idx;
+
+    // top off the the current schedule and compress
+    if (in_byte_nr >= avail_byte_nr) {
+        idx_word = sch_idx; idx_word += 1; idx_word /= 4; // get the word index of the next byte to be placed in the schedule
+        vector_256 = schedule[idx_word];                  // retrieve the current word
+        idx_byte = sch_idx; idx_byte += 1; idx_byte %= 4; // get the byte index within the word
+
+        // if the byte index is not word-aligned, the current word must first be filled byte by byte
+        if (idx_byte == 1) {
+            mask = 0xFF000000FF000000FF000000FF000000FF000000FF000000FF000000FF000000;
+            vector_256 &= mask; // keep the already-set input bytes, set the rest to 0
+
+            // set three input bytes per lane
+                        mask  = (u256) in0[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in0[in_byte_idx+1];
+            mask <<= 8; mask += (u256) in0[in_byte_idx+2];
+            mask <<= 8; // skip one byte
+            mask <<= 8; mask += (u256) in1[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in1[in_byte_idx+1];
+            mask <<= 8; mask += (u256) in1[in_byte_idx+2];
+            mask <<= 8; // skip one byte
+            mask <<= 8; mask += (u256) in2[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in2[in_byte_idx+1];
+            mask <<= 8; mask += (u256) in2[in_byte_idx+2];
+            mask <<= 8; // skip one byte
+            mask <<= 8; mask += (u256) in3[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in3[in_byte_idx+1];
+            mask <<= 8; mask += (u256) in3[in_byte_idx+2];
+            mask <<= 8; // skip one byte
+            mask <<= 8; mask += (u256) in4[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in4[in_byte_idx+1];
+            mask <<= 8; mask += (u256) in4[in_byte_idx+2];
+            mask <<= 8; // skip one byte
+            mask <<= 8; mask += (u256) in5[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in5[in_byte_idx+1];
+            mask <<= 8; mask += (u256) in5[in_byte_idx+2];
+            mask <<= 8; // skip one byte
+            mask <<= 8; mask += (u256) in6[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in6[in_byte_idx+1];
+            mask <<= 8; mask += (u256) in6[in_byte_idx+2];
+            mask <<= 8; // skip one byte
+            mask <<= 8; mask += (u256) in7[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in7[in_byte_idx+1];
+            mask <<= 8; mask += (u256) in7[in_byte_idx+2];
+
+            vector_256 ^= mask; // combine the vector with existing data, with the vector with new data 
+
+            schedule[idx_word] = vector_256; // overwrite the vector in the schedule
+
+            in_byte_idx += 3; // consumed three bytes of input per lane
+            idx_word += 1; // the current word has been filled and stored
+        } else if (idx_byte == 2) {
+            mask = 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000;
+            vector_256 &= mask; // keep the already-set input bytes, set the rest to 0
+
+            // set two input bytes per lane
+                        mask  = (u256) in0[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in0[in_byte_idx+1];
+            mask <<= 16; // skip two bytes
+            mask <<= 8; mask += (u256) in1[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in1[in_byte_idx+1];
+            mask <<= 16; // skip two bytes
+            mask <<= 8; mask += (u256) in2[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in2[in_byte_idx+1];
+            mask <<= 16; // skip two bytes
+            mask <<= 8; mask += (u256) in3[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in3[in_byte_idx+1];
+            mask <<= 16; // skip two bytes
+            mask <<= 8; mask += (u256) in4[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in4[in_byte_idx+1];
+            mask <<= 16; // skip two bytes
+            mask <<= 8; mask += (u256) in5[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in5[in_byte_idx+1];
+            mask <<= 16; // skip two bytes
+            mask <<= 8; mask += (u256) in6[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in6[in_byte_idx+1];
+            mask <<= 16; // skip two bytes
+            mask <<= 8; mask += (u256) in7[in_byte_idx  ];
+            mask <<= 8; mask += (u256) in7[in_byte_idx+1];
+
+            vector_256 ^= mask; // combine the vector with existing data, with the vector with new data 
+
+            schedule[idx_word] = vector_256; // overwrite the vector in the schedule
+
+            in_byte_idx += 2; // consumed two bytes of input per lane
+            idx_word += 1;    // the current word has been filled and stored
+        } else if (idx_byte == 3) {
+            mask = 0xFFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00;
+            vector_256 &= mask; // keep the already-set input bytes, set the rest to 0
+
+            // set one input byte per lane
+                        mask  = (u256) in0[in_byte_idx];
+            mask <<= 24; // skip three bytes
+            mask <<= 8; mask += (u256) in1[in_byte_idx];
+            mask <<= 24; // skip three bytes
+            mask <<= 8; mask += (u256) in2[in_byte_idx];
+            mask <<= 24; // skip three bytes
+            mask <<= 8; mask += (u256) in3[in_byte_idx];
+            mask <<= 24; // skip three bytes
+            mask <<= 8; mask += (u256) in4[in_byte_idx];
+            mask <<= 24; // skip three bytes
+            mask <<= 8; mask += (u256) in5[in_byte_idx];
+            mask <<= 24; // skip three bytes
+            mask <<= 8; mask += (u256) in6[in_byte_idx];
+            mask <<= 24; // skip three bytes
+            mask <<= 8; mask += (u256) in7[in_byte_idx];
+
+            vector_256 ^= mask; // combine the vector with existing data, with the vector with new data 
+
+            schedule[idx_word] = vector_256; // overwrite the vector in the schedule
+
+            in_byte_idx += 1; // consumed one byte of input per lane
+            idx_word += 1;    // the current word has been filled and stored
+        }
+        
+        // fill the rest of the schedule with entire words of input
+        while (idx_word < MSG_BLOCK_u32_SIZE) {
+            // gather one word from each input, and insert the word into the packed vector
+            vector_32 = in0.[:u32 in_byte_idx];                    vector_256  = (u256) vector_32;
+            vector_32 = in1.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+            vector_32 = in2.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+            vector_32 = in3.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+            vector_32 = in4.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+            vector_32 = in5.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+            vector_32 = in6.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+            vector_32 = in7.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+            
+            schedule[idx_word] = vector_256; // store the assembled vector in the schedule
+
+            in_byte_idx += 4; // four bytes of input have been gathered
+            idx_word += 1;    // one word of input has been gathered
+        }
+
+        state = compress(state, schedule); // compress the message schedule into the state
+
+        in_byte_nr -= avail_byte_nr; // the number of bytes needed to top off the schedule have been consumed
+
+        // fill entire input blocks and compress
+        while (in_byte_nr >= MSG_BLOCK_u8_SIZE) {
+            // fill the (empty) schedule completely
+            for i=0 to MSG_BLOCK_u32_SIZE {
+                // gather one word from each input, and insert the word into the packed vector
+                vector_32 = in0.[:u32 in_byte_idx];                    vector_256  = (u256) vector_32;
+                vector_32 = in1.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+                vector_32 = in2.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+                vector_32 = in3.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+                vector_32 = in4.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+                vector_32 = in5.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+                vector_32 = in6.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+                vector_32 = in7.[:u32 in_byte_idx]; vector_256 <<= 32; vector_256 += (u256) vector_32;
+                
+                schedule[i] = vector_256; // store the assembled vector in the schedule
+
+                in_byte_idx += 4; // four bytes of input have been gathered
+            }
+
+            state = compress(state, schedule); // compress the message schedule into the state
+            
+            in_byte_nr -= MSG_BLOCK_u8_SIZE; // one entire block of input has been consumed
+        }
+    }
+
+    // TODO write the remainder of the input to the schedule
+
+    // update how many bits of input have been processed after consuming the entire input
+    () = #unspill(bits);
+    in_bit_nr = INPUT_LENGTH << 3; // INPUT_LENGTH is in number of bytes, so multiply by eight to get number of bits
+    bits += in_bit_nr;
 
     return state, schedule, sch_idx, bits;
 }

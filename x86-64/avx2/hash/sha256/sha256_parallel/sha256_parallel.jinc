@@ -5,8 +5,10 @@
 namespace sha256_parallel {
     // SHA-2 parameters
     param int ROUNDS_NUM         = 64;
-    param int MSG_BLOCK_u32_SIZE = 16;
-    param int STATE_u32_SIZE     = 8;
+    param int MSG_BLOCK_u8_SIZE  = 64;
+    param int MSG_BLOCK_u32_SIZE = MSG_BLOCK_u8_SIZE/4;
+    param int STATE_u8_SIZE      = 32;
+    param int STATE_u32_SIZE     = STATE_u8_SIZE/4;
     param int MSG_u32_SIZE       = 4;
 
     // sigma function constants
@@ -404,12 +406,30 @@ namespace sha256_parallel {
     fn compress(
         reg u256[STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
         stack u256[ROUNDS_NUM] schedule // (filled) message schedule
-    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state
+    ) -> reg u256[STATE_u32_SIZE] // -> state
     {
+        // register variables
+        reg u256 tmp; // temporary variable for copying purposes
+
+        // stack variables
+        stack u256[STATE_u32_SIZE] ihv;
+
+        inline int i;
         inline int round_nr; // round number iterator
+
+        // save the IHV values before the loop
+        for i=0 to STATE_u32_SIZE {
+            ihv[i] = state[i];
+        }
 
         for round_nr=0 to ROUNDS_NUM {
             state = round(state, schedule, round_nr);
+        }
+
+        // add to the working variables the IHV values from before the loop
+        for i=0 to STATE_u32_SIZE {
+            tmp = ihv[i];
+            state[i] = #VPADD_8u32(state[i], tmp);
         }
 
         return state;
@@ -421,7 +441,8 @@ namespace sha256_parallel {
         reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
         reg ptr u256[ROUNDS_NUM] schedule, // message schedule
         reg u64 sch_idx,                   // byte index of current position in message schedule
-        reg u64 bits                       // number of bits processed
+        reg u64 bits,                      // number of bits processed
+        reg ptr u8[STATE_u8_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
     ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule // schedule is only returned because it needs to be writable
     {
         // TODO set separator byte
