@@ -9,7 +9,6 @@ namespace sha256_parallel {
     param int MSG_BLOCK_u32_SIZE = MSG_BLOCK_u8_SIZE/4;
     param int STATE_u8_SIZE      = 32;
     param int STATE_u32_SIZE     = STATE_u8_SIZE/4;
-    param int MSG_u32_SIZE       = 4;
 
     // sigma function constants
     param int sigma0_0 =  7;
@@ -121,8 +120,15 @@ namespace sha256_parallel {
 
         inline int i;
 
+        // set the IHVs to the initialisation vectors
         for i=0 to STATE_u32_SIZE {
             state[i] = sha256_iv[i];
+        }
+
+        // reset the message part of the schedule
+        // (the computed part will be overwritten by compute_word anyway)
+        for i=0 to MSG_BLOCK_u32_SIZE {
+            schedule[i] = 0x0;
         }
 
         sch_idx = 0;
@@ -142,6 +148,12 @@ namespace sha256_parallel {
 
         // stack variables
         stack u256[ROUNDS_NUM] schedule // message schedule
+
+        // reset the message part of the schedule
+        // (the computed part will be overwritten by compute_word anyway)
+        for i=0 to MSG_BLOCK_u32_SIZE {
+            schedule[i] = 0x0;
+        }
 
         sch_idx = 0;
 
@@ -417,6 +429,10 @@ namespace sha256_parallel {
         inline int i;
         inline int round_nr; // round number iterator
 
+        // complete the message schedule
+        // (only the message part is filled, not the computed part yet)
+        schedule = complete_schedule(schedule);
+
         // save the IHV values before the loop
         for i=0 to STATE_u32_SIZE {
             ihv[i] = state[i];
@@ -432,7 +448,25 @@ namespace sha256_parallel {
             state[i] = #VPADD_8u32(state[i], tmp);
         }
 
+        // reset the message part of the schedule
+        // (the computed part will be overwritten by compute_word anyway)
+        for i=0 to MSG_BLOCK_u32_SIZE {
+            schedule[i] = 0x0;
+        }
+
         return state;
+    }
+
+    // unpack the vectorised eight-lane state into separate output vectors
+    inline
+    fn unpack_state(
+        reg u256[STATE_u32_SIZE] state, // vectorised IHVs
+        reg ptr u8[STATE_u8_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
+    ) -> reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE] // -> out0, out1, out2, out3, out4, out5, out6, out7
+    {
+        // TODO
+
+        return out0, out1, out2, out3, out4, out5, out6, out7;
     }
 
     // finalise the SHA256 computation,
@@ -445,11 +479,83 @@ namespace sha256_parallel {
         reg ptr u8[STATE_u8_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
     ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule // schedule is only returned because it needs to be writable
     {
-        // TODO set separator byte
-        // TODO set zero padding
-        // TODO set length encoding
-        // TODO run final compression
+        // register variables
+        reg u256 mask;      // bitmask for constructing vectors from bytes
+        reg u256 length_hi; // 32  most-significant bits of the length encoding
+        reg u256 length_lo; // 32 least-significant bits of the length encoding
+        reg u64 idx_word;   // temporary variable for computing a word index in the schedule
+        reg u64 idx_byte;   // temporary variable for computing a byte index within a word
 
-        return state, schedule;
+        idx_word = sch_idx; idx_word /= 4; // get the word index of the next byte to be placed in the schedule
+        idx_byte = sch_idx; idx_byte %= 4; // get the byte index within the word
+
+        // determine which pre-computed separator byte mask is needed
+        if (idx_byte == 0) {
+            mask = 0x8000000080000000800000008000000080000000800000008000000080000000;
+        } else if (idx_byte == 1) {
+            mask = 0x0080000000800000008000000080000000800000008000000080000000800000;
+        } else if (idx_byte == 2) {
+            mask = 0x0000800000008000000080000000800000008000000080000000800000008000;
+        } else { // idx_byte == 3
+            mask = 0x0000008000000080000000800000008080000008000000800000008000000080;
+        }
+
+        // set the separator bytes
+        vector_256 = schedule[idx_word]; // retrieve the current word
+        vector_256 ^= mask;              // combine the vector of existing data and the vector with the separator bytes
+        schedule[idx_word] = vector_256; // overwrite the vector in the schedule
+        idx_word += 1;                   // any zeroes after the separator byte are effectively already zero padding, so move on to the next word
+
+        // check if the length encoding fits in the current block
+        if (idx_word >= MSG_BLOCK_u32_SIZE-2) {
+
+            // length encoding does not fit in the current message schedule,
+            // so compress the schedule first
+            // (the schedule started as all-zero, so the zero padding is already set correctly)
+            state = compress(state, schedule); // compress the message schedule into the state
+
+            // the compression function automatically sets the entire schedule to all zeroes,
+            // so the word index for the length encoding can just be set to the correct position immediately
+            idx_word = MSG_BLOCK_u32_SIZE-2;
+        }
+
+        length_hi = bits; length_hi >>= 32; // get the first half of the length encoding
+
+        // only compute and set the vector if the high half of bits are non-zero
+        if (length_hi != 0) {
+
+            vector_256 = 0x0; // initialise the packed vector to all zero
+
+            for i=0 to 8 {
+                vector_256 <<= 32;       // make place for one word
+                vector_256 += length_hi; // insert the word
+            }
+
+            schedule[idx_word] = vector_256;
+        }
+
+        idx_word += 1; // move on to the second word of the length encoding
+        length_low = bits; length_low &= 0xFFFFFFFF; // get the second half of the length encoding
+
+        // only compute and set the vector if the low half of bits are non-zero
+        if (length_low != 0) {
+
+            vector_256 = 0x0; // initialise the packed vector to all zero
+
+            for i=0 to 8 {
+                vector_256 <<= 32;        // make place for one word
+                vector_256 += length_low; // insert the word
+            }
+
+            schedule[idx_word] = vector_256;
+        }
+
+        // run the final compression
+        state = compress(state, schedule);
+
+        // convert the vectorised state to separate outputs
+        out0, out1, out2, out3, out4, out5, out6, out7 = unpack_state(state, out0, out1, out2, out3, out4, out5, out6, out7);
+
+        return out0, out1, out2, out3, out4, out5, out6, out7;
     }
 }

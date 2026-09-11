@@ -75,11 +75,12 @@ fn absorb_fixed(
     reg u64 avail_byte_nr; // the number of bits of input
     reg u64 idx_word;      // temporary variable for computing a word index in the schedule
     reg u64 idx_byte;      // temporary variable for computing a byte index within a word
+    reg u64 target;        // temporary variable for computing a target byte index to compare against
 
     // stack variables
     stack u256[ROUNDS_NUM] schedule_st; // message schedule stack space
 
-    () = #spill(bits); // not needed until the end of this function
+    () = #spill(bits, sch_idx); // not needed until the end of this function
 
     schedule_st = schedule;    // associate the schedule with the stack
     in_byte_idx = 0;           // (counts up to INPUT_LENGTH-1) index in the inputs of the next byte to be consumed
@@ -228,6 +229,11 @@ fn absorb_fixed(
     () = #unspill(bits);
     in_bit_nr = INPUT_LENGTH << 3; // INPUT_LENGTH is in number of bytes, so multiply by eight to get number of bits
     bits += in_bit_nr;
+
+    // update schedule byte index
+    () = #unspill(sch_idx);
+    sch_idx += INPUT_LENGTH;
+    sch_idx %= MSG_BLOCK_u8_SIZE;
 
     return state, schedule, sch_idx, bits;
 }
