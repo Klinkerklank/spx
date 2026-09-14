@@ -1,0 +1,45 @@
+
+require "sha256_parallel.jinc"
+namespace sha256_parallel_16 {
+    param int INPUT_LENGTH = 16;
+    require "sha256_parallel_absorb_fixed.jinc"
+}
+
+export
+fn test_parallel(
+    reg u64 out_base
+)
+{
+    reg u256[8] state;
+    reg ptr u256[64] schedule;
+    reg u64 sch_idx;
+    reg u64 bits;
+    reg u64 ret;
+
+    stack u8[16] in0  in1  in2  in3  in4  in5  in6  in7;  // inputs
+    stack u8[16] out0 out1 out2 out3 out4 out5 out6 out7; // outputs
+
+    inline int i;
+
+    () = #spill(out_base);
+
+    state, schedule, sch_idx, bits = sha256_parallel::init_iv();
+
+    // state, schedule, sch_idx, bits = sha256_parallel_16::absorb_fixed(in0, in1, in2, in3, in4, in5, in6, in7);
+
+    out0, out1, out2, out3, out4, out5, out6, out7 = sha256_parallel::finalise(state, schedule, sch_idx, bits, out0, out1, out2, out3, out4, out5, out6, out7);
+
+    () = #unspill(out_base);
+
+    for i=0 to 4 { [:u32 out_base + 4*0 + i] = out0[i]; }
+    for i=0 to 4 { [:u32 out_base + 4*1 + i] = out1[i]; }
+    for i=0 to 4 { [:u32 out_base + 4*2 + i] = out2[i]; }
+    for i=0 to 4 { [:u32 out_base + 4*3 + i] = out3[i]; }
+    for i=0 to 4 { [:u32 out_base + 4*4 + i] = out4[i]; }
+    for i=0 to 4 { [:u32 out_base + 4*5 + i] = out5[i]; }
+    for i=0 to 4 { [:u32 out_base + 4*6 + i] = out6[i]; }
+    for i=0 to 4 { [:u32 out_base + 4*7 + i] = out7[i]; }
+
+    ret = 0;
+    return ret;
+}
