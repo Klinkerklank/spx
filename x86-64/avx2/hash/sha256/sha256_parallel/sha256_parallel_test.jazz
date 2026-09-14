@@ -6,7 +6,7 @@ namespace sha256_parallel_16 {
 }
 
 export
-fn test_parallel(
+fn sha256_parallel_test(
     reg u64 out_base
 ) -> reg u64 // -> ret
 {
