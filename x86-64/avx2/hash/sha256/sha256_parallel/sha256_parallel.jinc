@@ -486,39 +486,27 @@ namespace sha256_parallel {
     {
         // register variables
         reg u256 vector; // temporary variable for copying purposes
-        reg u256 idx;    // temporary variable for determining lane indices in a permutation
+        reg u128 upper;  // temporary variable for copying purposes
         reg u32 word;    // temporary variable for copying purposes
 
         inline int i;
 
-        idx = rotate_right_vector; // set idx to the lane-rotating index vector
-
         for i=0 to STATE_u32_SIZE {
-            vector = state[i]; // retrieve the packed state vector
+            vector = state[i]; // retrieve the entire packed state vector
 
-            // write output 7
-            word = (32u) vector; word = #BSWAP_32(word); out7[:u32 i] = word;
-            // write output 6
-            vector = #VPERMD(vector, idx);
-            word = (32u) vector; word = #BSWAP_32(word); out6[:u32 i] = word;
-            // write output 5
-            vector = #VPERMD(vector, idx);
-            word = (32u) vector; word = #BSWAP_32(word); out5[:u32 i] = word;
-            // write output 4
-            vector = #VPERMD(vector, idx);
-            word = (32u) vector; word = #BSWAP_32(word); out4[:u32 i] = word;
-            // write output 3
-            vector = #VPERMD(vector, idx);
-            word = (32u) vector; word = #BSWAP_32(word); out3[:u32 i] = word;
-            // write output 2
-            vector = #VPERMD(vector, idx);
-            word = (32u) vector; word = #BSWAP_32(word); out2[:u32 i] = word;
-            // write output 1
-            vector = #VPERMD(vector, idx);
-            word = (32u) vector; word = #BSWAP_32(word); out1[:u32 i] = word;
-            // write output 0
-            vector = #VPERMD(vector, idx);
-            word = (32u) vector; word = #BSWAP_32(word); out0[:u32 i] = word;
+            // write out4-out7, taking from the lower half of the vector
+            word = #VPEXTR_32(vector, 0); word = #BSWAP_32(word); out7[:u32 i] = word;
+            word = #VPEXTR_32(vector, 1); word = #BSWAP_32(word); out6[:u32 i] = word;
+            word = #VPEXTR_32(vector, 2); word = #BSWAP_32(word); out5[:u32 i] = word;
+            word = #VPEXTR_32(vector, 3); word = #BSWAP_32(word); out4[:u32 i] = word;
+
+            upper = #VEXTRACTI128(vector, 1); // retrieve upper half of the packed state vector
+
+            // write out0-out3, taking from the upper half of the original vector
+            word = #VPEXTR_32(upper, 0); word = #BSWAP_32(word); out3[:u32 i] = word;
+            word = #VPEXTR_32(upper, 1); word = #BSWAP_32(word); out2[:u32 i] = word;
+            word = #VPEXTR_32(upper, 2); word = #BSWAP_32(word); out1[:u32 i] = word;
+            word = #VPEXTR_32(upper, 3); word = #BSWAP_32(word); out0[:u32 i] = word;
         }
 
         return out0, out1, out2, out3, out4, out5, out6, out7;
