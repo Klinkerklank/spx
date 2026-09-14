@@ -104,19 +104,17 @@ namespace sha256_parallel {
         (8u32)[0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c],
         (8u32)[0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab],
         (8u32)[0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19]
-    }
+    };
 
     // initialise the vectorised SHA256 state from scratch
     fn init_iv(
+        reg ptr u256[ROUNDS_NUM] schedule // message schedule
     ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
     {
         // register variables
-        reg u256[STATE_u32_SIZE] state; // Intermediate Hash Values (IHVs)
-        reg u64 sch_idx;                // byte index of current position in message schedule
-        reg u64 bits;                   // number of bits processed
-
-        // stack variables
-        stack u256[ROUNDS_NUM] schedule // message schedule
+        reg u256[STATE_u32_SIZE] state;   // Intermediate Hash Values (IHVs)
+        reg u64 sch_idx;                  // byte index of current position in message schedule
+        reg u64 bits;                     // number of bits processed
 
         inline int i;
 
@@ -139,15 +137,13 @@ namespace sha256_parallel {
 
     // initialise the vectorised SHA256 state from a cached state
     fn init_cache(
-        reg u256[STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
-        reg u64 bits                    // number of bits processed
+        reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
+        reg u64 bits                       // number of bits processed
     ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
     {
         // register variables
         reg u64 sch_idx; // byte index of current position in message schedule
-
-        // stack variables
-        stack u256[ROUNDS_NUM] schedule; // message schedule
 
         inline int i;
 
@@ -172,9 +168,9 @@ namespace sha256_parallel {
         reg u256 a;
 
         a  = w; // a = w
-        a  = #VPSLL(a,32-i); // a = w << 32-i
+        a  = #VPSLL_8u32(a,32-i); // a = w << 32-i
 
-        w  = #VPSRL(w,i); // w = w >> i
+        w  = #VPSRL_8u32(w,i); // w = w >> i
 
         w |= a; // w = (w >> i) || (w << 32-i)
 
@@ -194,9 +190,13 @@ namespace sha256_parallel {
         a  = x; // a = x
         a &= y; // a = x /\ y
 
-        b  = x; // b = x
-        b  = #NOT_256(b); // b = ¬x
+        b  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF; // b = XOR mask to perform NOT
+        b ^= x; // b = ¬x
         b &= z; // b = ¬x /\ z
+
+        // b  = x; // b = x
+        // b  = #NOT_256(b); // b = ¬x
+        // b &= z; // b = ¬x /\ z
 
         a ^= b; // a = (x /\ y) ^ (¬x /\ z)
 
@@ -316,9 +316,9 @@ namespace sha256_parallel {
     // compute one word in the message schedule
     inline
     fn compute_word(
-        stack u256[ROUNDS_NUM] schedule, // message schedule
-        inline int word_idx              // word index in the message schedule
-    ) -> stack u256[ROUNDS_NUM] // -> schedule
+        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
+        inline int word_idx                // word index in the message schedule
+    ) -> reg ptr u256[ROUNDS_NUM] // -> schedule
     {
         reg u256 v w;
 
@@ -345,8 +345,8 @@ namespace sha256_parallel {
     // words of the schedule already contain the message data
     inline
     fn complete_schedule(
-        stack u256[ROUNDS_NUM] schedule
-    ) -> stack u256[ROUNDS_NUM] // -> schedule
+        reg ptr u256[ROUNDS_NUM] schedule
+    ) -> reg ptr u256[ROUNDS_NUM] // -> schedule
     {
         inline int word_idx; // index of the words in the schedule
 
@@ -361,10 +361,10 @@ namespace sha256_parallel {
     // compute one round of the main loop
     inline
     fn round(
-        reg u256[STATE_u32_SIZE] state,  // Intermediate Hash Values (IHVs)
-        stack u256[ROUNDS_NUM] schedule, // (filled) message schedule
-        inline int round_nr              // round index
-    ) -> reg u256[STATE_u32_SIZE] // -> state
+        reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule, // (filled) message schedule
+        inline int round_nr                // round index
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule
     {
         reg u256 t1; // intermediate value t1
         reg u256 t2; // intermediate value t2
@@ -412,15 +412,15 @@ namespace sha256_parallel {
         state[1] = state[0]; // tb = ta
         state[0] = t2;       // ta = t2
 
-        return state;
+        return state, schedule;
     }
 
     // compress the message schedule into the state
     inline
     fn compress(
         reg u256[STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
-        stack u256[ROUNDS_NUM] schedule // (filled) message schedule
-    ) -> reg u256[STATE_u32_SIZE] // -> state
+        reg ptr u256[ROUNDS_NUM] schedule // (filled) message schedule
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule
     {
         // register variables
         reg u256 tmp; // temporary variable for copying purposes
@@ -441,7 +441,7 @@ namespace sha256_parallel {
         }
 
         for round_nr=0 to ROUNDS_NUM {
-            state = round(state, schedule, round_nr);
+            state, schedule = round(state, schedule, round_nr);
         }
 
         // add to the working variables the IHV values from before the loop
@@ -456,7 +456,7 @@ namespace sha256_parallel {
             schedule[i] = 0x0;
         }
 
-        return state;
+        return state, schedule;
     }
 
     // unpack the vectorised eight-lane state into separate output vectors
@@ -467,8 +467,8 @@ namespace sha256_parallel {
     ) -> reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE] // -> out0, out1, out2, out3, out4, out5, out6, out7
     {
         // register variables
-        u256 vector; // temporary variable for copying purposes
-        u32 word;    // temporary variable for copying purposes
+        reg u256 vector; // temporary variable for copying purposes
+        reg u32 word;    // temporary variable for copying purposes
 
         inline int i;
 
@@ -497,7 +497,7 @@ namespace sha256_parallel {
         reg u64 sch_idx,                   // byte index of current position in message schedule
         reg u64 bits,                      // number of bits processed
         reg ptr u8[STATE_u8_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
-    ) -> reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE] // -> out0, out1, out2, out3, out4, out5, out6, out7
+    ) -> reg ptr u256[ROUNDS_NUM], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE] // -> schedule, out0, out1, out2, out3, out4, out5, out6, out7
     {
         // register variables
         reg u256 vector;    // eight-lane vector
@@ -510,6 +510,7 @@ namespace sha256_parallel {
         inline int i;
 
         idx_word = sch_idx; idx_word /= 4; // get the word index of the next byte to be placed in the schedule
+        () = #spill(idx_word); // resolves architectural constraints compile error
         idx_byte = sch_idx; idx_byte %= 4; // get the byte index within the word
 
         // determine which pre-computed separator byte mask is needed
@@ -523,11 +524,13 @@ namespace sha256_parallel {
             mask = 0x0000008000000080000000800000008080000008000000800000008000000080;
         }
 
+        () = #unspill(idx_word);
+
         // set the separator bytes
         vector = schedule[idx_word]; // retrieve the current word
         vector ^= mask;              // combine the vector of existing data and the vector with the separator bytes
         schedule[idx_word] = vector; // overwrite the vector in the schedule
-        idx_word += 1;                   // any zeroes after the separator byte are effectively already zero padding, so move on to the next word
+        idx_word += 1;               // any zeroes after the separator byte are effectively already zero padding, so move on to the next word
 
         // check if the length encoding fits in the current block
         if (idx_word >= MSG_BLOCK_u32_SIZE-2) {
@@ -535,14 +538,14 @@ namespace sha256_parallel {
             // length encoding does not fit in the current message schedule,
             // so compress the schedule first
             // (the schedule started as all-zero, so the zero padding is already set correctly)
-            state = compress(state, schedule); // compress the message schedule into the state
+            state, schedule = compress(state, schedule); // compress the message schedule into the state
 
             // the compression function automatically sets the entire schedule to all zeroes,
             // so the word index for the length encoding can just be set to the correct position immediately
             idx_word = MSG_BLOCK_u32_SIZE-2;
         }
 
-        length_hi = bits; length_hi >>= 32; // get the first half of the length encoding
+        length_hi = (256u) bits; length_hi >>= 32; // get the first half of the length encoding
 
         // only compute and set the vector if the high half of bits are non-zero
         if (length_hi != 0) {
@@ -558,7 +561,7 @@ namespace sha256_parallel {
         }
 
         idx_word += 1; // move on to the second word of the length encoding
-        length_lo = bits; length_lo &= 0xFFFFFFFF; // get the second half of the length encoding
+        length_lo = (256u) bits; length_lo &= 0xFFFFFFFF; // get the second half of the length encoding
 
         // only compute and set the vector if the low half of bits are non-zero
         if (length_lo != 0) {
@@ -574,11 +577,11 @@ namespace sha256_parallel {
         }
 
         // run the final compression
-        state = compress(state, schedule);
+        state, schedule = compress(state, schedule);
 
         // convert the vectorised state to separate outputs
         out0, out1, out2, out3, out4, out5, out6, out7 = unpack_state(state, out0, out1, out2, out3, out4, out5, out6, out7);
 
-        return out0, out1, out2, out3, out4, out5, out6, out7;
+        return schedule, out0, out1, out2, out3, out4, out5, out6, out7;
     }
 }
