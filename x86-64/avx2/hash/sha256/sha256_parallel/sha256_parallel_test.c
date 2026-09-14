@@ -37,7 +37,7 @@ int main(void)
 
     /* Print one SHA-256 digest per line. */
     for (int i = 0; i < NUM_HASHES; i++) {
-        printf("hash %d: ", i);
+        printf("hash %d: ", i+1);
 
         for (int j = 0; j < HASH_BYTES; j++) {
             printf("%02x", out[i][j]);
@@ -45,6 +45,8 @@ int main(void)
 
         printf("\n");
     }
+
+    printf("\nexpect: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n");
 
     return 0;
 }

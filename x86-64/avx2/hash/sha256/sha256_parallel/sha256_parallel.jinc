@@ -119,10 +119,10 @@ namespace sha256_parallel {
     u256 rotate_right_vector = (8u32)[0x00000007, 0x00000000, 0x00000001, 0x00000002, 0x00000003, 0x00000004, 0x00000005, 0x00000006];
 
     // constant vectors carrying the separator bit (and zero padding)
-    u256 separator_0_vector  = (8u32)[0x80000000, 0x80000000, 0x80000000, 0x80000000,0x80000000, 0x80000000, 0x80000000, 0x80000000];
-    u256 separator_1_vector  = (8u32)[0x00800000, 0x00800000, 0x00800000, 0x00800000,0x00800000, 0x00800000, 0x00800000, 0x00800000];
-    u256 separator_2_vector  = (8u32)[0x00008000, 0x00008000, 0x00008000, 0x00008000,0x00008000, 0x00008000, 0x00008000, 0x00008000];
-    u256 separator_3_vector  = (8u32)[0x00000080, 0x00000080, 0x00000080, 0x00000080,0x80000008, 0x00000080, 0x00000080, 0x00000080];
+    u256 separator_0_vector  = (8u32)[0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000];
+    u256 separator_1_vector  = (8u32)[0x00800000, 0x00800000, 0x00800000, 0x00800000, 0x00800000, 0x00800000, 0x00800000, 0x00800000];
+    u256 separator_2_vector  = (8u32)[0x00008000, 0x00008000, 0x00008000, 0x00008000, 0x00008000, 0x00008000, 0x00008000, 0x00008000];
+    u256 separator_3_vector  = (8u32)[0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080];
 
     // initialise the vectorised SHA256 state from scratch
     fn init_iv(
@@ -493,32 +493,32 @@ namespace sha256_parallel {
 
         idx = rotate_right_vector; // set idx to the lane-rotating index vector
 
-        for i=0 to 8 {
+        for i=0 to STATE_u32_SIZE {
             vector = state[i]; // retrieve the packed state vector
 
             // write output 7
-            word = (32u) vector; out7[:u32 i] = word;
+            word = (32u) vector; word = #BSWAP_32(word); out7[:u32 i] = word;
             // write output 6
             vector = #VPERMD(vector, idx);
-            word = (32u) vector; out6[:u32 i] = word;
+            word = (32u) vector; word = #BSWAP_32(word); out6[:u32 i] = word;
             // write output 5
             vector = #VPERMD(vector, idx);
-            word = (32u) vector; out5[:u32 i] = word;
+            word = (32u) vector; word = #BSWAP_32(word); out5[:u32 i] = word;
             // write output 4
             vector = #VPERMD(vector, idx);
-            word = (32u) vector; out4[:u32 i] = word;
+            word = (32u) vector; word = #BSWAP_32(word); out4[:u32 i] = word;
             // write output 3
             vector = #VPERMD(vector, idx);
-            word = (32u) vector; out3[:u32 i] = word;
+            word = (32u) vector; word = #BSWAP_32(word); out3[:u32 i] = word;
             // write output 2
             vector = #VPERMD(vector, idx);
-            word = (32u) vector; out2[:u32 i] = word;
+            word = (32u) vector; word = #BSWAP_32(word); out2[:u32 i] = word;
             // write output 1
             vector = #VPERMD(vector, idx);
-            word = (32u) vector; out1[:u32 i] = word;
+            word = (32u) vector; word = #BSWAP_32(word); out1[:u32 i] = word;
             // write output 0
             vector = #VPERMD(vector, idx);
-            word = (32u) vector; out0[:u32 i] = word;
+            word = (32u) vector; word = #BSWAP_32(word); out0[:u32 i] = word;
         }
 
         return out0, out1, out2, out3, out4, out5, out6, out7;
@@ -568,7 +568,6 @@ namespace sha256_parallel {
 
         // check if the length encoding fits in the current block
         if (idx_word >= MSG_BLOCK_u32_SIZE-2) {
-
             // length encoding does not fit in the current message schedule,
             // so compress the schedule first
             // (the schedule started as all-zero, so the zero padding is already set correctly)
@@ -595,7 +594,7 @@ namespace sha256_parallel {
         length = (32u) bits; // get the second half (least significant bits) of the length encoding
 
         // only compute and set the vector if the low half of bits are non-zero
-        if (length_hi != 0) {
+        if (length != 0) {
             vector = #VPBROADCAST_8u32(length);      // copy the length encoding word to all words in the vector
             idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
             schedule.[idx_offset] = vector;

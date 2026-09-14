@@ -32,14 +32,17 @@ fn sha256_parallel_test(
 
     () = #unspill(out_base);
 
-    for i=0 to 4 { [:u32 out_base + 4*0 + i] = out0[:u32 i]; }
-    for i=0 to 4 { [:u32 out_base + 4*1 + i] = out1[:u32 i]; }
-    for i=0 to 4 { [:u32 out_base + 4*2 + i] = out2[:u32 i]; }
-    for i=0 to 4 { [:u32 out_base + 4*3 + i] = out3[:u32 i]; }
-    for i=0 to 4 { [:u32 out_base + 4*4 + i] = out4[:u32 i]; }
-    for i=0 to 4 { [:u32 out_base + 4*5 + i] = out5[:u32 i]; }
-    for i=0 to 4 { [:u32 out_base + 4*6 + i] = out6[:u32 i]; }
-    for i=0 to 4 { [:u32 out_base + 4*7 + i] = out7[:u32 i]; }
+    // // print state
+    // for i=0 to 8 { [:u256 out_base + 32*i] = state[i]; }
+
+    for i=0 to 8 { [:u32 out_base + 0*32 + 4*i] = out0[:u32 i]; }
+    for i=0 to 8 { [:u32 out_base + 1*32 + 4*i] = out1[:u32 i]; }
+    for i=0 to 8 { [:u32 out_base + 2*32 + 4*i] = out2[:u32 i]; }
+    for i=0 to 8 { [:u32 out_base + 3*32 + 4*i] = out3[:u32 i]; }
+    for i=0 to 8 { [:u32 out_base + 4*32 + 4*i] = out4[:u32 i]; }
+    for i=0 to 8 { [:u32 out_base + 5*32 + 4*i] = out5[:u32 i]; }
+    for i=0 to 8 { [:u32 out_base + 6*32 + 4*i] = out6[:u32 i]; }
+    for i=0 to 8 { [:u32 out_base + 7*32 + 4*i] = out7[:u32 i]; }
 
     ret = 0;
     return ret;
