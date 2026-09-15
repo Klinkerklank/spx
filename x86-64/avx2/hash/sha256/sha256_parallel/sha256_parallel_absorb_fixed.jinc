@@ -1,3 +1,12 @@
+/* 
+ * functions that together absorb eight independent inputs into
+ * the state, where the inputs are of a given fixed byte length
+ * INPUT_LENGTH (which is why this file needs to be included in
+ * a namespace that defines that length)
+ * 
+ * author: Dennis op 't Roodt 2026-09-15 (d.n.e.o.t.roodt@tue.nl)
+ */
+
 // pack one word from eight independent inputs into one large vector
 inline
 fn pack_word(

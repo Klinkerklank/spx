@@ -1,6 +1,10 @@
-// implementation of SHA256 which takes eight independent inputs,
-// and produces eight digests by computing SHA256 in parallel
-// using eight-lane AVX2 intrinsics
+/* 
+ * implementation of SHA256 which takes eight independent inputs,
+ * and produces eight digests by computing SHA256 in parallel
+ * using eight-lane AVX2 intrinsics
+ * 
+ * author: Dennis op 't Roodt 2026-09-15 (d.n.e.o.t.roodt@tue.nl)
+ */
 
 namespace sha256_parallel {
     // SHA-2 parameters

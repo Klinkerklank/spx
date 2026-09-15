@@ -45,7 +45,5 @@ int main(void)
         printf("\n");
     }
 
-    // printf("\nexpect: b413f47d13ee2fe6c845b2ee141af81de858df4ec549a58b7970bb96645bc8d2\n");
-
     return 0;
 }
