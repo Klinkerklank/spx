@@ -17,16 +17,27 @@ fn sha256_parallel_test(
 
     // stack variables
     stack u256[64] schedule; // message schedule
-    // stack u8[32] in0  in1  in2  in3  in4  in5  in6  in7;  // inputs
+    stack u8[16] in0  in1  in2  in3  in4  in5  in6  in7;  // inputs
     stack u8[32] out0 out1 out2 out3 out4 out5 out6 out7; // outputs
 
     inline int i;
 
     () = #spill(out_base);
 
+    for i=0 to 16 {
+        in0[i] = 0x00;
+        in1[i] = 0x01;
+        in2[i] = 0x02;
+        in3[i] = 0x03;
+        in4[i] = 0x04;
+        in5[i] = 0x05;
+        in6[i] = 0x06;
+        in7[i] = 0x07;
+    }
+
     state, schedule, sch_idx, bits = sha256_parallel::init_iv(schedule);
 
-    // state, schedule, sch_idx, bits = sha256_parallel_16::absorb_fixed(schedule, in0, in1, in2, in3, in4, in5, in6, in7);
+    state, schedule, sch_idx, bits = sha256_parallel_16::absorb_fixed(state, schedule, sch_idx, bits, in0, in1, in2, in3, in4, in5, in6, in7);
 
     schedule, out0, out1, out2, out3, out4, out5, out6, out7 = sha256_parallel::finalise(state, schedule, sch_idx, bits, out0, out1, out2, out3, out4, out5, out6, out7);
 

@@ -106,8 +106,9 @@ namespace sha256_parallel {
         (8u32)[0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19]
     };
 
-    // constant used for setting 256-bit registers to 0
-    u256 zero_vector         = (8u32)[0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000];
+    // constants used for setting registers to 0
+    u256 zero_vector_256     = (8u32)[0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000];
+    u128 zero_vector_128     = (4u32)[0x00000000, 0x00000000, 0x00000000, 0x00000000];
 
     // constant used for setting 256-bit registers to 0xFF...F
     u256 maxval_vector       = (8u32)[0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF];
@@ -144,7 +145,7 @@ namespace sha256_parallel {
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
-        tmp = zero_vector;
+        tmp = zero_vector_256;
         for i=0 to MSG_BLOCK_u32_SIZE {
             schedule[i] = tmp;
         }
@@ -170,7 +171,7 @@ namespace sha256_parallel {
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
         for i=0 to MSG_BLOCK_u32_SIZE {
-            schedule[i] = zero_vector;
+            schedule[i] = zero_vector_256;
         }
 
         sch_idx = 0;
@@ -469,7 +470,7 @@ namespace sha256_parallel {
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
-        tmp = zero_vector;
+        tmp = zero_vector_256;
         for i=0 to MSG_BLOCK_u32_SIZE {
             schedule[i] = tmp;
         }
