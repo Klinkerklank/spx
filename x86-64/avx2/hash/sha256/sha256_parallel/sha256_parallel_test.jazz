@@ -1,5 +1,5 @@
 
-param int INPUT_TEST = 2;
+param int INPUT_TEST = 7;
 
 require "sha256_parallel.jinc"
 namespace sha256_parallel_fixed {
@@ -36,11 +36,18 @@ fn sha256_parallel_test(
 
     state, schedule, sch_idx, bits = sha256_parallel_fixed::absorb_fixed(state, schedule, sch_idx, bits, in0, in1, in2, in3, in4, in5, in6, in7);
 
+    // state, schedule, sch_idx, bits = sha256_parallel_fixed::absorb_fixed(state, schedule, sch_idx, bits, in0, in1, in2, in3, in4, in5, in6, in7);
+
     schedule, out0, out1, out2, out3, out4, out5, out6, out7 = sha256_parallel::finalise(state, schedule, sch_idx, bits, out0, out1, out2, out3, out4, out5, out6, out7);
 
     () = #unspill(out_base);
 
-    // for i=0 to 256 { [:u8 out_base + i] = schedule[:u8 256+i]; }
+    // bits = 1;
+    // ret = 1;
+    // schedule[0] = sha256_parallel_fixed::pack_byte(schedule[0], bits, ret, in0, in1, in2, in3, in4, in5, in6, in7);
+
+    // for i=0 to 256 { [:u8 out_base + i] = schedule[:u8 i]; }
+    // for i=0 to 32 { [:u8 out_base + i] = schedule[:u8 i]; }
 
     for i=0 to 32 { [:u8 out_base + 0*32 + i] = out0[:u8 i]; }
     for i=0 to 32 { [:u8 out_base + 1*32 + i] = out1[:u8 i]; }

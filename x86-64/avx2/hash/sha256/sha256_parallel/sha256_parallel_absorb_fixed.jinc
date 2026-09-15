@@ -50,17 +50,17 @@ fn pack_byte(
 
     // construct the lower 128 bits by inserting one word at a time
     lower128 = sha256_parallel::zero_vector_128;
-    byte = (32u) in0.[:u8 in_byte_idx]; lower128 = #VPINSR(lower128, byte, 0);
-    byte = (32u) in1.[:u8 in_byte_idx]; lower128 = #VPINSR(lower128, byte, 1);
-    byte = (32u) in2.[:u8 in_byte_idx]; lower128 = #VPINSR(lower128, byte, 2);
-    byte = (32u) in3.[:u8 in_byte_idx]; lower128 = #VPINSR(lower128, byte, 3);
+    byte = (32u) in0.[:u8 in_byte_idx]; lower128 = #VPINSR_4u32(lower128, byte, 0);
+    byte = (32u) in1.[:u8 in_byte_idx]; lower128 = #VPINSR_4u32(lower128, byte, 1);
+    byte = (32u) in2.[:u8 in_byte_idx]; lower128 = #VPINSR_4u32(lower128, byte, 2);
+    byte = (32u) in3.[:u8 in_byte_idx]; lower128 = #VPINSR_4u32(lower128, byte, 3);
 
     // construct the upper 128 bits by inserting one word at a time
     upper128 = sha256_parallel::zero_vector_128;
-    byte = (32u) in4.[:u8 in_byte_idx]; upper128 = #VPINSR(upper128, byte, 0);
-    byte = (32u) in5.[:u8 in_byte_idx]; upper128 = #VPINSR(upper128, byte, 1);
-    byte = (32u) in6.[:u8 in_byte_idx]; upper128 = #VPINSR(upper128, byte, 2);
-    byte = (32u) in7.[:u8 in_byte_idx]; upper128 = #VPINSR(upper128, byte, 3);
+    byte = (32u) in4.[:u8 in_byte_idx]; upper128 = #VPINSR_4u32(upper128, byte, 0);
+    byte = (32u) in5.[:u8 in_byte_idx]; upper128 = #VPINSR_4u32(upper128, byte, 1);
+    byte = (32u) in6.[:u8 in_byte_idx]; upper128 = #VPINSR_4u32(upper128, byte, 2);
+    byte = (32u) in7.[:u8 in_byte_idx]; upper128 = #VPINSR_4u32(upper128, byte, 3);
 
     // combine the two 128-bit halves
     vector = (256u) lower128;
@@ -196,7 +196,7 @@ fn absorb_fixed(
     // store the remainder of the input in the schedule (guaranteed to not complete the schedule)
     if (in_byte_nr > 0) {
 
-        // check if enough input bytes are present to complete at least one word
+        // check if enough input bytes are present to complete at least the current word
         target = 4; target -= idx_byte;
         if (in_byte_nr >= target) {
 
