@@ -495,19 +495,19 @@ namespace sha256_parallel {
         for i=0 to STATE_u32_SIZE {
             vector = state[i]; // retrieve the entire packed state vector
 
-            // write out4-out7, taking from the lower half of the vector
-            word = #VPEXTR_32(vector, 0); word = #BSWAP_32(word); out7[:u32 i] = word;
-            word = #VPEXTR_32(vector, 1); word = #BSWAP_32(word); out6[:u32 i] = word;
-            word = #VPEXTR_32(vector, 2); word = #BSWAP_32(word); out5[:u32 i] = word;
-            word = #VPEXTR_32(vector, 3); word = #BSWAP_32(word); out4[:u32 i] = word;
+            // write out0-out3, taking from the lower half of the vector
+            word = #VPEXTR_32(vector, 0); word = #BSWAP_32(word); out0[:u32 i] = word;
+            word = #VPEXTR_32(vector, 1); word = #BSWAP_32(word); out1[:u32 i] = word;
+            word = #VPEXTR_32(vector, 2); word = #BSWAP_32(word); out2[:u32 i] = word;
+            word = #VPEXTR_32(vector, 3); word = #BSWAP_32(word); out3[:u32 i] = word;
 
             upper = #VEXTRACTI128(vector, 1); // retrieve upper half of the packed state vector
 
-            // write out0-out3, taking from the upper half of the original vector
-            word = #VPEXTR_32(upper, 0); word = #BSWAP_32(word); out3[:u32 i] = word;
-            word = #VPEXTR_32(upper, 1); word = #BSWAP_32(word); out2[:u32 i] = word;
-            word = #VPEXTR_32(upper, 2); word = #BSWAP_32(word); out1[:u32 i] = word;
-            word = #VPEXTR_32(upper, 3); word = #BSWAP_32(word); out0[:u32 i] = word;
+            // write out4-out7, taking from the upper half of the original vector
+            word = #VPEXTR_32(upper, 0); word = #BSWAP_32(word); out4[:u32 i] = word;
+            word = #VPEXTR_32(upper, 1); word = #BSWAP_32(word); out5[:u32 i] = word;
+            word = #VPEXTR_32(upper, 2); word = #BSWAP_32(word); out6[:u32 i] = word;
+            word = #VPEXTR_32(upper, 3); word = #BSWAP_32(word); out7[:u32 i] = word;
         }
 
         return out0, out1, out2, out3, out4, out5, out6, out7;
@@ -530,6 +530,7 @@ namespace sha256_parallel {
         reg u64 idx_byte;   // temporary variable for computing a byte index within a word
         reg u64 idx_offset; // temporary variable for computing address within a u256 array
         reg u64 length_hi;  // temporary variable for casting the first half of the length encoding to u32
+        reg u32 length_reg; // temporary variable for byteswapping
 
         // stack variables
         stack u32 length; // one word of the length encoding (needs to be stack type for VPBROADCAST_8u32)
@@ -556,34 +557,36 @@ namespace sha256_parallel {
         idx_word += 1;                           // any zeroes after the separator byte are effectively already zero padding, so move on to the next word
 
         // check if the length encoding fits in the current block
-        if (idx_word >= MSG_BLOCK_u32_SIZE-2) {
+        if (idx_word > MSG_BLOCK_u32_SIZE-2) {
             // length encoding does not fit in the current message schedule,
             // so compress the schedule first
             // (the schedule started as all-zero, so the zero padding is already set correctly)
             state, schedule = compress(state, schedule); // compress the message schedule into the state
-
-            // the compression function automatically sets the entire schedule to all zeroes,
-            // so the word index for the length encoding can just be set to the correct position immediately
-            idx_word = MSG_BLOCK_u32_SIZE-2;
         }
+
+        // the 'empty' message parts of the schedule are all zeroes,
+        // so the word index for the length encoding can just be set to the correct position immediately
+        idx_word = MSG_BLOCK_u32_SIZE-2;
 
         // get the first half (most significant bits) of the length encoding
         length_hi = bits;
         length_hi >>= 32;
-        length = (32u) length_hi;
+        length_reg = (32u) length_hi;
 
         // only compute and set the vector if the high half of bits are non-zero
-        if (length != 0) {
+        if (length_reg != 0) {
+            length = length_reg;
             vector = #VPBROADCAST_8u32(length);      // copy the length encoding word to all words in the vector
             idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
             schedule.[idx_offset] = vector;
         }
 
-        idx_word += 1;       // move on to the second word of the length encoding
-        length = (32u) bits; // get the second half (least significant bits) of the length encoding
+        idx_word += 1; // move on to the second word of the length encoding
+        length_reg = (32u) bits; // get the second half (least significant bits) of the length encoding
 
         // only compute and set the vector if the low half of bits are non-zero
-        if (length != 0) {
+        if (length_reg != 0) {
+            length = length_reg;
             vector = #VPBROADCAST_8u32(length);      // copy the length encoding word to all words in the vector
             idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
             schedule.[idx_offset] = vector;

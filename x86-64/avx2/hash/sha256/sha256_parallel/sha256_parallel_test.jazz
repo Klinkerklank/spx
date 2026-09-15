@@ -1,7 +1,9 @@
 
+param int INPUT_TEST = 2;
+
 require "sha256_parallel.jinc"
-namespace sha256_parallel_16 {
-    param int INPUT_LENGTH = 16;
+namespace sha256_parallel_fixed {
+    param int INPUT_LENGTH = INPUT_TEST;
     require "sha256_parallel_absorb_fixed.jinc"
 }
 
@@ -17,40 +19,37 @@ fn sha256_parallel_test(
 
     // stack variables
     stack u256[64] schedule; // message schedule
-    stack u8[16] in0  in1  in2  in3  in4  in5  in6  in7;  // inputs
+    stack u8[INPUT_TEST] in0 in1 in2 in3 in4 in5 in6 in7; // inputs
     stack u8[32] out0 out1 out2 out3 out4 out5 out6 out7; // outputs
 
     inline int i;
 
     () = #spill(out_base);
 
-    for i=0 to 16 {
-        in0[i] = 0x00;
-        in1[i] = 0x01;
-        in2[i] = 0x02;
-        in3[i] = 0x03;
-        in4[i] = 0x04;
-        in5[i] = 0x05;
-        in6[i] = 0x06;
-        in7[i] = 0x07;
+    for i=0 to INPUT_TEST {
+        // in0[i] = 0x00; in1[i] = 0x00; in2[i] = 0x00; in3[i] = 0x00; in4[i] = 0x00; in5[i] = 0x00; in6[i] = 0x00; in7[i] = 0x00;
+        // in0[i] = 0x00; in1[i] = 0x11; in2[i] = 0x22; in3[i] = 0x33; in4[i] = 0x44; in5[i] = 0x55; in6[i] = 0x66; in7[i] = 0x77;
+        in0[i] = i; in1[i] = i; in2[i] = i; in3[i] = i; in4[i] = i; in5[i] = i; in6[i] = i; in7[i] = i;
     }
 
     state, schedule, sch_idx, bits = sha256_parallel::init_iv(schedule);
 
-    state, schedule, sch_idx, bits = sha256_parallel_16::absorb_fixed(state, schedule, sch_idx, bits, in0, in1, in2, in3, in4, in5, in6, in7);
+    state, schedule, sch_idx, bits = sha256_parallel_fixed::absorb_fixed(state, schedule, sch_idx, bits, in0, in1, in2, in3, in4, in5, in6, in7);
 
     schedule, out0, out1, out2, out3, out4, out5, out6, out7 = sha256_parallel::finalise(state, schedule, sch_idx, bits, out0, out1, out2, out3, out4, out5, out6, out7);
 
     () = #unspill(out_base);
 
-    for i=0 to 8 { [:u32 out_base + 0*32 + 4*i] = out0[:u32 i]; }
-    for i=0 to 8 { [:u32 out_base + 1*32 + 4*i] = out1[:u32 i]; }
-    for i=0 to 8 { [:u32 out_base + 2*32 + 4*i] = out2[:u32 i]; }
-    for i=0 to 8 { [:u32 out_base + 3*32 + 4*i] = out3[:u32 i]; }
-    for i=0 to 8 { [:u32 out_base + 4*32 + 4*i] = out4[:u32 i]; }
-    for i=0 to 8 { [:u32 out_base + 5*32 + 4*i] = out5[:u32 i]; }
-    for i=0 to 8 { [:u32 out_base + 6*32 + 4*i] = out6[:u32 i]; }
-    for i=0 to 8 { [:u32 out_base + 7*32 + 4*i] = out7[:u32 i]; }
+    // for i=0 to 256 { [:u8 out_base + i] = schedule[:u8 256+i]; }
+
+    for i=0 to 32 { [:u8 out_base + 0*32 + i] = out0[:u8 i]; }
+    for i=0 to 32 { [:u8 out_base + 1*32 + i] = out1[:u8 i]; }
+    for i=0 to 32 { [:u8 out_base + 2*32 + i] = out2[:u8 i]; }
+    for i=0 to 32 { [:u8 out_base + 3*32 + i] = out3[:u8 i]; }
+    for i=0 to 32 { [:u8 out_base + 4*32 + i] = out4[:u8 i]; }
+    for i=0 to 32 { [:u8 out_base + 5*32 + i] = out5[:u8 i]; }
+    for i=0 to 32 { [:u8 out_base + 6*32 + i] = out6[:u8 i]; }
+    for i=0 to 32 { [:u8 out_base + 7*32 + i] = out7[:u8 i]; }
 
     ret = 0;
     return ret;
