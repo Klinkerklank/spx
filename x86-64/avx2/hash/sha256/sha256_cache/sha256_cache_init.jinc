@@ -18,3 +18,44 @@ fn sha256_initH_cache(reg ptr u8[96] Hc, reg ptr u8[SPX_N] pkseed) -> reg ptr u8
 
     return Hc;
 }
+
+fn sha256_parallel_initH_cache(
+    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state_cache,
+    reg ptr u8[SPX_N] pkseed
+) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE]
+{
+    // register variables
+    reg u256[sha256_parallel::STATE_u32_SIZE] state;
+    reg u64 sch_idx;
+    reg u64 bits;
+
+    // stack variables
+    stack u256[sha256_parallel::ROUNDS_NUM] schedule;
+    stack u8[SHA256_IN] in0 in1 in2 in3 in4 in5 in6 in7;
+
+    inline int i;
+
+    sch_idx = 0; bits = 0; // prevent warnings of uninitialised variables
+    state, schedule, sch_idx, bits = sha256_parallel::init_iv(state, schedule, sch_idx, bits);
+
+    for i=0 to SHA256_IN/8 { in0[:u64 i] = 0; }
+
+    for i=0 to SPX_N { in0[i] = pkseed[i]; }
+
+    // duplicate to the other inputs
+    for i=0 to SHA256_IN/8 {
+        in1[:u64 i] = in0[:u64 i];
+        in2[:u64 i] = in0[:u64 i];
+        in3[:u64 i] = in0[:u64 i];
+        in4[:u64 i] = in0[:u64 i];
+        in5[:u64 i] = in0[:u64 i];
+        in6[:u64 i] = in0[:u64 i];
+        in7[:u64 i] = in0[:u64 i];
+    }
+
+    state, schedule, sch_idx, bits = sha256_parallel::absorb_fixed(state, schedule, sch_idx, bits, in0, in1, in2, in3, in4, in5, in6, in7);
+
+    for i=0 to sha256_parallel::STATE_u32_SIZE { state_cache[:u32 i] = state[i]; }
+
+    return state_cache;
+}

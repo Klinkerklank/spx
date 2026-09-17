@@ -129,60 +129,6 @@ namespace sha256_parallel {
     u256 separator_2_vector  = (8u32)[0x00008000, 0x00008000, 0x00008000, 0x00008000, 0x00008000, 0x00008000, 0x00008000, 0x00008000];
     u256 separator_3_vector  = (8u32)[0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080, 0x00000080];
 
-    // initialise the vectorised SHA256 state from scratch
-    fn init_iv(
-        reg ptr u256[ROUNDS_NUM] schedule // message schedule
-    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
-    {
-        // register variables
-        reg u256[STATE_u32_SIZE] state;   // Intermediate Hash Values (IHVs)
-        reg u256 tmp;                     // temporary variable for copying purposes
-        reg u64 sch_idx;                  // byte index of current position in message schedule
-        reg u64 bits;                     // number of bits processed
-
-        inline int i;
-
-        // set the IHVs to the initialisation vectors
-        for i=0 to STATE_u32_SIZE {
-            state[i] = sha256_iv[i];
-        }
-
-        // reset the message part of the schedule
-        // (the computed part will be overwritten by compute_word anyway)
-        tmp = zero_vector_256;
-        for i=0 to MSG_BLOCK_u32_SIZE {
-            schedule[i] = tmp;
-        }
-
-        sch_idx = 0;
-        bits = 0;
-
-        return state, schedule, sch_idx, bits;
-    }
-
-    // initialise the vectorised SHA256 state from a cached state
-    fn init_cache(
-        reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
-        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
-        reg u64 bits                       // number of bits processed
-    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
-    {
-        // register variables
-        reg u64 sch_idx; // byte index of current position in message schedule
-
-        inline int i;
-
-        // reset the message part of the schedule
-        // (the computed part will be overwritten by compute_word anyway)
-        for i=0 to MSG_BLOCK_u32_SIZE {
-            schedule[i] = zero_vector_256;
-        }
-
-        sch_idx = 0;
-
-        return state, schedule, sch_idx, bits;
-    }
-
     // rotate right
     inline
     fn rotate(
@@ -517,15 +463,79 @@ namespace sha256_parallel {
         return out0, out1, out2, out3, out4, out5, out6, out7;
     }
 
+    /********** FUNCTIONS INTENDED FOR EXTERNAL USE **********/
+
+    // initialise the vectorised SHA256 state from scratch
+    fn init_iv(
+        reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
+        reg u64 sch_idx,                   // byte index of current position in message schedule
+        reg u64 bits                       // number of bits processed
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        // register variables
+        reg u256 tmp; // temporary variable for copying purposes
+
+        inline int i;
+
+        // set the IHVs to the initialisation vectors
+        for i=0 to STATE_u32_SIZE {
+            state[i] = sha256_iv[i];
+        }
+
+        // reset the message part of the schedule
+        // (the computed part will be overwritten by compute_word anyway)
+        tmp = zero_vector_256;
+        for i=0 to MSG_BLOCK_u32_SIZE {
+            schedule[i] = tmp;
+        }
+
+        sch_idx = 0;
+        bits = 0;
+
+        return state, schedule, sch_idx, bits;
+    }
+
+    // initialise the vectorised SHA256 state from a cached state
+    fn init_cache(
+        reg u256[STATE_u32_SIZE] state,          // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule,       // message schedule
+        reg u64 sch_idx,                         // byte index of current position in message schedule
+        reg u64 bits,                            // number of bits processed
+        reg ptr u256[STATE_u32_SIZE] state_cache // cached Intermediate Hash Values (IHVs)
+    ) -> reg u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        // register variables
+        reg u256 tmp; // temporary variable for copying purposes
+
+        inline int i;
+
+        // set the cached state
+        for i=0 to STATE_u32_SIZE {
+            state[i] = state_cache[i];
+        }
+
+        // reset the message part of the schedule
+        // (the computed part will be overwritten by compute_word anyway)
+        tmp = zero_vector_256;
+        for i=0 to MSG_BLOCK_u32_SIZE {
+            schedule[i] = tmp;
+        }
+
+        sch_idx = 0;
+
+        return state, schedule, sch_idx, bits;
+    }
+
     // finalise the SHA256 computation,
     // i.e. add zero padding, add the length encoding, and run the final compression(s)
     fn finalise(
         reg u256[STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
         reg ptr u256[ROUNDS_NUM] schedule, // message schedule
-        reg u64 sch_idx,                   // byte index of current position in message schedule
+        reg u64 sch_idx,                   // byte index of the current position in message schedule
         reg u64 bits,                      // number of bits processed
         reg ptr u8[STATE_u8_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
-    ) -> reg ptr u256[ROUNDS_NUM], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE] // -> schedule, out0, out1, out2, out3, out4, out5, out6, out7
+    ) -> reg ptr u256[ROUNDS_NUM], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE], reg ptr u8[STATE_u8_SIZE] // -> schedule, out0, out1, out2, out3, out4, out5, out6, out7 // schedule is only returned because it needs to be writable
     {
         // register variables
         reg u256 vector;    // eight-lane vector

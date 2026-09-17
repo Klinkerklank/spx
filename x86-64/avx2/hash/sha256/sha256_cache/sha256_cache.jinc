@@ -1,6 +1,13 @@
 namespace sha256_firstblock {
     param int INLEN = SHA256_IN;
     require "../sha256_array/sha256_array.jinc"
+    
+    namespace sha256_parallel {
+        param int INPUT_LENGTH = SHA256_IN;
+        require "../sha256_parallel/sha256_parallel.jinc"
+        require "../sha256_parallel/sha256_parallel_absorb_fixed.jinc"
+    }
+
     require "sha256_cache_init.jinc"
 }
 
@@ -9,4 +16,16 @@ fn init_cache(reg ptr u8[96] Hc, reg ptr u8[SPX_N] pkseed) -> reg ptr u8[96]
     Hc = sha256_firstblock::sha256_initH_cache(Hc, pkseed);
 
     return Hc;
+}
+
+fn init_caches(
+    reg ptr u8[96] Hc,
+    reg ptr u256[8] Hcpara,
+    reg ptr u8[SPX_N] pkseed
+) -> reg ptr u8[96], reg ptr u256[8]
+{
+    Hc     = sha256_firstblock::sha256_initH_cache(Hc, pkseed);
+    Hcpara = sha256_firstblock::sha256_parallel_initH_cache(Hcpara, pkseed);
+
+    return Hc, Hcpara;
 }
