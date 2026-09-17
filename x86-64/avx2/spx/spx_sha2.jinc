@@ -1,3 +1,10 @@
+/* 
+ * SLH-DSA algorithms, using SHA-2 as a hash function
+ * (which needs to be separate from SHAKE as we only use a cached state for SHA-2)
+ * 
+ * author: Dennis op 't Roodt 2026-09-17 (d.n.e.o.t.roodt@tue.nl)
+ */
+
 require "../active_params.jinc" // SPHINCS+ parameters
 // active_params.jinc in turn requires the chosen parameter file with the concrete parameter values
 
@@ -99,8 +106,9 @@ fn slh_keygen_internal_(
 ) -> reg ptr u8[SPX_SKBYTES], reg ptr u8[SPX_PKBYTES], reg u64 // -> sk, pk, res
 {
     // stack variables
-    stack u32[8] adrs;    // ADRS data structure
-    stack u8[96] h_cache; // cached SHA2 state
+    stack u32[8] adrs; // ADRS data structure
+    stack u8[96] cache_single; // cached single SHA2 state
+    stack u256[sha256_parallel::STATE_u32_SIZE] cache_parallel; // cached parallelised SHA2 state
 
     // register variables
     reg ptr u8[SPX_N] skseed pkseed pkroot; // pointers to the individual parts of sk
@@ -122,7 +130,7 @@ fn slh_keygen_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(sk, pk, skseed);
-    h_cache = init_cache(h_cache, pkseed);
+    cache_single, cache_parallel = init_caches(cache_single, cache_parallel, pkseed);
     () = #unspill(sk, pk, skseed);
 
     // initialise ADRS to the all-zero string
@@ -139,7 +147,7 @@ fn slh_keygen_internal_(
 
     pkroot = sk[3*SPX_N : SPX_N]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(sk, pk);
-    pkroot, adrs = __xmss_node(pkroot, skseed, i, z, adrs, h_cache);
+    pkroot, adrs = __xmss_node(pkroot, skseed, i, z, adrs, cache_single, cache_parallel);
     () = #unspill(sk, pk);
     sk[3*SPX_N : SPX_N] = pkroot; // redesignate the pointer so the region of the full array is not partial
 
@@ -206,7 +214,8 @@ fn slh_sign_internal_(
     stack u8[SPX_N] pk_fors; // FORS public key
     stack u8[SPX_M] digest;  // full message digest from H_msg
     stack u32[3] idx_tree;   // tree index selecting a lowest-layer XMSS tree to sign with
-    stack u8[96] h_cache;    // cached SHA2 state
+    stack u8[96] cache_single;                 // cached single SHA2 state
+    stack u256[sha256_parallel::STATE_u32_SIZE] cache_parallel; // cached parallelised SHA2 state
 
     // reg variables
     reg ptr u8[SPX_MD_LEN] md;                 // digest bytes allocated to determine FORS leaf indices
@@ -275,25 +284,25 @@ fn slh_sign_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(skseed, sig_slh, md, idx_leaf);
-    h_cache = init_cache(h_cache, pkseed);
+    cache_single, cache_parallel = init_caches(cache_single, cache_parallel, pkseed);
     () = #unspill(skseed, sig_slh, md, idx_leaf);
 
     // compute the FORS signature
     sig_fors = sig_slh[SPX_N : FORS_SIG]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(skseed, sig_slh, md, idx_leaf);
-    sig_fors, adrs = __fors_sign(sig_fors, md, skseed, adrs, h_cache);
+    sig_fors, adrs = __fors_sign(sig_fors, md, skseed, adrs, cache_single);
     () = #unspill(skseed, sig_slh, md, idx_leaf);
     sig_slh[SPX_N : FORS_SIG] = sig_fors; // redesignate the pointer so the region of the full array is not partial
 
     // compute the FORS public key based on the FORS signature
     () = #spill(skseed, sig_slh, idx_leaf);
-    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, adrs, h_cache);
+    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, adrs, cache_single);
     () = #unspill(skseed, sig_slh, idx_leaf);
 
     // compute the hypertree signature on the FORS public key
     sig_ht = sig_slh[SPX_N + FORS_SIG : HT_SIG]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(skseed, sig_slh);
-    sig_ht = __ht_sign(sig_ht, pk_fors, skseed, idx_tree, idx_leaf, h_cache);
+    sig_ht = __ht_sign(sig_ht, pk_fors, skseed, idx_tree, idx_leaf, cache_single, cache_parallel);
     () = #unspill(skseed, sig_slh);
     sig_slh[SPX_N + FORS_SIG : HT_SIG] = sig_ht; // redesignate the pointer so the region of the full array is not partial
 
@@ -357,11 +366,11 @@ fn slh_verify_internal_(
 ) -> reg u64 // -> res
 {
     // stack variables
-    stack u32[8] adrs;       // ADRS data structure
-    stack u32[3] idx_tree;   // tree index selecting a lowest-layer XMSS tree to sign with
-    stack u8[SPX_N] pk_fors; // FORS public key
-    stack u8[SPX_M] digest;  // full message digest from H_msg
-    stack u8[96] h_cache;    // cached SHA2 state
+    stack u32[8] adrs;         // ADRS data structure
+    stack u32[3] idx_tree;     // tree index selecting a lowest-layer XMSS tree to sign with
+    stack u8[SPX_N] pk_fors;   // FORS public key
+    stack u8[SPX_M] digest;    // full message digest from H_msg
+    stack u8[96] cache_single; // cached SHA2 state
 
     // reg variables
     reg ptr u8[SPX_MD_LEN] md;                 // digest bytes allocated to determine FORS leaf indices
@@ -413,7 +422,7 @@ fn slh_verify_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(pkroot, sig_slh, idx_leaf);
-    h_cache = init_cache(h_cache, pkseed);
+    cache_single = init_cache(cache_single, pkseed);
     () = #unspill(pkroot, sig_slh, idx_leaf);
 
     // extract the FORS signature from the overall signature
@@ -421,11 +430,11 @@ fn slh_verify_internal_(
 
     // compute the FORS public key based on the FORS signature
     () = #spill(pkroot, sig_slh, idx_leaf);
-    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, adrs, h_cache);
+    pk_fors, adrs = __fors_pkfromsig(pk_fors, sig_fors, md, adrs, cache_single);
     () = #unspill(pkroot, sig_slh, idx_leaf);
 
     // verify the hypertree signature on the FORS public key
-    res = __ht_verify(pk_fors, sig_slh[SPX_N + FORS_SIG : HT_SIG], idx_tree, idx_leaf, pkroot, h_cache);
+    res = __ht_verify(pk_fors, sig_slh[SPX_N + FORS_SIG : HT_SIG], idx_tree, idx_leaf, pkroot, cache_single);
 
     return res;
 }

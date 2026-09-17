@@ -1,4 +1,10 @@
-// translate u32[8] adrs to u8[32] bytestring
+/* 
+ * ADRS and ADRS^C functions
+ * 
+ * author: Dennis op 't Roodt 2026-09-17 (d.n.e.o.t.roodt@tue.nl)
+ */
+ 
+ // translate u32[8] adrs to u8[32] bytestring
 inline
 fn __adrs_to_bytes(
     reg ptr u8[32] bytes,
@@ -36,27 +42,6 @@ fn __adrs_clone(
     inline int i;
     for i=0 to 4 { adrs_new[:u64 i] = adrs[:u64 i]; }
     return adrs_new;
-}
-
-// compress adrs to adrs^c, for SHA implementations
-inline
-fn __adrs_compress(
-    reg ptr u8[22] out,
-    reg ptr u32[8] adrs
-) -> reg ptr u8[22]
-{
-    inline int i;
-
-    stack u8[32] adrs_b;
-    adrs_b = __adrs_to_bytes(adrs_b, adrs);
-
-    // ADRS^c = ADRS[3] ∥ ADRS[8 ∶ 16] ∥ ADRS[19] ∥ ADRS[20 ∶ 32]
-    out[0] = adrs_b[3];
-    for i=0 to 8 { out[i+1] = adrs_b[i+8]; }
-    out[9] = adrs_b[19];
-    for i=0 to 12 { out[i+10] = adrs_b[i+20]; }
-
-    return out;
 }
 
 ////////////////////////////////
@@ -163,4 +148,37 @@ fn __adrs_get_tree_index(
 {
     reg u32 treeindex = adrs[SPX_ADRS_OFFSET_TREEINDEX];
     return treeindex;
+}
+
+////////////////////////////////
+
+// compress adrs to adrs^c, for SHA implementations
+inline
+fn __adrs_compress(
+    reg ptr u8[22] out,
+    reg ptr u32[8] adrs
+) -> reg ptr u8[22]
+{
+    inline int i;
+
+    stack u8[32] adrs_b;
+    adrs_b = __adrs_to_bytes(adrs_b, adrs);
+
+    // ADRS^c = ADRS[3] ∥ ADRS[8 ∶ 16] ∥ ADRS[19] ∥ ADRS[20 ∶ 32]
+    out[0] = adrs_b[3];
+    for i=0 to 8 { out[i+1] = adrs_b[i+8]; }
+    out[9] = adrs_b[19];
+    for i=0 to 12 { out[i+10] = adrs_b[i+20]; }
+
+    return out;
+}
+
+inline
+fn __adrsc_set_tree_index(
+    reg ptr u8[22] adrsc,
+    reg u32 treeindex
+) -> reg ptr u8[22]
+{
+    adrsc.[:u32 18] = treeindex;
+    return adrsc;
 }
