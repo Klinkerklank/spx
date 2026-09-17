@@ -34,6 +34,8 @@ fn sha256_parallel_initH_cache(
     stack u8[SHA256_IN] in0 in1 in2 in3 in4 in5 in6 in7;
 
     inline int i;
+    
+    () = #spill(state_cache); // free up space in the registers
 
     sch_idx = 0; bits = 0; // prevent warnings of uninitialised variables
     state, schedule, sch_idx, bits = sha256_parallel::init_iv(state, schedule, sch_idx, bits);
@@ -54,6 +56,8 @@ fn sha256_parallel_initH_cache(
     }
 
     state, schedule, sch_idx, bits = sha256_parallel::absorb_fixed(state, schedule, sch_idx, bits, in0, in1, in2, in3, in4, in5, in6, in7);
+    
+    () = #unspill(state_cache);
 
     for i=0 to sha256_parallel::STATE_u32_SIZE { state_cache[:u32 i] = state[i]; }
 

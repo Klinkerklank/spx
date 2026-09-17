@@ -24,8 +24,14 @@ fn init_caches(
     reg ptr u8[SPX_N] pkseed
 ) -> reg ptr u8[96], reg ptr u256[8]
 {
+    () = #spill(Hcpara); // free up space in the registers
     Hc     = sha256_firstblock::sha256_initH_cache(Hc, pkseed);
+
+    () = #spill(Hc); // free up space in the registers
+    () = #unspill(Hcpara);
     Hcpara = sha256_firstblock::sha256_parallel_initH_cache(Hcpara, pkseed);
+    
+    () = #unspill(Hc);
 
     return Hc, Hcpara;
 }

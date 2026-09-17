@@ -161,16 +161,20 @@ fn xmss_node(
                 para_height -= 3;
                 if (layer <= para_height) {
 
+                    () = #spill(adrs); // free up space in the registers
+
                     // init the SHA256 instances from the cached state
-                    () = #unspill(node);
                     state, schedule, sch_idx, bits, node = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
-                    () = #spill(node);
+                    () = #spill(node); // free up space in the registers
 
                     // absorb all children
                     state, schedule, sch_idx, bits = __H_children(state, schedule, sch_idx, bits, flat_tree[lnode : 16*SPX_N]);
 
                     // finalise and write the digests
+                    () = #spill(node_addr);
                     flat_tree[node_addr : 8*SPX_N], schedule = __H_digests(state, schedule, sch_idx, bits, flat_tree[node_addr : 8*SPX_N]);
+                    
+                    () = #unspill(adrs, node_addr);
 
                 } else { // parallelisation not possible, so compute nodes individually instead
 
@@ -185,7 +189,7 @@ fn xmss_node(
                     buf_r = __copy_nbytes(buf_r, flat_tree[rnode : SPX_N]);
 
                     // compute node value
-                    () = #spill(adrs);
+                    () = #spill(adrs); // free up space in the registers
                     flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], adrs, buf_l, buf_r, cache_single);
                     () = #unspill(adrs);
                 }
