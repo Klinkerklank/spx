@@ -615,7 +615,14 @@ fn __H_digests(
     // split live-range of the input parameters into two segments
     schedule = schedule; sch_idx = sch_idx; bits = bits; nodes = nodes;
 
-    nodes, schedule = H_digests(state, schedule, sch_idx, bits, nodes);
+    // split live range of state, to resolve 'conflicting variables' error
+    reg u256[sha256_parallel::STATE_u32_SIZE] state2;
+    inline int i;
+    for i=0 to sha256_parallel::STATE_u32_SIZE {
+        state2[i] = state[i];
+    }
+
+    nodes, schedule = H_digests(state2, schedule, sch_idx, bits, nodes);
 
     // split live-range of the output parameters into two segments
     nodes = nodes; schedule = schedule;
