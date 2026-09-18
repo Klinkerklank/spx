@@ -443,14 +443,14 @@ fn __T_k(
 /********** PARALLELISED HASHES **********/
 
 fn H_adrs(
-    reg u256[sha256_parallel::STATE_u32_SIZE] state,           // vectorised SHA256 state
+    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state,       // Intermediate Hash Values (IHVs)
     reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,        // message schedule
     reg u64 sch_idx,                                           // byte index of the current position in message schedule
     reg u64 bits,                                              // number of bits processed
     reg ptr u256[sha256_parallel::STATE_u32_SIZE] state_cache, // Intermediate Hash Values (IHVs)
     reg ptr u32[8] adrs,                                       // ADRS for the first hash
     reg u32 tree_index                                         // tree index of the leftmost input node
-) -> reg u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64, reg u32 // -> state, schedule, sch_idx, bits, tree_index
+) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64, reg u32 // -> state, schedule, sch_idx, bits, tree_index
 {
     // stack variables
     stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^C for every hash
@@ -495,14 +495,14 @@ fn H_adrs(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_adrs(
-    reg u256[sha256_parallel::STATE_u32_SIZE] state,           // vectorised SHA256 state
+    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state,       // Intermediate Hash Values (IHVs)
     reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,        // message schedule
     reg u64 sch_idx,                                           // byte index of the current position in message schedule
     reg u64 bits,                                              // number of bits processed
     reg ptr u256[sha256_parallel::STATE_u32_SIZE] state_cache, // Intermediate Hash Values (IHVs)
     reg ptr u32[8] adrs,                                       // ADRS for the first hash
     reg u32 tree_index                                         // tree index of the leftmost input node
-) -> reg u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64, reg u32 // -> state, schedule, sch_idx, bits, tree_index
+) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64, reg u32 // -> state, schedule, sch_idx, bits, tree_index
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; state_cache = state_cache; adrs = adrs; tree_index = tree_index;
@@ -516,12 +516,12 @@ fn __H_adrs(
 }
 
 fn H_children(
-    reg u256[sha256_parallel::STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule, // message schedule
+    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,  // message schedule
     reg u64 sch_idx,                   // byte index of the current position in message schedule
     reg u64 bits,                      // number of bits processed
     reg ptr u8[16 * SPX_N] children    // array pointer containing all children (interleaved left/right/left/.../right)
-) -> reg u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
     reg ptr u8[SPX_N] lnode0 lnode1 lnode2 lnode3 lnode4 lnode5 lnode6 lnode7; // left children
@@ -558,12 +558,12 @@ fn H_children(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_children(
-    reg u256[sha256_parallel::STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule, // message schedule
+    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,  // message schedule
     reg u64 sch_idx,                   // byte index of the current position in message schedule
     reg u64 bits,                      // number of bits processed
     reg ptr u8[16 * SPX_N] children    // array pointer containing all children (interleaved left/right/left/.../right)
-) -> reg u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; children = children;
@@ -577,8 +577,8 @@ fn __H_children(
 }
 
 fn H_digests(
-    reg u256[sha256_parallel::STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule, // message schedule
+    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,  // message schedule
     reg u64 sch_idx,                   // byte index of the current position in message schedule
     reg u64 bits,                      // number of bits processed
     reg ptr u8[8 * SPX_N] nodes        // out: array pointer with space for all output nodes
@@ -588,7 +588,9 @@ fn H_digests(
     stack u8[SHA256_OUT] node0, node1, node2, node3, node4, node5, node6, node7;
 
     // finalise all digests and write to the output nodes
+    () = #spill(nodes); // free up space in the registers
     schedule, node0, node1, node2, node3, node4, node5, node6, node7 = sha256_parallel::finalise(state, schedule, sch_idx, bits, node0, node1, node2, node3, node4, node5, node6, node7);
+    () = #unspill(nodes);
     
     // write the nodes to the output array
     nodes[0*SPX_N : SPX_N] = __copy_nbytes(nodes[0*SPX_N : SPX_N], node0[0 : SPX_N]);
@@ -605,24 +607,17 @@ fn H_digests(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_digests(
-    reg u256[sha256_parallel::STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule, // message schedule
+    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,  // message schedule
     reg u64 sch_idx,                   // byte index of the current position in message schedule
     reg u64 bits,                      // number of bits processed
     reg ptr u8[8 * SPX_N] nodes        // out: array pointer with space for all output nodes
 ) -> reg ptr u8[8 * SPX_N], reg ptr u256[sha256_parallel::ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // split live-range of the input parameters into two segments
-    schedule = schedule; sch_idx = sch_idx; bits = bits; nodes = nodes;
+    state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; nodes = nodes;
 
-    // split live range of state, to resolve 'conflicting variables' error
-    reg u256[sha256_parallel::STATE_u32_SIZE] state2;
-    inline int i;
-    for i=0 to sha256_parallel::STATE_u32_SIZE {
-        state2[i] = state[i];
-    }
-
-    nodes, schedule = H_digests(state2, schedule, sch_idx, bits, nodes);
+    nodes, schedule = H_digests(state, schedule, sch_idx, bits, nodes);
 
     // split live-range of the output parameters into two segments
     nodes = nodes; schedule = schedule;

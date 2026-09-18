@@ -25,11 +25,11 @@ fn sha256_parallel_initH_cache(
 ) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE]
 {
     // register variables
-    reg u256[sha256_parallel::STATE_u32_SIZE] state;
     reg u64 sch_idx;
     reg u64 bits;
 
     // stack variables
+    stack u256[sha256_parallel::STATE_u32_SIZE] state;
     stack u256[sha256_parallel::ROUNDS_NUM] schedule;
     stack u8[SHA256_IN] in0 in1 in2 in3 in4 in5 in6 in7;
 

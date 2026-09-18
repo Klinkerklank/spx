@@ -89,10 +89,10 @@ fn xmss_node(
     reg u32 para_height; // temporary variable for computing whether there are enough nodes on the current layer to parallel hash
 
     // parallelised SHA256 register and stack variables
-    reg u256[sha256_parallel::STATE_u32_SIZE] state;  // state
-    stack u256[sha256_parallel::ROUNDS_NUM] schedule; // message schedule
-    reg u64 sch_idx;                                  // schedule index
-    reg u64 bits;                                     // number of bits consumed
+    stack u256[sha256_parallel::STATE_u32_SIZE] state; // state
+    stack u256[sha256_parallel::ROUNDS_NUM] schedule;  // message schedule
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
              
     layer = 0; // iterate over the layers
     while (layer <= z) {

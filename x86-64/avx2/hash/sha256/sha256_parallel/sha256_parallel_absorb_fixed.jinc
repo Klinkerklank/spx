@@ -93,14 +93,15 @@ fn pack_byte(
 
 // absorb eight independent (but same-length) fixed-size pointer inputs
 fn absorb_fixed(
-    reg u256[sha256_parallel::STATE_u32_SIZE] state,    // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule, // message schedule
-    reg u64 sch_idx,                                    // byte index of current position in message schedule
-    reg u64 bits,                                       // number of bits processed
+    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state, // pointer to the state
+    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,  // message schedule
+    reg u64 sch_idx,                                     // byte index of current position in message schedule
+    reg u64 bits,                                        // number of bits processed
     reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 in4 in5 in6 in7 // inputs
-) -> reg u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
+    reg u256[sha256_parallel::STATE_u32_SIZE] ihvs; // Intermediate Hash Values (IHVs)
     reg u256 vector;       // placeholder for assembling a 256-bit vector
     reg u256 mask;         // bitmask for constructing vectors from bytes
     reg u64 in_bit_nr;     // the number of bits of input
@@ -114,7 +115,12 @@ fn absorb_fixed(
 
     inline int i;
 
-    () = #spill(bits, sch_idx); // not needed until the end of this function
+    // put the state in vector registers
+    for i=0 to sha256_parallel::STATE_u32_SIZE {
+        ihvs[i] = state[i];
+    }
+
+    () = #spill(bits, sch_idx, state); // not needed until the end of this function
 
     in_byte_idx = 0;           // (counts up to INPUT_LENGTH-1) index in the inputs of the next byte to be consumed
     in_byte_nr = INPUT_LENGTH; // (counts down to 0) at the start, INPUT_LENGTH number of bytes of input are available
@@ -170,7 +176,7 @@ fn absorb_fixed(
             idx_word += 1;    // one word of input has been gathered
         }
 
-        state, schedule = sha256_parallel::compress(state, schedule); // compress the message schedule into the state
+        ihvs, schedule = sha256_parallel::compress(ihvs, schedule); // compress the message schedule into the state
 
         () = #unspill(in_byte_nr);
 
@@ -192,7 +198,7 @@ fn absorb_fixed(
                 in_byte_idx += 4; // four bytes of input have been gathered
             }
 
-            state, schedule = sha256_parallel::compress(state, schedule); // compress the message schedule into the state
+            ihvs, schedule = sha256_parallel::compress(ihvs, schedule); // compress the message schedule into the state
 
             () = #unspill(in_byte_nr);
             
@@ -294,6 +300,12 @@ fn absorb_fixed(
     () = #unspill(sch_idx);
     sch_idx += INPUT_LENGTH;
     sch_idx &= sha256_parallel::MSG_BLOCK_u8_SIZE-1;
+
+    // put the vector registers back in state
+    () = #unspill(state);
+    for i=0 to sha256_parallel::STATE_u32_SIZE {
+        state[i] = ihvs[i];
+    }
 
     return state, schedule, sch_idx, bits;
 }
