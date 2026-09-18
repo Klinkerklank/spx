@@ -159,7 +159,7 @@ fn xmss_node(
 
                 // parallelise eight node computations if possible
                 // (layer needs to be low enough so >= eight nodes are available to be computed)
-                para_height  = i;
+                para_height  = z;
                 para_height -= 3;
                 if (layer <= para_height) {
 
