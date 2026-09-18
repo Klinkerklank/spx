@@ -179,6 +179,9 @@ fn __adrsc_set_tree_index(
     reg u32 treeindex
 ) -> reg ptr u8[22]
 {
-    adrsc.[:u32 18] = treeindex;
+    reg u32 swap;
+    swap = treeindex;
+    swap = #BSWAP_32(swap);
+    adrsc.[:u32 18] = swap;
     return adrsc;
 }
