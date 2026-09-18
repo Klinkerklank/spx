@@ -488,7 +488,9 @@ fn H_adrs(
     tree_index += 1; adrsc7 = __adrsc_set_tree_index(adrsc7, tree_index);
 
     // absorb ADRS^C into the parallelised state
+    () = #spill(tree_index); // free up space in the registers
     state, schedule, sch_idx, bits = sha256_parallel_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3, adrsc4, adrsc5, adrsc6, adrsc7);
+    () = #unspill(tree_index);
     
     return state, schedule, sch_idx, bits, tree_index;
 }
@@ -538,7 +540,9 @@ fn H_children(
     lnode7 = children[(0+7*2) * SPX_N : SPX_N];
 
     // consume all left children into the parallelised state
+    () = #spill(children); // make space in the registers
     state, schedule, sch_idx, bits = sha256_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, lnode0, lnode1, lnode2, lnode3, lnode4, lnode5, lnode6, lnode7);
+    () = #unspill(children);
     
     // get the pointers to all of the right children
     rnode0 = children[(1+0*2) * SPX_N : SPX_N];

@@ -474,20 +474,20 @@ namespace sha256_parallel {
     ) -> reg ptr u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
     {
         // register variables
-        reg u256 tmp; // temporary variable for copying purposes
+        reg u256 copy; // temporary variable for copying purposes
 
         inline int i;
 
         // set the IHVs to the initialisation vectors
         for i=0 to STATE_u32_SIZE {
-            state[i] = sha256_iv[i];
+            copy = sha256_iv[i]; state[i] = copy;
         }
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
-        tmp = zero_vector_256;
+        copy = zero_vector_256;
         for i=0 to MSG_BLOCK_u32_SIZE {
-            schedule[i] = tmp;
+            schedule[i] = copy;
         }
 
         sch_idx = 0;
@@ -506,20 +506,20 @@ namespace sha256_parallel {
     ) -> reg ptr u256[STATE_u32_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
     {
         // register variables
-        reg u256 tmp; // temporary variable for copying purposes
+        reg u256 copy; // temporary variable for copying purposes
 
         inline int i;
 
         // set the cached state
         for i=0 to STATE_u32_SIZE {
-            state[i] = state_cache[i];
+            copy = state_cache[i]; state[i] = copy;
         }
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
-        tmp = zero_vector_256;
+        copy = zero_vector_256;
         for i=0 to MSG_BLOCK_u32_SIZE {
-            schedule[i] = tmp;
+            schedule[i] = copy;
         }
 
         sch_idx = 0;

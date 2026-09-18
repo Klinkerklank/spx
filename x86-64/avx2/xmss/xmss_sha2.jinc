@@ -91,6 +91,8 @@ fn xmss_node(
     // parallelised SHA256 register and stack variables
     stack u256[sha256_parallel::STATE_u32_SIZE] state; // state
     stack u256[sha256_parallel::ROUNDS_NUM] schedule;  // message schedule
+    reg ptr u8[16*SPX_N] children; // pointer to subarray with the child nodes
+    reg ptr u8[8*SPX_N] nodes;     // pointer to subarray with the computed nodes
     reg u64 sch_idx; // schedule index
     reg u64 bits;    // number of bits consumed
              
@@ -111,7 +113,7 @@ fn xmss_node(
 
         // iterate over the nodes within the current layer
         while (node < rightmost) {
-            () = #spill(skseed, i, layer, node, rightmost, cache_single, cache_parallel); // free up space in the registers
+            () = #spill(skseed, i, layer, node, rightmost, cache_single, cache_parallel, sch_idx, bits); // free up space in the registers
 
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
@@ -161,20 +163,28 @@ fn xmss_node(
                 para_height -= 3;
                 if (layer <= para_height) {
 
-                    () = #spill(adrs); // free up space in the registers
+                    () = #spill(adrs, lnode, node_addr); // free up space in the registers
+                    () = #unspill(sch_idx, bits);
 
                     // init the SHA256 instances from the cached state
                     state, schedule, sch_idx, bits, node = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
+
                     () = #spill(node); // free up space in the registers
 
                     // absorb all children
-                    state, schedule, sch_idx, bits = __H_children(state, schedule, sch_idx, bits, flat_tree[lnode : 16*SPX_N]);
+                    () = #unspill(lnode);
+                    children = flat_tree[lnode : 16*SPX_N];
+                    state, schedule, sch_idx, bits = __H_children(state, schedule, sch_idx, bits, children);
+                    flat_tree[lnode : 16*SPX_N] = children;
 
                     // finalise and write the digests
-                    () = #spill(node_addr);
-                    flat_tree[node_addr : 8*SPX_N], schedule = __H_digests(state, schedule, sch_idx, bits, flat_tree[node_addr : 8*SPX_N]);
+                    () = #unspill(node_addr);
+                    nodes = flat_tree[node_addr : 8*SPX_N];
+                    nodes, schedule = __H_digests(state, schedule, sch_idx, bits, nodes);
+                    flat_tree[node_addr : 8*SPX_N] = nodes;
                     
-                    () = #unspill(adrs, node_addr);
+                    () = #spill(sch_idx, bits); // free up space in the registers
+                    () = #unspill(adrs);
 
                 } else { // parallelisation not possible, so compute nodes individually instead
 
@@ -199,7 +209,7 @@ fn xmss_node(
             // advance to the next uncomputed node in the layer
             node += 1;
 
-            () = #unspill(skseed, i, layer, rightmost, cache_single, cache_parallel);
+            () = #unspill(skseed, i, layer, rightmost, cache_single, cache_parallel, sch_idx, bits);
         }
 
         () = #unspill(z);
