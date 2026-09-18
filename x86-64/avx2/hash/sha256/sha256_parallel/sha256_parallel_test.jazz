@@ -12,12 +12,12 @@ fn sha256_parallel_test(
     reg u64 out_base
 ) -> reg u64 // -> ret
 {
-    reg u256[8] state;
     reg u64 sch_idx;
     reg u64 bits;
     reg u64 ret;
 
     // stack variables
+    stack u256[8] state;     // state
     stack u256[64] schedule; // message schedule
     stack u8[INPUT_TEST] in0 in1 in2 in3 in4 in5 in6 in7; // inputs
     stack u8[32] out0 out1 out2 out3 out4 out5 out6 out7; // outputs
@@ -30,7 +30,8 @@ fn sha256_parallel_test(
         in0[i] = i; in1[i] = i; in2[i] = i; in3[i] = i; in4[i] = i; in5[i] = i; in6[i] = i; in7[i] = i;
     }
 
-    state, schedule, sch_idx, bits = sha256_parallel::init_iv(schedule);
+    sch_idx = 0; bits = 0;
+    state, schedule, sch_idx, bits = sha256_parallel::init_iv(state, schedule, sch_idx, bits);
 
     state, schedule, sch_idx, bits = sha256_parallel_fixed::absorb_fixed(state, schedule, sch_idx, bits, in0, in1, in2, in3, in4, in5, in6, in7);
 

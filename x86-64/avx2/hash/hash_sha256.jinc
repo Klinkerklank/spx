@@ -450,8 +450,11 @@ fn H_adrs(
     reg ptr u256[sha256_parallel::STATE_u32_SIZE] state_cache, // Intermediate Hash Values (IHVs)
     reg ptr u32[8] adrs,                                       // ADRS for the first hash
     reg u32 tree_index                                         // tree index of the leftmost input node
-) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64, reg u32 // -> state, schedule, sch_idx, bits, tree_index
+) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
+    // register variables
+    reg u32 index; // local copy of tree_index, to prevent modifying tree_index
+
     // stack variables
     stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^C for every hash
 
@@ -478,21 +481,20 @@ fn H_adrs(
     }
 
     // set tree_index for all ADRS^c instances
-                     adrsc0 = __adrsc_set_tree_index(adrsc0, tree_index);
-    tree_index += 1; adrsc1 = __adrsc_set_tree_index(adrsc1, tree_index);
-    tree_index += 1; adrsc2 = __adrsc_set_tree_index(adrsc2, tree_index);
-    tree_index += 1; adrsc3 = __adrsc_set_tree_index(adrsc3, tree_index);
-    tree_index += 1; adrsc4 = __adrsc_set_tree_index(adrsc4, tree_index);
-    tree_index += 1; adrsc5 = __adrsc_set_tree_index(adrsc5, tree_index);
-    tree_index += 1; adrsc6 = __adrsc_set_tree_index(adrsc6, tree_index);
-    tree_index += 1; adrsc7 = __adrsc_set_tree_index(adrsc7, tree_index);
+    index = tree_index;
+    adrsc0 = __adrsc_set_tree_index(adrsc0, index); index += 1;
+    adrsc1 = __adrsc_set_tree_index(adrsc1, index); index += 1;
+    adrsc2 = __adrsc_set_tree_index(adrsc2, index); index += 1;
+    adrsc3 = __adrsc_set_tree_index(adrsc3, index); index += 1;
+    adrsc4 = __adrsc_set_tree_index(adrsc4, index); index += 1;
+    adrsc5 = __adrsc_set_tree_index(adrsc5, index); index += 1;
+    adrsc6 = __adrsc_set_tree_index(adrsc6, index); index += 1;
+    adrsc7 = __adrsc_set_tree_index(adrsc7, index);
 
     // absorb ADRS^C into the parallelised state
-    () = #spill(tree_index); // free up space in the registers
     state, schedule, sch_idx, bits = sha256_parallel_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3, adrsc4, adrsc5, adrsc6, adrsc7);
-    () = #unspill(tree_index);
     
-    return state, schedule, sch_idx, bits, tree_index;
+    return state, schedule, sch_idx, bits;
 }
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
@@ -504,17 +506,17 @@ fn __H_adrs(
     reg ptr u256[sha256_parallel::STATE_u32_SIZE] state_cache, // Intermediate Hash Values (IHVs)
     reg ptr u32[8] adrs,                                       // ADRS for the first hash
     reg u32 tree_index                                         // tree index of the leftmost input node
-) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64, reg u32 // -> state, schedule, sch_idx, bits, tree_index
+) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; state_cache = state_cache; adrs = adrs; tree_index = tree_index;
 
-    state, schedule, sch_idx, bits, tree_index = H_adrs(state, schedule, sch_idx, bits, state_cache, adrs, tree_index);
+    state, schedule, sch_idx, bits = H_adrs(state, schedule, sch_idx, bits, state_cache, adrs, tree_index);
 
     // split live-range of the output parameters into two segments
-    state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; tree_index = tree_index;
+    state = state; schedule = schedule; sch_idx = sch_idx; bits = bits;
 
-    return state, schedule, sch_idx, bits, tree_index;
+    return state, schedule, sch_idx, bits;
 }
 
 fn H_children(
@@ -583,13 +585,13 @@ fn __H_children(
 fn H_digests(
     reg ptr u256[sha256_parallel::STATE_u32_SIZE] state, // Intermediate Hash Values (IHVs)
     reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,  // message schedule
-    reg u64 sch_idx,                   // byte index of the current position in message schedule
-    reg u64 bits,                      // number of bits processed
-    reg ptr u8[8 * SPX_N] nodes        // out: array pointer with space for all output nodes
+    reg u64 sch_idx,            // byte index of the current position in message schedule
+    reg u64 bits,               // number of bits processed
+    reg ptr u8[8 * SPX_N] nodes // out: array pointer with space for all output nodes
 ) -> reg ptr u8[8 * SPX_N], reg ptr u256[sha256_parallel::ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // stack variables
-    stack u8[SHA256_OUT] node0, node1, node2, node3, node4, node5, node6, node7;
+    stack u8[SHA256_OUT] node0 node1 node2 node3 node4 node5 node6 node7;
 
     // finalise all digests and write to the output nodes
     () = #spill(nodes); // free up space in the registers

@@ -50,7 +50,7 @@ namespace sha256_compress_fors {
 
 
 
-// already uses a namespace internally
+// already provides the namespace 'sha256_parallel' internally
 require "sha256_parallel/sha256_parallel.jinc"
 
 namespace sha256_parallel_adrsc {

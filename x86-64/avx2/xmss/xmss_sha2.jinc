@@ -86,7 +86,7 @@ fn xmss_node(
     reg u64 node_addr;   // byte address of 'node' in the buffer
     reg u64 pow;         // temporary variable for computing powers
     reg u32 exp;         // temporary variable for computing exponents
-    reg u32 para_height; // temporary variable for computing whether there are enough nodes on the current layer to parallel hash
+    reg u32 avail_nodes; // temporary variable for computing whether there are enough nodes on the current layer to parallel hash
 
     // parallelised SHA256 register and stack variables
     stack u256[sha256_parallel::STATE_u32_SIZE] state; // state
@@ -98,7 +98,8 @@ fn xmss_node(
              
     layer = 0; // iterate over the layers
     while (layer <= z) {
-        () = #spill(z); // free up space in the registers
+
+        () = #spill(z); // make space in the registers
 
         // node      = horizontal index   of the leftmost  node in the current layer
         // rightmost = horizontal index+1 of the rightmost node in the current layer
@@ -129,6 +130,10 @@ fn xmss_node(
 
                 // compute the WOTS+ public key
                 flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, adrs, cache_single);
+                
+                () = #unspill(node);
+                // advance to the next uncomputed node in the layer
+                node += 1;
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
                 
@@ -158,16 +163,15 @@ fn xmss_node(
                 node_addr *= SPX_N; // node_addr = tree_label(node, layer) * SPX_N
 
                 // parallelise eight node computations if possible
-                // (layer needs to be low enough so >= eight nodes are available to be computed)
-                para_height  = z;
-                para_height -= 3;
-                if (layer <= para_height) {
+                avail_nodes  = rightmost;
+                avail_nodes -= node;
+                if (avail_nodes >= 8) {
 
                     () = #spill(adrs, lnode, node_addr); // free up space in the registers
                     () = #unspill(sch_idx, bits);
 
                     // init the SHA256 instances from the cached state
-                    state, schedule, sch_idx, bits, node = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
+                    state, schedule, sch_idx, bits = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
 
                     () = #spill(node); // free up space in the registers
 
@@ -185,6 +189,10 @@ fn xmss_node(
                     
                     () = #spill(sch_idx, bits); // free up space in the registers
                     () = #unspill(adrs);
+                
+                    () = #unspill(node);
+                    // advance to the next uncomputed node in the layer
+                    node += 8;
 
                 } else { // parallelisation not possible, so compute nodes individually instead
 
@@ -202,12 +210,12 @@ fn xmss_node(
                     () = #spill(adrs); // free up space in the registers
                     flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], adrs, buf_l, buf_r, cache_single);
                     () = #unspill(adrs);
+                
+                    () = #unspill(node);
+                    // advance to the next uncomputed node in the layer
+                    node += 1;
                 }
             }
-                
-            () = #unspill(node);
-            // advance to the next uncomputed node in the layer
-            node += 1;
 
             () = #unspill(skseed, i, layer, rightmost, cache_single, cache_parallel, sch_idx, bits);
         }
