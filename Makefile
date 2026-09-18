@@ -10,6 +10,7 @@ PARAMETER_SET ?= shake-256f
 # compiler settings
 JASMINC = jasmin/compiler/jasminc
 JASMINFLAGS = -I Keccak=formosa-keccak/src/amd64
+# JASMINFLAGS = -I Keccak=formosa-keccak/src/amd64 -pliveness > pliveness.log # for debugging register allocation
 CC = /usr/bin/gcc
 
 # fixed-location files
