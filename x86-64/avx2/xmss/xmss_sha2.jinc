@@ -86,20 +86,20 @@ fn xmss_node(
     reg u64 node_addr;   // byte address of 'node' in the buffer
     reg u64 pow;         // temporary variable for computing powers
     reg u32 exp;         // temporary variable for computing exponents
-    reg u32 avail_nodes; // temporary variable for computing whether there are enough nodes on the current layer to parallel hash
 
     // parallelised SHA256 register and stack variables
     stack u256[sha256_parallel::STATE_u32_SIZE] state; // state
     stack u256[sha256_parallel::ROUNDS_NUM] schedule;  // message schedule
     reg ptr u8[16*SPX_N] children; // pointer to subarray with the child nodes
     reg ptr u8[8*SPX_N] nodes;     // pointer to subarray with the computed nodes
-    reg u64 sch_idx; // schedule index
-    reg u64 bits;    // number of bits consumed
+    reg u64 sch_idx;     // schedule index
+    reg u64 bits;        // number of bits consumed
+    reg u32 avail_nodes; // temporary variable for computing whether there are enough nodes on the current layer to parallel hash
              
     layer = 0; // iterate over the layers
     while (layer <= z) {
 
-        () = #spill(z); // make space in the registers
+        () = #spill(z); // free up space in the registers
 
         // node      = horizontal index   of the leftmost  node in the current layer
         // rightmost = horizontal index+1 of the rightmost node in the current layer
@@ -114,7 +114,7 @@ fn xmss_node(
 
         // iterate over the nodes within the current layer
         while (node < rightmost) {
-            () = #spill(skseed, i, layer, node, rightmost, cache_single, cache_parallel); // free up space in the registers
+            () = #spill(skseed, i, z, layer, node, rightmost, cache_single, cache_parallel); // free up space in the registers
 
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
@@ -125,8 +125,8 @@ fn xmss_node(
 
                 // compute the byte address within flat_tree without tree_label (for efficiency),
                 // as 'node' is already the offset in flat_tree because the leaves start at index 0
-                node_addr = (64u) node; // node index
-                node_addr *= SPX_N;     // byte address of node
+                node_addr  = (64u) node; // node index
+                node_addr *= SPX_N;      // byte address of node
 
                 // compute the WOTS+ public key
                 flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, adrs, cache_single);
@@ -138,16 +138,16 @@ fn xmss_node(
                 // internal node: the node value is the hash of its two children lnode and rnode
                 
                 // compute the horizontal index and height of the left child
-                lnode_i = node;  // lnode_i = node
-                lnode_i *= 2;    // lnode_i = 2*node
-                lnode_z = layer; // lnode_z = layer
-                lnode_z -= 1;    // lnode_z = layer-1
+                lnode_i  = node;  // lnode_i = node
+                lnode_i *= 2;     // lnode_i = 2*node
+                lnode_z  = layer; // lnode_z = layer
+                lnode_z -= 1;     // lnode_z = layer-1
 
                 // compute the label of the left child
                 label = __tree_label(lnode_i, lnode_z); // label = tree_label(2*node, layer-1)
 
                 // compute the byte address of the left child
-                lnode = label;  // lnode = tree_label(2*node, layer-1)
+                lnode  = label; // lnode = tree_label(2*node, layer-1)
                 lnode *= SPX_N; // lnode = tree_label(2*node, layer-1) * SPX_N
 
                 // set the correct values in ADRS for tree node hashing
@@ -159,21 +159,21 @@ fn xmss_node(
                 label = __tree_label(node, layer); // label = tree_label(node, layer)
 
                 // compute the byte address of the parent node
-                node_addr = label;  // node_addr = tree_label(node, layer)
+                node_addr  = label; // node_addr = tree_label(node, layer)
                 node_addr *= SPX_N; // node_addr = tree_label(node, layer) * SPX_N
 
-                // parallelise eight node computations if possible
+                // compute how many nodes still need to be computed on this layer
                 avail_nodes  = rightmost;
                 avail_nodes -= node;
+
+                // parallelise eight node computations if possible
                 if (avail_nodes >= 8) {
 
-                    () = #spill(adrs, lnode, node_addr); // free up space in the registers
+                    () = #spill(adrs, node, lnode, node_addr); // free up space in the registers
 
                     // init the SHA256 instances from the cached state
                     sch_idx = 0; bits = 0;
                     state, schedule, sch_idx, bits = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
-
-                    () = #spill(node); // free up space in the registers
 
                     // absorb all children
                     () = #unspill(lnode);
@@ -189,8 +189,8 @@ fn xmss_node(
                     
                     () = #unspill(adrs);
                 
-                    () = #unspill(node);
                     // advance to the next uncomputed node in the layer
+                    () = #unspill(node);
                     node += 8;
 
                 } else { // parallelisation not possible, so compute nodes individually instead
@@ -216,7 +216,7 @@ fn xmss_node(
                 }
             }
 
-            () = #unspill(skseed, i, layer, rightmost, cache_single, cache_parallel);
+            () = #unspill(skseed, i, z, layer, rightmost, cache_single, cache_parallel);
         }
 
         () = #unspill(z);
@@ -236,12 +236,12 @@ fn xmss_node(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __xmss_node(
-    reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg u32 i,                // target node index (horizontal)
-    reg u32 z,                // target node height
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] cache_single,                // cached single SHA2 state
+    reg ptr u8[SPX_N] root,      // output: root of the subtree rooted at i,z
+    reg ptr u8[SPX_N] skseed,    // SK.seed
+    reg u32 i,                   // target node index (horizontal)
+    reg u32 z,                   // target node height
+    reg ptr u32[8] adrs,         // ADRS
+    reg ptr u8[96] cache_single, // cached single SHA2 state
     reg ptr u256[sha256_parallel::STATE_u32_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
@@ -266,7 +266,7 @@ fn xmss_sign(
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg u32 idx,                   // WOTS+ leaf index to sign with
     reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single,                // cached single SHA2 state
+    reg ptr u8[96] cache_single,   // cached single SHA2 state
     reg ptr u256[sha256_parallel::STATE_u32_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {

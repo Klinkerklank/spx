@@ -290,7 +290,7 @@ fn slh_sign_internal_(
     // compute the FORS signature
     sig_fors = sig_slh[SPX_N : FORS_SIG]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(skseed, sig_slh, md, idx_leaf);
-    sig_fors, adrs = __fors_sign(sig_fors, md, skseed, adrs, cache_single);
+    sig_fors, adrs = __fors_sign(sig_fors, md, skseed, adrs, cache_single, cache_parallel);
     () = #unspill(skseed, sig_slh, md, idx_leaf);
     sig_slh[SPX_N : FORS_SIG] = sig_fors; // redesignate the pointer so the region of the full array is not partial
 
