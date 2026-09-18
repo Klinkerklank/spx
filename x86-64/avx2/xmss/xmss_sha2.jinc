@@ -114,7 +114,7 @@ fn xmss_node(
 
         // iterate over the nodes within the current layer
         while (node < rightmost) {
-            () = #spill(skseed, i, layer, node, rightmost, cache_single, cache_parallel, sch_idx, bits); // free up space in the registers
+            () = #spill(skseed, i, layer, node, rightmost, cache_single, cache_parallel); // free up space in the registers
 
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
@@ -168,9 +168,9 @@ fn xmss_node(
                 if (avail_nodes >= 8) {
 
                     () = #spill(adrs, lnode, node_addr); // free up space in the registers
-                    () = #unspill(sch_idx, bits);
 
                     // init the SHA256 instances from the cached state
+                    sch_idx = 0; bits = 0;
                     state, schedule, sch_idx, bits = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
 
                     () = #spill(node); // free up space in the registers
@@ -187,7 +187,6 @@ fn xmss_node(
                     nodes, schedule = __H_digests(state, schedule, sch_idx, bits, nodes);
                     flat_tree[node_addr : 8*SPX_N] = nodes;
                     
-                    () = #spill(sch_idx, bits); // free up space in the registers
                     () = #unspill(adrs);
                 
                     () = #unspill(node);
@@ -217,7 +216,7 @@ fn xmss_node(
                 }
             }
 
-            () = #unspill(skseed, i, layer, rightmost, cache_single, cache_parallel, sch_idx, bits);
+            () = #unspill(skseed, i, layer, rightmost, cache_single, cache_parallel);
         }
 
         () = #unspill(z);

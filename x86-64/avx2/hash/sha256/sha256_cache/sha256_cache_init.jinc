@@ -61,7 +61,7 @@ fn sha256_parallel_initH_cache(
     () = #unspill(state_cache);
 
     for i=0 to sha256_parallel::STATE_u32_SIZE {
-        copy = state[i]; state_cache[:u32 i] = copy;
+        copy = state[i]; state_cache[i] = copy;
     }
 
     return state_cache;

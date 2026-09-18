@@ -482,7 +482,7 @@ fn H_adrs(
 
     // set tree_index for all ADRS^c instances
     index = tree_index;
-    adrsc0 = __adrsc_set_tree_index(adrsc0, index); index += 1;
+                                                    index += 1;
     adrsc1 = __adrsc_set_tree_index(adrsc1, index); index += 1;
     adrsc2 = __adrsc_set_tree_index(adrsc2, index); index += 1;
     adrsc3 = __adrsc_set_tree_index(adrsc3, index); index += 1;
