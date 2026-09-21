@@ -59,7 +59,7 @@ fn ht_sign(
     reg ptr u32[3] tree,         // lowest-layer XMSS tree index
     reg u32        leaf,         // XMSS tree leaf index
     reg ptr u8[96] cache_single, // cached single SHA2 state
-    reg ptr u256[sha256_parallel::STATE_u32_SIZE] cache_parallel // cached parallelised SHA2 state
+    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached parallelised SHA2 state
 ) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     // stack variables
@@ -146,7 +146,7 @@ fn __ht_sign(
     reg ptr u32[3] tree,         // lowest-layer XMSS tree index
     reg u32        leaf,         // XMSS tree leaf index
     reg ptr u8[96] cache_single, // cached single SHA2 state
-    reg ptr u256[sha256_parallel::STATE_u32_SIZE] cache_parallel // cached parallelised SHA2 state
+    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached parallelised SHA2 state
 ) -> reg ptr u8[HT_SIG] // -> sig_ht
 {
     // split live-range of the input parameters into two segments

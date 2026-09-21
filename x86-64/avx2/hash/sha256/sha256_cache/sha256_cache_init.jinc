@@ -20,9 +20,9 @@ fn sha256_initH_cache(reg ptr u8[96] Hc, reg ptr u8[SPX_N] pkseed) -> reg ptr u8
 }
 
 fn sha256_parallel_initH_cache(
-    reg ptr u256[sha256_parallel::STATE_u32_SIZE] state_cache,
+    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state_cache,
     reg ptr u8[SPX_N] pkseed
-) -> reg ptr u256[sha256_parallel::STATE_u32_SIZE]
+) -> reg ptr u256[sha256_parallel::STATE_WORD_SIZE]
 {
     // register variables
     reg u256 copy;
@@ -30,7 +30,7 @@ fn sha256_parallel_initH_cache(
     reg u64 bits;
 
     // stack variables
-    stack u256[sha256_parallel::STATE_u32_SIZE] state;
+    stack u256[sha256_parallel::STATE_WORD_SIZE] state;
     stack u256[sha256_parallel::ROUNDS_NUM] schedule;
     stack u8[SHA256_IN] in0 in1 in2 in3 in4 in5 in6 in7;
 
@@ -60,7 +60,7 @@ fn sha256_parallel_initH_cache(
     
     () = #unspill(state_cache);
 
-    for i=0 to sha256_parallel::STATE_u32_SIZE {
+    for i=0 to sha256_parallel::STATE_WORD_SIZE {
         copy = state[i]; state_cache[i] = copy;
     }
 

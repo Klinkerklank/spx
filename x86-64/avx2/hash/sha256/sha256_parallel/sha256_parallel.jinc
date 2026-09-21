@@ -560,7 +560,7 @@ namespace sha256_parallel {
         }
 
         idx_word = sch_idx; idx_word >>= 2; // get the word index of the next byte to be placed in the schedule (divide by four)
-        idx_byte = sch_idx; idx_byte &= sha256_parallel::BYTES_PER_WORD; // get the byte index within the word (mod four)
+        idx_byte = sch_idx; idx_byte &= BYTES_PER_WORD-1; // get the byte index within the word (mod four)
 
         // determine which pre-computed separator byte mask is needed
         if (idx_byte == 0) {

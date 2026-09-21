@@ -108,7 +108,7 @@ fn slh_keygen_internal_(
     // stack variables
     stack u32[8] adrs; // ADRS data structure
     stack u8[96] cache_single; // cached single SHA2 state
-    stack u256[sha256_parallel::STATE_u32_SIZE] cache_parallel; // cached parallelised SHA2 state
+    stack u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel; // cached parallelised SHA2 state
 
     // register variables
     reg ptr u8[SPX_N] skseed pkseed pkroot; // pointers to the individual parts of sk
@@ -210,12 +210,12 @@ fn slh_sign_internal_(
 ) -> reg ptr u8[SPX_SIG], reg u64 // -> sig_slh, res
 {
     // stack variables
-    stack u32[8] adrs;       // ADRS data structure
-    stack u8[SPX_N] pk_fors; // FORS public key
-    stack u8[SPX_M] digest;  // full message digest from H_msg
-    stack u32[3] idx_tree;   // tree index selecting a lowest-layer XMSS tree to sign with
-    stack u8[96] cache_single;                 // cached single SHA2 state
-    stack u256[sha256_parallel::STATE_u32_SIZE] cache_parallel; // cached parallelised SHA2 state
+    stack u32[8] adrs;         // ADRS data structure
+    stack u8[SPX_N] pk_fors;   // FORS public key
+    stack u8[SPX_M] digest;    // full message digest from H_msg
+    stack u32[3] idx_tree;     // tree index selecting a lowest-layer XMSS tree to sign with
+    stack u8[96] cache_single; // cached single SHA2 state
+    stack u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel; // cached parallelised SHA2 state
 
     // reg variables
     reg ptr u8[SPX_MD_LEN] md;                 // digest bytes allocated to determine FORS leaf indices

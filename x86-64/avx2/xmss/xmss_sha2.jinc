@@ -60,7 +60,7 @@ fn xmss_node(
     reg u32 z,                   // target node height
     reg ptr u32[8] adrs,         // ADRS
     reg ptr u8[96] cache_single, // cached single SHA2 state
-    reg ptr u256[sha256_parallel::STATE_u32_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     () = #spill(root);
@@ -89,7 +89,7 @@ fn xmss_node(
     reg ptr u8[SPX_N] wots_pk; // pointer to subarray with a WOTS+ public key
 
     // parallelised SHA256 register and stack variables
-    stack u256[sha256_parallel::STATE_u32_SIZE] state; // state
+    stack u256[sha256_parallel::STATE_WORD_SIZE] state; // state
     stack u256[sha256_parallel::ROUNDS_NUM] schedule;  // message schedule
     reg ptr u8[16*SPX_N] children; // pointer to subarray with the child nodes
     reg ptr u8[8*SPX_N] nodes;     // pointer to subarray with the computed nodes
@@ -247,7 +247,7 @@ fn __xmss_node(
     reg u32 z,                   // target node height
     reg ptr u32[8] adrs,         // ADRS
     reg ptr u8[96] cache_single, // cached single SHA2 state
-    reg ptr u256[sha256_parallel::STATE_u32_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     // split live-range of the parameters into two segments
@@ -272,7 +272,7 @@ fn xmss_sign(
     reg u32 idx,                   // WOTS+ leaf index to sign with
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[96] cache_single,   // cached single SHA2 state
-    reg ptr u256[sha256_parallel::STATE_u32_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
     () = #spill(m);
@@ -338,8 +338,8 @@ fn __xmss_sign(
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg u32 idx,                   // WOTS+ leaf index to sign with
     reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single,                // cached single SHA2 state
-    reg ptr u256[sha256_parallel::STATE_u32_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[96] cache_single,   // cached single SHA2 state
+    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
     // split live-range of the parameters into two segments
