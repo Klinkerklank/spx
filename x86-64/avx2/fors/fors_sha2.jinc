@@ -163,7 +163,7 @@ fn fors_node(
     reg u64 bits;        // number of bits consumed
     reg u32 avail_nodes; // temporary variable for computing whether there are enough nodes on the current layer to parallel hash
 
-    layer = 0; // iterate over the layers
+    layer = 0x0; // iterate over the layers
     while (layer <= z) {
 
         () = #spill(z); // free up space in the registers
@@ -181,10 +181,11 @@ fn fors_node(
 
         // iterate over the nodes within the current layer
         while (node < rightmost) {
-            () = #spill(skseed, z, rightmost); // free up space in the registers
+            () = #spill(skseed, rightmost); // free up space in the registers
 
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
+                () = #spill(layer);
 
                 // set the correct values in ADRS for WOTS hashing
                 adrs = __adrs_set_tree_height(adrs, layer);
@@ -198,19 +199,22 @@ fn fors_node(
                 node_addr *= SPX_N; // node_addr = forest_label(node, layer) * SPX_N
 
                 // compute the FORS secret key value
-                () = #spill(adrs, i, layer, node, node_addr, cache_single);
+                () = #spill(adrs, i, node, node_addr, cache_single);
                 flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, adrs, node, cache_single);
-                () = #unspill(adrs, i, layer, node, node_addr, cache_single);
+                () = #unspill(adrs, i, node, node_addr, cache_single);
 
                 // compute the hash of the FORS secret key value
-                () = #spill(adrs, i, layer, node, node_addr, cache_single);
+                () = #spill(adrs, i, node, node_addr, cache_single);
                 flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], adrs, cache_single);
-                () = #unspill(adrs, i, layer, node, node_addr, cache_single);
+                () = #unspill(adrs, i, node, node_addr, cache_single);
+                
+                () = #unspill(layer);
 
                 // advance to the next node in the layer
                 node += 1;
             } else { // layer > 0
                 // internal node: the node value is the hash of its two children lnode and rnode
+                () = #spill(layer);
 
                 // compute the horizontal index and height of the left child
                 lnode_i  = node;  // lnode_i = node
@@ -282,16 +286,18 @@ fn fors_node(
                     buf_r = __copy_nbytes(buf_r, flat_tree[rnode : SPX_N]);
 
                     // compute node value = H(PK.seed, ADRS, lnode || rnode)
-                    () = #spill(adrs, i, layer, node, cache_single, cache_parallel);
+                    () = #spill(adrs, i, node, cache_single, cache_parallel);
                     flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], adrs, buf_l, buf_r, cache_single);
-                    () = #unspill(adrs, i, layer, node, cache_single, cache_parallel);
+                    () = #unspill(adrs, i, node, cache_single, cache_parallel);
 
                     // advance to the next node in the layer
                     node += 1;
                 }
+
+                () = #unspill(layer);
             }
 
-            () = #unspill(skseed, z, rightmost);
+            () = #unspill(skseed, rightmost);
         }
 
         () = #unspill(z);
@@ -400,7 +406,9 @@ fn fors_sign(
             // compute the sibling node
             node = sig_fors[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
             () = #spill(sig_fors, cache_single, cache_parallel);
+            () = #spill(j);
             node, adrs = __fors_node(node, skseed, idx_sib, j, adrs, cache_single, cache_parallel);
+            () = #unspill(j);
             () = #unspill(sig_fors, cache_single, cache_parallel);
             sig_fors[offset : SPX_N] = node; // redesignate the pointer so the region of the full array is not partial
 
