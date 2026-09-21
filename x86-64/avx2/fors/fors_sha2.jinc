@@ -126,8 +126,8 @@ fn fors_node(
     reg u32 i,                // target node index (horizontal)
     reg u32 z,                // target node height
     reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] cache_single,   // cached SHA2 state
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[96] cache_single, // cached SHA2 state
+    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     () = #spill(root);
@@ -155,16 +155,16 @@ fn fors_node(
     reg u32 exp;       // temporary variable for computing exponents
     reg ptr u8[SPX_N] tree_node; // pointer to subarray with a FORS tree node
 
-    // parallelised SHA256 register and stack variables
-    stack u256[sha256_parallel::STATE_WORD_SIZE] state; // state
-    stack u256[sha256_parallel::ROUNDS_NUM] schedule;   // message schedule
-    reg ptr u8[16*SPX_N] children; // pointer to subarray with the child nodes
-    reg ptr u8[8*SPX_N] nodes;     // pointer to subarray with the computed nodes
+    // parallelised SHA-2 register and stack variables
+    stack u256[SHA2_STATE_WORD_SIZE] state;       // state
+    stack u256[SHA2_ROUNDS_NUM] schedule;         // message schedule
+    reg ptr u8[2*SHA2_H_PARA_DEG*SPX_N] children; // pointer to subarray with the child nodes
+    reg ptr u8[SHA2_H_PARA_DEG*SPX_N] nodes;      // pointer to subarray with the computed nodes
     reg u64 sch_idx;     // schedule index
     reg u64 bits;        // number of bits consumed
     reg u32 avail_nodes; // temporary variable for computing whether there are enough nodes on the current layer to parallel hash
 
-    layer = 0x0; // iterate over the layers
+    layer = 0; // iterate over the layers
     while (layer <= z) {
 
         () = #spill(z); // free up space in the registers
@@ -247,26 +247,26 @@ fn fors_node(
                 avail_nodes  = rightmost;
                 avail_nodes -= node;
                 
-                // parallelise eight node computations if possible
-                if (avail_nodes >= 8) {
+                // parallelise SHA-2 node computations if possible
+                if (avail_nodes >= SHA2_H_PARA_DEG) {
 
                     () = #spill(adrs, node, lnode, node_addr, i, cache_single, cache_parallel); // free up space in the registers
 
-                    // init the SHA256 instances from the cached state
+                    // init the SHA-2 instances from the cached state
                     sch_idx = 0; bits = 0;
                     state, schedule, sch_idx, bits = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
 
                     // absorb all children
                     () = #unspill(lnode);
-                    children = flat_tree[lnode : 16*SPX_N];
+                    children = flat_tree[lnode : 2*SHA2_H_PARA_DEG*SPX_N];
                     state, schedule, sch_idx, bits = __H_children(state, schedule, sch_idx, bits, children);
-                    flat_tree[lnode : 16*SPX_N] = children;
+                    flat_tree[lnode : 2*SHA2_H_PARA_DEG*SPX_N] = children;
 
                     // finalise and write the digests
                     () = #unspill(node_addr);
-                    nodes = flat_tree[node_addr : 8*SPX_N];
+                    nodes = flat_tree[node_addr : SHA2_H_PARA_DEG*SPX_N];
                     nodes, schedule = __H_digests(state, schedule, sch_idx, bits, nodes);
-                    flat_tree[node_addr : 8*SPX_N] = nodes;
+                    flat_tree[node_addr : SHA2_H_PARA_DEG*SPX_N] = nodes;
                     
                     () = #unspill(adrs, i, cache_single, cache_parallel);
                 
@@ -326,7 +326,7 @@ fn __fors_node(
     reg u32 z,                   // target node height
     reg ptr u32[8] adrs,         // ADRS
     reg ptr u8[96] cache_single, // cached single SHA2 state
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     // split live-range of the parameters into two segments
@@ -350,7 +350,7 @@ fn fors_sign(
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[96] cache_single,   // cached SHA2 state
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
 {
     // stack variables
@@ -437,7 +437,7 @@ fn __fors_sign(
     reg ptr u8[SPX_N] skseed,      // SK.seed
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[96] cache_single,   // cached SHA2 state
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
 ) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
 {
     // split live-range of the parameters into two segments

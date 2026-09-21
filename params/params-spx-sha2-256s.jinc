@@ -58,8 +58,10 @@ param int SPX_ADRS_TYPE_WOTS_PRF   = 5;
 param int SPX_ADRS_TYPE_FORS_PRF   = 6;
 
 // SHA2 parameters
-param int SHA2_VERSION  = 512;
 param int SHA256_IN  = 64;
 param int SHA256_OUT = 32;
 param int SHA512_IN  = 128;
 param int SHA512_OUT = 64;
+param int SHA2_H_PARA_DEG = 4; // parallelisation degree of hash function H = four*SHA512  (for AVX2 implementations)
+param int SHA2_ROUNDS_NUM = 80; // number of rounds used in the SHA-512 instantiation in H
+param int SHA2_STATE_WORD_SIZE = 8; // number of words the SHA-2 state consists of
