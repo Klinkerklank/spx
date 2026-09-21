@@ -1,0 +1,311 @@
+/* 
+ * functions that together absorb four independent inputs into
+ * the state, where the inputs are of a given fixed byte length
+ * INPUT_LENGTH (which is why this file needs to be included in
+ * a namespace that defines that length)
+ * 
+ * author: Dennis op 't Roodt 2026-09-21 (d.n.e.o.t.roodt@tue.nl)
+ */
+
+// pack one word from four independent inputs into one large vector
+inline
+fn pack_word(
+    reg u256 vector,     // out: packed vector
+    reg u64 in_byte_idx, // byte index within the inputs
+    reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 // inputs
+) -> reg u256 // -> vector
+{
+    // register variables
+    reg u128 lower128; // least-significant half of bits
+    reg u128 upper128; //  most-significant half of bits
+    reg u64 word;      // temporary variable for copying purposes
+
+    // construct the lower 128 bits by inserting one word at a time
+    lower128 = sha512_parallel::zero_vector_128;
+    word = in0.[:u64 in_byte_idx]; word = #BSWAP_64(word); lower128 = #VPINSR_2u64(lower128, word, 0);
+    word = in1.[:u64 in_byte_idx]; word = #BSWAP_64(word); lower128 = #VPINSR_2u64(lower128, word, 1);
+
+    // construct the upper 128 bits by inserting one word at a time
+    upper128 = sha512_parallel::zero_vector_128;
+    word = in2.[:u64 in_byte_idx]; word = #BSWAP_64(word); upper128 = #VPINSR_2u64(upper128, word, 0);
+    word = in3.[:u64 in_byte_idx]; word = #BSWAP_64(word); upper128 = #VPINSR_2u64(upper128, word, 1);
+
+    // combine the two 128-bit halves
+    vector = (256u) lower128;
+    vector = #VINSERTI128(vector, upper128, 1);
+
+    return vector;
+}
+
+// pack one byte from four independent inputs into one large vector
+inline
+fn pack_byte(
+    reg u256 vector,     // out: packed vector
+    reg u64 in_byte_idx, // byte index within the inputs
+    reg u64 vec_idx,     // byte index of the input within the packed words (from the most-significant side)
+    reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 // inputs
+) -> reg u256 // -> vector
+{
+    // register variables
+    reg u128 lower128; // least-significant half of bits
+    reg u128 upper128; //  most-significant half of bits
+    reg u64 byte;      // temporary variable for copying purposes
+
+    () = #spill(vec_idx); // free up space in the word registers
+
+    // construct the lower 128 bits by inserting one word at a time
+    lower128 = sha512_parallel::zero_vector_128;
+    byte = (64u) in0.[:u8 in_byte_idx]; lower128 = #VPINSR_2u64(lower128, byte, 0);
+    byte = (64u) in1.[:u8 in_byte_idx]; lower128 = #VPINSR_2u64(lower128, byte, 1);
+
+    // construct the upper 128 bits by inserting one word at a time
+    upper128 = sha512_parallel::zero_vector_128;
+    byte = (64u) in2.[:u8 in_byte_idx]; upper128 = #VPINSR_2u64(upper128, byte, 0);
+    byte = (64u) in3.[:u8 in_byte_idx]; upper128 = #VPINSR_2u64(upper128, byte, 1);
+
+    // combine the two 128-bit halves
+    vector = (256u) lower128;
+    vector = #VINSERTI128(vector, upper128, 1);
+
+    () = #unspill(vec_idx);
+
+    // offset all bytes to the correct index within their words
+    if (vec_idx == 0) {
+        vector = #VPSLL_4u64(vector, 56);
+    } else if (vec_idx == 1) {
+        vector = #VPSLL_4u64(vector, 48);
+    } else if (vec_idx == 2) {
+        vector = #VPSLL_4u64(vector, 40);
+    } else if (vec_idx == 3) {
+        vector = #VPSLL_4u64(vector, 32);
+    } else if (vec_idx == 4) {
+        vector = #VPSLL_4u64(vector, 24);
+    } else if (vec_idx == 5) {
+        vector = #VPSLL_4u64(vector, 16);
+    } else if (vec_idx == 6) {
+        vector = #VPSLL_4u64(vector,  8);
+    } // else vec_idx == 7, which means the bytes are already in the correct position
+
+    return vector;
+}
+
+/********** FUNCTIONS INTENDED FOR EXTERNAL USE **********/
+
+// absorb four independent (but same-length) fixed-size pointer inputs
+fn absorb_fixed(
+    reg ptr u256[sha512_parallel::STATE_WORD_SIZE] state, // pointer to the state
+    reg ptr u256[sha512_parallel::ROUNDS_NUM] schedule,  // message schedule
+    reg u64 sch_idx,                                     // byte index of current position in message schedule
+    reg u64 bits,                                        // number of bits processed
+    reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 // inputs
+) -> reg ptr u256[sha512_parallel::STATE_WORD_SIZE], reg ptr u256[sha512_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+{
+    // register variables
+    reg u256[sha512_parallel::STATE_WORD_SIZE] ihvs; // Intermediate Hash Values (IHVs)
+    reg u256 vector;       // placeholder for assembling a 256-bit vector
+    reg u256 mask;         // bitmask for constructing vectors from bytes
+    reg u64 in_bit_nr;     // the number of bits of input
+    reg u64 in_byte_nr;    // the number of bytes of input left to consume
+    reg u64 in_byte_idx;   // byte index in the input pointers
+    reg u64 avail_byte_nr; // the number of bits of input
+    reg u64 idx_word;      // temporary variable for computing a word index in the schedule
+    reg u64 idx_byte;      // temporary variable for computing a byte index within a word
+    reg u64 idx_offset;    // temporary variable for computing address within a u256 array
+    reg u64 target;        // temporary variable for computing a target byte index to compare against
+
+    inline int i;
+
+    // put the state in vector registers
+    for i=0 to sha512_parallel::STATE_WORD_SIZE {
+        ihvs[i] = state[i];
+    }
+
+    () = #spill(bits, sch_idx, state); // not needed until the end of this function
+
+    in_byte_idx = 0;           // (counts up to INPUT_LENGTH-1) index in the inputs of the next byte to be consumed
+    in_byte_nr = INPUT_LENGTH; // (counts down to 0) at the start, INPUT_LENGTH number of bytes of input are available
+
+    // compute how many bytes of message space are available in the schedule
+    avail_byte_nr  = sha512_parallel::MSG_BLOCK_WORD_SIZE;
+    avail_byte_nr -= sch_idx;
+
+    idx_word = sch_idx; idx_word >>= 2; // get the word index of the next byte to be placed in the schedule (divide by four)
+    idx_byte = sch_idx; idx_byte &= sha512_parallel::BYTES_PER_WORD-1; // get the byte index within the word (mod eight)
+
+    // if enough input is available, first top off the current schedule and compress
+    if (in_byte_nr >= avail_byte_nr) {
+
+        () = #spill(in_byte_nr); // free up space in the word registers
+
+        // if the byte index is not word-aligned, the current word must first be filled byte by byte
+        if (idx_byte != 0) {
+
+            idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
+            vector = schedule.[:u256 idx_offset];    // retrieve the current word
+
+            () = #spill(schedule); // free up space in the word registers
+
+            while (idx_byte < sha512_parallel::BYTES_PER_WORD) {
+
+                // pack one byte from each input into one vector
+                mask = pack_byte(mask, in_byte_idx, idx_byte, in0, in1, in2, in3);
+
+                vector ^= mask; // combine the vector of existing data and the vector with the new bytes
+
+                // consumed one byte
+                in_byte_idx += 1;
+                idx_byte    += 1;
+            }
+
+            () = #unspill(schedule);
+
+            schedule.[:u256 idx_offset] = vector; // overwrite the vector in the schedule
+            idx_word += 1; // one word has been filled and stored
+        }
+        
+        // fill the rest of the schedule with entire words of input
+        while (idx_word < sha512_parallel::MSG_BLOCK_WORD_SIZE) {
+
+            // gather one word from each input, and insert the word into the packed vector
+            vector = pack_word(vector, in_byte_idx, in0, in1, in2, in3);
+            
+            idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
+            schedule.[:u256 idx_offset] = vector;    // store the assembled vector in the schedule
+
+            in_byte_idx += 4; // four bytes of input have been gathered
+            idx_word += 1;    // one word of input has been gathered
+        }
+
+        ihvs, schedule = sha512_parallel::compress(ihvs, schedule); // compress the message schedule into the state
+
+        () = #unspill(in_byte_nr);
+
+        in_byte_nr -= avail_byte_nr; // the number of bytes needed to top off the schedule have been consumed
+
+        // if enough input is available, fill entire message schedules and compress
+        while (in_byte_nr >= sha512_parallel::MSG_BLOCK_WORD_SIZE) {
+
+            () = #spill(in_byte_nr); // free up space in the word registers
+
+            // fill the (empty) schedule completely
+            for i=0 to sha512_parallel::MSG_BLOCK_WORD_SIZE {
+
+                // gather one word from each input, and insert the word into the packed vector
+                vector = pack_word(vector, in_byte_idx, in0, in1, in2, in3);
+                
+                schedule[i] = vector; // store the assembled vector in the schedule
+
+                in_byte_idx += sha512_parallel::BYTES_PER_WORD; // one word of input has been gathered
+            }
+
+            ihvs, schedule = sha512_parallel::compress(ihvs, schedule); // compress the message schedule into the state
+
+            () = #unspill(in_byte_nr);
+            
+            in_byte_nr -= sha512_parallel::MSG_BLOCK_WORD_SIZE; // one entire block of input has been consumed
+        }
+
+        // message schedule(s) were completed, so now the next message schedule is empty again
+        idx_word = 0;
+        idx_byte = 0;
+    }
+
+    // store the remainder of the input in the schedule (guaranteed to not complete the schedule)
+    if (in_byte_nr > 0) {
+
+        // check if enough input bytes are present to complete at least the current word
+        target = sha512_parallel::BYTES_PER_WORD; target -= idx_byte;
+        if (in_byte_nr >= target) {
+
+            // first complete the current word if it's not byte-aligned
+            if (idx_byte != 0) {
+
+                idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
+                vector = schedule.[:u256 idx_offset];    // retrieve the current word
+
+                while (idx_byte < sha512_parallel::BYTES_PER_WORD) {
+
+                    () = #spill(in_byte_nr); // free up space in the word registers
+
+                    // pack one byte from each input into one vector
+                    mask = pack_byte(mask, in_byte_idx, idx_byte, in0, in1, in2, in3);
+
+                    vector ^= mask; // combine the vector of existing data and the vector with the new bytes
+
+                    () = #unspill(in_byte_nr);
+
+                    // consumed one byte
+                    in_byte_nr  -= 1;
+                    in_byte_idx += 1;
+                    idx_byte    += 1;
+                }
+
+                schedule.[:u256 idx_offset] = vector; // overwrite the vector in the schedule
+
+                // one word has been filled and stored
+                idx_byte  = 0;
+                idx_word += 1;
+            }
+
+            // write as many full words as possible
+            while (in_byte_nr >= sha512_parallel::BYTES_PER_WORD) {
+
+                () = #spill(in_byte_nr); // free up space in the word registers
+
+                // gather one word from each input, and insert the word into the packed vector
+                vector = pack_word(vector, in_byte_idx, in0, in1, in2, in3);
+                
+                idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
+                schedule.[:u256 idx_offset] = vector;    // store the assembled vector in the schedule
+
+                () = #unspill(in_byte_nr);
+
+                // one word of input has been consumed
+                in_byte_nr  -= sha512_parallel::BYTES_PER_WORD;
+                in_byte_idx += sha512_parallel::BYTES_PER_WORD;
+                idx_word    += 1;
+            }
+        }
+
+        // write any remaining bytes (guaranteed to not complete the word)
+        if (in_byte_nr > 0) {
+
+            idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
+            vector = schedule.[:u256 idx_offset];    // retrieve the current word
+            target = idx_byte; target += in_byte_nr; // compute the target byte
+
+            while (idx_byte < target) {
+
+                // pack one byte from each input into one vector
+                mask = pack_byte(mask, in_byte_idx, idx_byte, in0, in1, in2, in3);
+
+                vector ^= mask; // combine the vector of existing data and the vector with the new bytes
+
+                // consumed one byte
+                in_byte_idx += 1;
+                idx_byte    += 1;
+            }
+
+            idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
+            schedule.[:u256 idx_offset] = vector;    // overwrite the vector in the schedule
+        }
+    }
+
+    // update how many bits of input have been processed after consuming the entire input
+    () = #unspill(bits);
+    in_bit_nr = INPUT_LENGTH << 3; // INPUT_LENGTH is in number of bytes, so multiply by eight to get number of bits
+    bits += in_bit_nr;
+
+    // update schedule byte index
+    () = #unspill(sch_idx);
+    sch_idx += INPUT_LENGTH;
+    sch_idx &= sha512_parallel::MSG_BLOCK_WORD_SIZE-1;
+
+    // put the vector registers back in state
+    () = #unspill(state);
+    for i=0 to sha512_parallel::STATE_WORD_SIZE {
+        state[i] = ihvs[i];
+    }
+
+    return state, schedule, sch_idx, bits;
+}

@@ -1,0 +1,635 @@
+/* 
+ * implementation of SHA512 which takes four independent inputs,
+ * and produces four digests by computing SHA512 in parallel
+ * using four-lane AVX2 intrinsics
+ * 
+ * author: Dennis op 't Roodt 2026-09-21 (d.n.e.o.t.roodt@tue.nl)
+ */
+
+namespace sha512_parallel {
+    // SHA-512 parameters
+    param int ROUNDS_NUM          = 80;
+    param int MSG_BLOCK_BYTE_SIZE = 128;
+    param int MSG_BLOCK_WORD_SIZE = MSG_BLOCK_BYTE_SIZE/8; // word = u64
+    param int STATE_BYTE_SIZE     = 64;
+    param int STATE_WORD_SIZE     = STATE_BYTE_SIZE/8; // word = u64
+    param int BYTES_PER_WORD      = 64/8; // word = u64
+
+    // σ function constants
+    param int sigma0_0 =  1;
+    param int sigma0_1 =  8;
+    param int sigma0_2 =  7;
+    param int sigma1_0 = 19;
+    param int sigma1_1 = 61;
+    param int sigma1_2 =  6;
+
+    // Σ function constants
+    param int Sigma0_0 = 28;
+    param int Sigma0_1 = 34;
+    param int Sigma0_2 = 39;
+    param int Sigma1_0 = 14;
+    param int Sigma1_1 = 18;
+    param int Sigma1_2 = 41;
+
+    // round constants
+    u256[ROUNDS_NUM] sha512_k = {
+        (4u64)[0x428a2f98d728ae22, 0x428a2f98d728ae22, 0x428a2f98d728ae22, 0x428a2f98d728ae22],
+        (4u64)[0x7137449123ef65cd, 0x7137449123ef65cd, 0x7137449123ef65cd, 0x7137449123ef65cd],
+        (4u64)[0xb5c0fbcfec4d3b2f, 0xb5c0fbcfec4d3b2f, 0xb5c0fbcfec4d3b2f, 0xb5c0fbcfec4d3b2f],
+        (4u64)[0xe9b5dba58189dbbc, 0xe9b5dba58189dbbc, 0xe9b5dba58189dbbc, 0xe9b5dba58189dbbc],
+        (4u64)[0x3956c25bf348b538, 0x3956c25bf348b538, 0x3956c25bf348b538, 0x3956c25bf348b538],
+        (4u64)[0x59f111f1b605d019, 0x59f111f1b605d019, 0x59f111f1b605d019, 0x59f111f1b605d019],
+        (4u64)[0x923f82a4af194f9b, 0x923f82a4af194f9b, 0x923f82a4af194f9b, 0x923f82a4af194f9b],
+        (4u64)[0xab1c5ed5da6d8118, 0xab1c5ed5da6d8118, 0xab1c5ed5da6d8118, 0xab1c5ed5da6d8118],
+        (4u64)[0xd807aa98a3030242, 0xd807aa98a3030242, 0xd807aa98a3030242, 0xd807aa98a3030242],
+        (4u64)[0x12835b0145706fbe, 0x12835b0145706fbe, 0x12835b0145706fbe, 0x12835b0145706fbe],
+        (4u64)[0x243185be4ee4b28c, 0x243185be4ee4b28c, 0x243185be4ee4b28c, 0x243185be4ee4b28c],
+        (4u64)[0x550c7dc3d5ffb4e2, 0x550c7dc3d5ffb4e2, 0x550c7dc3d5ffb4e2, 0x550c7dc3d5ffb4e2],
+        (4u64)[0x72be5d74f27b896f, 0x72be5d74f27b896f, 0x72be5d74f27b896f, 0x72be5d74f27b896f],
+        (4u64)[0x80deb1fe3b1696b1, 0x80deb1fe3b1696b1, 0x80deb1fe3b1696b1, 0x80deb1fe3b1696b1],
+        (4u64)[0x9bdc06a725c71235, 0x9bdc06a725c71235, 0x9bdc06a725c71235, 0x9bdc06a725c71235],
+        (4u64)[0xc19bf174cf692694, 0xc19bf174cf692694, 0xc19bf174cf692694, 0xc19bf174cf692694],
+        (4u64)[0xe49b69c19ef14ad2, 0xe49b69c19ef14ad2, 0xe49b69c19ef14ad2, 0xe49b69c19ef14ad2],
+        (4u64)[0xefbe4786384f25e3, 0xefbe4786384f25e3, 0xefbe4786384f25e3, 0xefbe4786384f25e3],
+        (4u64)[0x0fc19dc68b8cd5b5, 0x0fc19dc68b8cd5b5, 0x0fc19dc68b8cd5b5, 0x0fc19dc68b8cd5b5],
+        (4u64)[0x240ca1cc77ac9c65, 0x240ca1cc77ac9c65, 0x240ca1cc77ac9c65, 0x240ca1cc77ac9c65],
+        (4u64)[0x2de92c6f592b0275, 0x2de92c6f592b0275, 0x2de92c6f592b0275, 0x2de92c6f592b0275],
+        (4u64)[0x4a7484aa6ea6e483, 0x4a7484aa6ea6e483, 0x4a7484aa6ea6e483, 0x4a7484aa6ea6e483],
+        (4u64)[0x5cb0a9dcbd41fbd4, 0x5cb0a9dcbd41fbd4, 0x5cb0a9dcbd41fbd4, 0x5cb0a9dcbd41fbd4],
+        (4u64)[0x76f988da831153b5, 0x76f988da831153b5, 0x76f988da831153b5, 0x76f988da831153b5],
+        (4u64)[0x983e5152ee66dfab, 0x983e5152ee66dfab, 0x983e5152ee66dfab, 0x983e5152ee66dfab],
+        (4u64)[0xa831c66d2db43210, 0xa831c66d2db43210, 0xa831c66d2db43210, 0xa831c66d2db43210],
+        (4u64)[0xb00327c898fb213f, 0xb00327c898fb213f, 0xb00327c898fb213f, 0xb00327c898fb213f],
+        (4u64)[0xbf597fc7beef0ee4, 0xbf597fc7beef0ee4, 0xbf597fc7beef0ee4, 0xbf597fc7beef0ee4],
+        (4u64)[0xc6e00bf33da88fc2, 0xc6e00bf33da88fc2, 0xc6e00bf33da88fc2, 0xc6e00bf33da88fc2],
+        (4u64)[0xd5a79147930aa725, 0xd5a79147930aa725, 0xd5a79147930aa725, 0xd5a79147930aa725],
+        (4u64)[0x06ca6351e003826f, 0x06ca6351e003826f, 0x06ca6351e003826f, 0x06ca6351e003826f],
+        (4u64)[0x142929670a0e6e70, 0x142929670a0e6e70, 0x142929670a0e6e70, 0x142929670a0e6e70],
+        (4u64)[0x27b70a8546d22ffc, 0x27b70a8546d22ffc, 0x27b70a8546d22ffc, 0x27b70a8546d22ffc],
+        (4u64)[0x2e1b21385c26c926, 0x2e1b21385c26c926, 0x2e1b21385c26c926, 0x2e1b21385c26c926],
+        (4u64)[0x4d2c6dfc5ac42aed, 0x4d2c6dfc5ac42aed, 0x4d2c6dfc5ac42aed, 0x4d2c6dfc5ac42aed],
+        (4u64)[0x53380d139d95b3df, 0x53380d139d95b3df, 0x53380d139d95b3df, 0x53380d139d95b3df],
+        (4u64)[0x650a73548baf63de, 0x650a73548baf63de, 0x650a73548baf63de, 0x650a73548baf63de],
+        (4u64)[0x766a0abb3c77b2a8, 0x766a0abb3c77b2a8, 0x766a0abb3c77b2a8, 0x766a0abb3c77b2a8],
+        (4u64)[0x81c2c92e47edaee6, 0x81c2c92e47edaee6, 0x81c2c92e47edaee6, 0x81c2c92e47edaee6],
+        (4u64)[0x92722c851482353b, 0x92722c851482353b, 0x92722c851482353b, 0x92722c851482353b],
+        (4u64)[0xa2bfe8a14cf10364, 0xa2bfe8a14cf10364, 0xa2bfe8a14cf10364, 0xa2bfe8a14cf10364],
+        (4u64)[0xa81a664bbc423001, 0xa81a664bbc423001, 0xa81a664bbc423001, 0xa81a664bbc423001],
+        (4u64)[0xc24b8b70d0f89791, 0xc24b8b70d0f89791, 0xc24b8b70d0f89791, 0xc24b8b70d0f89791],
+        (4u64)[0xc76c51a30654be30, 0xc76c51a30654be30, 0xc76c51a30654be30, 0xc76c51a30654be30],
+        (4u64)[0xd192e819d6ef5218, 0xd192e819d6ef5218, 0xd192e819d6ef5218, 0xd192e819d6ef5218],
+        (4u64)[0xd69906245565a910, 0xd69906245565a910, 0xd69906245565a910, 0xd69906245565a910],
+        (4u64)[0xf40e35855771202a, 0xf40e35855771202a, 0xf40e35855771202a, 0xf40e35855771202a],
+        (4u64)[0x106aa07032bbd1b8, 0x106aa07032bbd1b8, 0x106aa07032bbd1b8, 0x106aa07032bbd1b8],
+        (4u64)[0x19a4c116b8d2d0c8, 0x19a4c116b8d2d0c8, 0x19a4c116b8d2d0c8, 0x19a4c116b8d2d0c8],
+        (4u64)[0x1e376c085141ab53, 0x1e376c085141ab53, 0x1e376c085141ab53, 0x1e376c085141ab53],
+        (4u64)[0x2748774cdf8eeb99, 0x2748774cdf8eeb99, 0x2748774cdf8eeb99, 0x2748774cdf8eeb99],
+        (4u64)[0x34b0bcb5e19b48a8, 0x34b0bcb5e19b48a8, 0x34b0bcb5e19b48a8, 0x34b0bcb5e19b48a8],
+        (4u64)[0x391c0cb3c5c95a63, 0x391c0cb3c5c95a63, 0x391c0cb3c5c95a63, 0x391c0cb3c5c95a63],
+        (4u64)[0x4ed8aa4ae3418acb, 0x4ed8aa4ae3418acb, 0x4ed8aa4ae3418acb, 0x4ed8aa4ae3418acb],
+        (4u64)[0x5b9cca4f7763e373, 0x5b9cca4f7763e373, 0x5b9cca4f7763e373, 0x5b9cca4f7763e373],
+        (4u64)[0x682e6ff3d6b2b8a3, 0x682e6ff3d6b2b8a3, 0x682e6ff3d6b2b8a3, 0x682e6ff3d6b2b8a3],
+        (4u64)[0x748f82ee5defb2fc, 0x748f82ee5defb2fc, 0x748f82ee5defb2fc, 0x748f82ee5defb2fc],
+        (4u64)[0x78a5636f43172f60, 0x78a5636f43172f60, 0x78a5636f43172f60, 0x78a5636f43172f60],
+        (4u64)[0x84c87814a1f0ab72, 0x84c87814a1f0ab72, 0x84c87814a1f0ab72, 0x84c87814a1f0ab72],
+        (4u64)[0x8cc702081a6439ec, 0x8cc702081a6439ec, 0x8cc702081a6439ec, 0x8cc702081a6439ec],
+        (4u64)[0x90befffa23631e28, 0x90befffa23631e28, 0x90befffa23631e28, 0x90befffa23631e28],
+        (4u64)[0xa4506cebde82bde9, 0xa4506cebde82bde9, 0xa4506cebde82bde9, 0xa4506cebde82bde9],
+        (4u64)[0xbef9a3f7b2c67915, 0xbef9a3f7b2c67915, 0xbef9a3f7b2c67915, 0xbef9a3f7b2c67915],
+        (4u64)[0xc67178f2e372532b, 0xc67178f2e372532b, 0xc67178f2e372532b, 0xc67178f2e372532b],
+        (4u64)[0xca273eceea26619c, 0xca273eceea26619c, 0xca273eceea26619c, 0xca273eceea26619c],
+        (4u64)[0xd186b8c721c0c207, 0xd186b8c721c0c207, 0xd186b8c721c0c207, 0xd186b8c721c0c207],
+        (4u64)[0xeada7dd6cde0eb1e, 0xeada7dd6cde0eb1e, 0xeada7dd6cde0eb1e, 0xeada7dd6cde0eb1e],
+        (4u64)[0xf57d4f7fee6ed178, 0xf57d4f7fee6ed178, 0xf57d4f7fee6ed178, 0xf57d4f7fee6ed178],
+        (4u64)[0x06f067aa72176fba, 0x06f067aa72176fba, 0x06f067aa72176fba, 0x06f067aa72176fba],
+        (4u64)[0x0a637dc5a2c898a6, 0x0a637dc5a2c898a6, 0x0a637dc5a2c898a6, 0x0a637dc5a2c898a6],
+        (4u64)[0x113f9804bef90dae, 0x113f9804bef90dae, 0x113f9804bef90dae, 0x113f9804bef90dae],
+        (4u64)[0x1b710b35131c471b, 0x1b710b35131c471b, 0x1b710b35131c471b, 0x1b710b35131c471b],
+        (4u64)[0x28db77f523047d84, 0x28db77f523047d84, 0x28db77f523047d84, 0x28db77f523047d84],
+        (4u64)[0x32caab7b40c72493, 0x32caab7b40c72493, 0x32caab7b40c72493, 0x32caab7b40c72493],
+        (4u64)[0x3c9ebe0a15c9bebc, 0x3c9ebe0a15c9bebc, 0x3c9ebe0a15c9bebc, 0x3c9ebe0a15c9bebc],
+        (4u64)[0x431d67c49c100d4c, 0x431d67c49c100d4c, 0x431d67c49c100d4c, 0x431d67c49c100d4c],
+        (4u64)[0x4cc5d4becb3e42b6, 0x4cc5d4becb3e42b6, 0x4cc5d4becb3e42b6, 0x4cc5d4becb3e42b6],
+        (4u64)[0x597f299cfc657e2a, 0x597f299cfc657e2a, 0x597f299cfc657e2a, 0x597f299cfc657e2a],
+        (4u64)[0x5fcb6fab3ad6faec, 0x5fcb6fab3ad6faec, 0x5fcb6fab3ad6faec, 0x5fcb6fab3ad6faec],
+        (4u64)[0x6c44198c4a475817, 0x6c44198c4a475817, 0x6c44198c4a475817, 0x6c44198c4a475817]
+    };
+
+    // initialisation vector for state variables
+    u256[STATE_WORD_SIZE] sha512_iv = {
+        (4u64)[0x6a09e667f3bcc908, 0x6a09e667f3bcc908, 0x6a09e667f3bcc908, 0x6a09e667f3bcc908],
+        (4u64)[0xbb67ae8584caa73b, 0xbb67ae8584caa73b, 0xbb67ae8584caa73b, 0xbb67ae8584caa73b],
+        (4u64)[0x3c6ef372fe94f82b, 0x3c6ef372fe94f82b, 0x3c6ef372fe94f82b, 0x3c6ef372fe94f82b],
+        (4u64)[0xa54ff53a5f1d36f1, 0xa54ff53a5f1d36f1, 0xa54ff53a5f1d36f1, 0xa54ff53a5f1d36f1],
+        (4u64)[0x510e527fade682d1, 0x510e527fade682d1, 0x510e527fade682d1, 0x510e527fade682d1],
+        (4u64)[0x9b05688c2b3e6c1f, 0x9b05688c2b3e6c1f, 0x9b05688c2b3e6c1f, 0x9b05688c2b3e6c1f],
+        (4u64)[0x1f83d9abfb41bd6b, 0x1f83d9abfb41bd6b, 0x1f83d9abfb41bd6b, 0x1f83d9abfb41bd6b],
+        (4u64)[0x5be0cd19137e2179, 0x5be0cd19137e2179, 0x5be0cd19137e2179, 0x5be0cd19137e2179]
+    };
+
+    // constants used for setting registers to 0
+    u256 zero_vector_256     = (4u64)[0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000];
+    u128 zero_vector_128     = (2u64)[0x0000000000000000, 0x0000000000000000];
+
+    // constant used for setting 256-bit registers to 0xFF...F
+    u256 maxval_vector       = (4u64)[0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF];
+
+    // constant used for keeping only the last word in the vector
+    u256 last_vector         = (4u64)[0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0xFFFFFFFFFFFFFFFF];
+
+    // constant used for rotating the 64-bit lanes in a 256-bit vector with the VPERMD intrinsic
+    u256 rotate_right_vector = (4u64)[0x0000000000000003, 0x0000000000000000, 0x0000000000000001, 0x0000000000000002];
+
+    // constant vectors carrying the separator bit (and zero padding)
+    u256 separator_0_vector  = (4u64)[0x8000000000000000, 0x8000000000000000, 0x8000000000000000, 0x8000000000000000];
+    u256 separator_1_vector  = (4u64)[0x0080000000000000, 0x0080000000000000, 0x0080000000000000, 0x0080000000000000];
+    u256 separator_2_vector  = (4u64)[0x0000800000000000, 0x0000800000000000, 0x0000800000000000, 0x0000800000000000];
+    u256 separator_3_vector  = (4u64)[0x0000008000000000, 0x0000008000000000, 0x0000008000000000, 0x0000008000000000];
+    u256 separator_4_vector  = (4u64)[0x0000000080000000, 0x0000000080000000, 0x0000000080000000, 0x0000000080000000];
+    u256 separator_5_vector  = (4u64)[0x0000000000800000, 0x0000000000800000, 0x0000000000800000, 0x0000000000800000];
+    u256 separator_6_vector  = (4u64)[0x0000000000008000, 0x0000000000008000, 0x0000000000008000, 0x0000000000008000];
+    u256 separator_7_vector  = (4u64)[0x0000000000000080, 0x0000000000000080, 0x0000000000000080, 0x0000000000000080];
+
+    // rotate right
+    inline
+    fn rotate(
+        reg u256 w,
+        inline int i
+    ) -> reg u256
+    {
+        reg u256 a;
+
+        a  = w; // a = w
+        a  = #VPSLL_4u64(a,64-i); // a = w << 64-i
+
+        w  = #VPSRL_4u64(w,i); // w = w >> i
+
+        w |= a; // w = (w >> i) || (w << 64-i)
+
+        return w;
+    }
+
+    // choice function
+    inline
+    fn choice(
+        reg u256 x,
+        reg u256 y,
+        reg u256 z
+    ) -> reg u256
+    {
+        reg u256 a b;
+
+        a  = x; // a = x
+        a &= y; // a = x /\ y
+
+        b  = maxval_vector; // b = XOR mask to perform NOT
+        b ^= x; // b = ¬x
+        b &= z; // b = ¬x /\ z
+
+        a ^= b; // a = (x /\ y) ^ (¬x /\ z)
+
+        return a;
+    }
+
+    // majority function
+    inline
+    fn majority(
+        reg u256 x,
+        reg u256 y,
+        reg u256 z
+    ) -> reg u256
+    {
+        reg u256 a b;
+
+        a  = x; // a = x
+        a &= y; // a = x /\ y
+
+        b  = x; // b = x
+        b &= z; // b = x /\ z
+
+        a ^= b; // a = (x /\ y) ^ (x /\ z)
+
+        b  = y; // b = y
+        b &= z; // b = y /\ z
+
+        a ^= b; // a = (x /\ y) ^ (x /\ z) ^ (y /\ z)
+
+        return a;
+    }
+
+    // σ0
+    inline
+    fn sigma0(
+        reg u256 w
+    ) -> reg u256
+    {
+        reg u256 u;
+
+        u   = w; // u = w
+        w   = #VPSRL_4u64(w, sigma0_2); // w = w >> 7
+
+        u   = rotate(u, sigma0_0); // u = w rotate 1
+        w  ^= u; // w = (w rotate 1) ^ (w >> 7)
+
+        u   = rotate(u, sigma0_1-sigma0_0); // u = w rotate 8
+        w  ^= u; // w = (w rotate 1) ^ (w rotate 8) ^ (w >> 7)
+
+        return w;
+    }
+
+    // σ1
+    inline
+    fn sigma1(
+        reg u256 w
+    ) -> reg u256
+    {
+        reg u256 u;
+
+        u   = w; // u = w
+
+        w   = #VPSRL_4u64(w, sigma1_2); // w = w >> 6
+
+        u   = rotate(u, sigma1_0); // u = w rotate 19
+        w  ^= u; // w = (w rotate 19) ^ (w >> 6)
+
+        u   = rotate(u, sigma1_1-sigma1_0); // u = w rotate 61
+        w  ^= u; // w = (w rotate 19) ^ (w rotate 61) ^ (w >> 6)
+
+        return w;
+    }
+
+    // Σ0
+    inline
+    fn Sigma0(
+        reg u256 w
+    ) -> reg u256
+    {
+        reg u256 u;
+        reg u256 v;
+
+        u  = w; // u = w
+        u  = rotate(u, Sigma0_0); // u = w rotate 28
+
+        v  = w; // v = w
+        v  = rotate(v, Sigma0_1); // v = w rotate 34
+        u ^= v; // u = (w rotate 28) ^ (w rotate 34)
+
+        v  = rotate(v, Sigma0_2-Sigma0_1); // v = w rotate 39
+        u ^= v; // w = (w rotate 28) ^ (w rotate 34) ^ (w rotate 39)
+
+        return u;
+    }
+
+    // Σ1
+    inline
+    fn Sigma1(
+        reg u256 w
+    ) -> reg u256
+    {
+        reg u256 u;
+        reg u256 v;
+
+        u  = w; // u = w
+        u  = rotate(u, Sigma1_0); // u = w rotate 14
+
+        v  = w; // v = w
+        v  = rotate(v, Sigma1_1); // v = w rotate 18
+        u ^= v; // u = (w rotate 14) ^ (w rotate 18)
+
+        v  = rotate(v, Sigma1_2-Sigma1_1); // v = w rotate 41
+        u ^= v; // w = (w rotate 14) ^ (w rotate 18) ^ (w rotate 41)
+
+        return u;
+    }
+
+    // compute one word in the message schedule
+    inline
+    fn compute_word(
+        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
+        inline int word_idx                // word index in the message schedule
+    ) -> reg ptr u256[ROUNDS_NUM] // -> schedule
+    {
+        reg u256 v w;
+
+        w  = schedule[word_idx-15]; // w = sch[i-15]
+        w  = sigma0(w);             // w = σ0(sch[i-15])
+
+        v  = schedule[word_idx-2];  // v = sch[i-2]
+        v  = sigma1(v);             // v = σ1(sch[i-2])
+
+        w = #VPADD_4u64(w, v);      // w = σ1(sch[i-2]) + σ0(sch[i-15])
+
+        v  = schedule[word_idx-7];  // v = sch[i-7]
+        w = #VPADD_4u64(w, v);      // w = σ1(sch[i-2]) + sch[i-7] + σ0(sch[i-15])
+
+        v  = schedule[word_idx-16]; // v = sch[i-16]
+        w = #VPADD_4u64(w, v);      // w = σ1(sch[i-2]) + sch[i-7] + σ0(sch[i-15]) + sch[i-16]
+
+        schedule[word_idx] = w;
+
+        return schedule;
+    }
+
+    // complete the message schedule, assuming the first MSG_BLOCK_WORD_SIZE
+    // words of the schedule already contain the message data
+    inline
+    fn complete_schedule(
+        reg ptr u256[ROUNDS_NUM] schedule
+    ) -> reg ptr u256[ROUNDS_NUM] // -> schedule
+    {
+        inline int word_idx; // index of the words in the schedule
+
+        // compute the rest of the schedule one word at a time using compute_word
+        for word_idx=MSG_BLOCK_WORD_SIZE to ROUNDS_NUM {
+            schedule = compute_word(schedule, word_idx);
+        }
+
+        return schedule;
+    }
+
+    // compute one round of the main loop
+    inline
+    fn round(
+        reg u256[STATE_WORD_SIZE] state,   // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule, // (filled) message schedule
+        inline int round_nr                // round index
+    ) -> reg u256[STATE_WORD_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule
+    {
+        reg u256 t1; // intermediate value t1
+        reg u256 t2; // intermediate value t2
+        reg u256 t;  // temporary variable
+
+        // set initial value of t1
+        t1 = state[7]; // t1 = th
+
+        // add relevant message schedule word
+        t  = schedule[round_nr]; // t  = sch[i]
+        t1 = #VPADD_4u64(t1, t); // t1 = th + sch[i]
+
+        // add relevant round constant
+        t  = sha256_k[round_nr]; // t  = k[i]
+        t1 = #VPADD_4u64(t1, t); // t1 = th + sch[i] + k[i]
+
+        // add choice(te, tf, tg)
+        t  = choice(state[4], state[5], state[6]); // t  = choice(te, tf, tg)
+        t1 = #VPADD_4u64(t1, t);                   // t1 = th + sch[i] + k[i] + choice(te, tf, tg)
+
+        // add Σ1(te)
+        t  = Sigma1(state[4]);   // t  = Σ1(te)
+        t1 = #VPADD_4u64(t1, t); // t1 = th + sch[i] + k[i] + choice(te, tf, tg) + Σ1(te)
+
+        // update te, tf, tg, and th
+        state[7] = state[6]; // th = tg
+        state[6] = state[5]; // tg = tf
+        state[5] = state[4]; // tf = te
+        state[4] = state[3]; state[4] = #VPADD_4u64(state[4], t1); // te = td + t1
+
+        // set initial value of t2
+        t2 = t1; // t2 = t1
+
+        // add majority(ta, tb, tc)
+        t  = majority(state[0], state[1], state[2]); // t  = majority(ta, tb, tc)
+        t2 = #VPADD_4u64(t2, t);                     // t2 = t1 + majority(ta, tb, tc)
+
+        // add Σ0(ta)
+        t  = Sigma0(state[0]);   // t  = Σ0(ta)
+        t2 = #VPADD_4u64(t2, t); // t2 = t1 + majority(ta, tb, tc) + Σ0(ta)
+
+        // update ta, tb, tc, and td
+        state[3] = state[2]; // td = tc
+        state[2] = state[1]; // tc = tb
+        state[1] = state[0]; // tb = ta
+        state[0] = t2;       // ta = t2
+
+        return state, schedule;
+    }
+
+    // compress the message schedule into the state
+    inline
+    fn compress(
+        reg u256[STATE_WORD_SIZE] state,  // Intermediate Hash Values (IHVs)
+        reg ptr u256[ROUNDS_NUM] schedule // (filled) message schedule
+    ) -> reg u256[STATE_WORD_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule
+    {
+        // register variables
+        reg u256 tmp; // temporary variable for copying purposes
+
+        // stack variables
+        stack u256[STATE_WORD_SIZE] ihv;
+
+        inline int i;
+        inline int round_nr; // round number iterator
+
+        // complete the message schedule
+        // (only the message part is filled before this call, not the computed part yet)
+        schedule = complete_schedule(schedule);
+
+        // save the IHV values before the loop
+        for i=0 to STATE_WORD_SIZE {
+            ihv[i] = state[i];
+        }
+
+        // run the main loop
+        for round_nr=0 to ROUNDS_NUM {
+            state, schedule = round(state, schedule, round_nr);
+        }
+
+        // add to the working variables the IHV values from before the loop
+        for i=0 to STATE_WORD_SIZE {
+            tmp = ihv[i];
+            state[i] = #VPADD_4u64(state[i], tmp);
+        }
+
+        // reset the message part of the schedule
+        // (the computed part will be overwritten by compute_word anyway)
+        tmp = zero_vector_256;
+        for i=0 to MSG_BLOCK_WORD_SIZE {
+            schedule[i] = tmp;
+        }
+
+        return state, schedule;
+    }
+
+    // unpack the vectorised four-lane state into separate output vectors
+    inline
+    fn unpack_state(
+        reg u256[STATE_WORD_SIZE] state, // vectorised IHVs
+        reg ptr u8[STATE_BYTE_SIZE] out0 out1 out2 out3 // outputs
+    ) -> reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE] // -> out0, out1, out2, out3
+    {
+        // register variables
+        reg u256 vector; // temporary variable for copying purposes
+        reg u128 upper;  // temporary variable for copying purposes
+        reg u64 word;    // temporary variable for copying purposes
+
+        inline int i;
+
+        for i=0 to STATE_WORD_SIZE {
+            vector = state[i]; // retrieve the entire packed state vector
+
+            // write out0-out3, taking from the lower half of the vector
+            word = #VPEXTR_64(vector, 0); word = #BSWAP_64(word); out0[:u64 i] = word;
+            word = #VPEXTR_64(vector, 1); word = #BSWAP_64(word); out1[:u64 i] = word;
+
+            upper = #VEXTRACTI128(vector, 1); // retrieve upper half of the packed state vector
+
+            // write out4-out7, taking from the upper half of the original vector
+            word = #VPEXTR_64(upper, 0); word = #BSWAP_64(word); out2[:u64 i] = word;
+            word = #VPEXTR_64(upper, 1); word = #BSWAP_64(word); out3[:u64 i] = word;
+        }
+
+        return out0, out1, out2, out3;
+    }
+
+    /********** FUNCTIONS INTENDED FOR EXTERNAL USE **********/
+
+    // initialise the vectorised SHA256 state from scratch
+    fn init_iv(
+        reg ptr u256[STATE_WORD_SIZE] state, // pointer to the state
+        reg ptr u256[ROUNDS_NUM] schedule,   // message schedule
+        reg u64 sch_idx,                     // byte index of current position in message schedule
+        reg u64 bits                         // number of bits processed
+    ) -> reg ptr u256[STATE_WORD_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        // register variables
+        reg u256 copy; // temporary variable for copying purposes
+
+        inline int i;
+
+        // set the IHVs to the initialisation vectors
+        for i=0 to STATE_WORD_SIZE {
+            copy = sha256_iv[i]; state[i] = copy;
+        }
+
+        // reset the message part of the schedule
+        // (the computed part will be overwritten by compute_word anyway)
+        copy = zero_vector_256;
+        for i=0 to MSG_BLOCK_WORD_SIZE {
+            schedule[i] = copy;
+        }
+
+        sch_idx = 0;
+        bits = 0;
+
+        return state, schedule, sch_idx, bits;
+    }
+
+    // initialise the vectorised SHA256 state from a cached state
+    fn init_cache(
+        reg ptr u256[STATE_WORD_SIZE] state,      // pointer to the state
+        reg ptr u256[ROUNDS_NUM] schedule,        // message schedule
+        reg u64 sch_idx,                          // byte index of current position in message schedule
+        reg u64 bits,                             // number of bits processed
+        reg ptr u256[STATE_WORD_SIZE] state_cache // cached Intermediate Hash Values (IHVs)
+    ) -> reg ptr u256[STATE_WORD_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        // register variables
+        reg u256 copy; // temporary variable for copying purposes
+
+        inline int i;
+
+        // set the cached state
+        for i=0 to STATE_WORD_SIZE {
+            copy = state_cache[i]; state[i] = copy;
+        }
+
+        // reset the message part of the schedule
+        // (the computed part will be overwritten by compute_word anyway)
+        copy = zero_vector_256;
+        for i=0 to MSG_BLOCK_WORD_SIZE {
+            schedule[i] = copy;
+        }
+
+        sch_idx = 0;
+
+        return state, schedule, sch_idx, bits;
+    }
+
+    // finalise the SHA256 computation,
+    // i.e. add zero padding, add the length encoding, and run the final compression(s)
+    fn finalise(
+        reg ptr u256[STATE_WORD_SIZE] state, // pointer to the state
+        reg ptr u256[ROUNDS_NUM] schedule,   // message schedule
+        reg u64 sch_idx,                     // byte index of the current position in message schedule
+        reg u64 bits,                        // number of bits processed
+        reg ptr u8[STATE_BYTE_SIZE] out0 out1 out2 out3 // outputs
+    ) -> reg ptr u256[ROUNDS_NUM], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE] // -> schedule, out0, out1, out2, out3 // schedule is only returned because it needs to be writable
+    {
+        // register variables
+        reg u256[STATE_WORD_SIZE] ihvs; // Intermediate Hash Values (IHVs)
+        reg u256 vector;    // four-lane vector
+        reg u256 mask;      // bitmask for constructing vectors from bytes
+        reg u64 idx_word;   // temporary variable for computing a word index in the schedule
+        reg u64 idx_byte;   // temporary variable for computing a byte index within a word
+        reg u64 idx_offset; // temporary variable for computing address within a u256 array
+
+        // stack variables
+        stack u64 length; // one word of the length encoding (needs to be stack type for VPBROADCAST_4u64)
+
+        inline int i;
+
+        // put the state in vector registers
+        for i=0 to STATE_WORD_SIZE {
+            ihvs[i] = state[i];
+        }
+
+        idx_word = sch_idx; idx_word >>= 2; // get the word index of the next byte to be placed in the schedule (divide by four)
+        idx_byte = sch_idx; idx_byte &= sha512_parallel::BYTES_PER_WORD; // get the byte index within the word (mod eight)
+
+        // determine which pre-computed separator byte mask is needed
+        if (idx_byte == 0) {
+            mask = separator_0_vector;
+        } else if (idx_byte == 1) {
+            mask = separator_1_vector;
+        } else if (idx_byte == 2) {
+            mask = separator_2_vector;
+        } else if (idx_byte == 3) {
+            mask = separator_3_vector;
+        } else if (idx_byte == 4) {
+            mask = separator_4_vector;
+        } else if (idx_byte == 5) {
+            mask = separator_5_vector;
+        } else if (idx_byte == 6) {
+            mask = separator_6_vector;
+        } else { // idx_byte == 7
+            mask = separator_7_vector;
+        }
+
+        // set the separator bytes
+        idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
+        vector = schedule.[:u256 idx_offset];    // retrieve the current word
+        vector ^= mask;                          // combine the vector of existing data and the vector with the separator bytes
+        schedule.[:u256 idx_offset] = vector;    // overwrite the vector in the schedule
+        idx_word += 1;                           // any zeroes after the separator byte are effectively already zero padding, so move on to the next word
+
+        // check if the length encoding fits in the current block
+        if (idx_word > MSG_BLOCK_WORD_SIZE-2) {
+            // length encoding does not fit in the current message schedule,
+            // so compress the schedule first
+            // (the schedule started as all-zero, so the zero padding is already set correctly)
+            ihvs, schedule = compress(ihvs, schedule); // compress the message schedule into the state
+        }
+
+        // TODO modify the following input length handling to correctly handle inputs with more than 2^64-1 bits of input length
+
+        // the 'empty' message parts of the schedule are all zeroes,
+        // so the word index for the length encoding can just be set to the correct position immediately
+        idx_word = MSG_BLOCK_WORD_SIZE-1;
+
+        // only compute and set the vector if the low half of bits are non-zero
+        if (bits != 0) {
+            length = bits;
+            vector = #VPBROADCAST_4u64(length);      // copy the length encoding word to all words in the vector
+            idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
+            schedule.[idx_offset] = vector;
+        }
+
+        // run the final compression
+        ihvs, schedule = compress(ihvs, schedule);
+
+        // convert the vectorised state to separate outputs
+        out0, out1, out2, out3 = unpack_state(ihvs, out0, out1, out2, out3);
+
+        return schedule, out0, out1, out2, out3;
+    }
+}
