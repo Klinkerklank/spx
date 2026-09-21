@@ -92,9 +92,9 @@ fn ht_sign(
     sig_ht[0 : XMSS_SIG] = sig_xmss; // redesignate the pointer so the region of the full array is not partial
 
     // compute the lowest-layer XMSS tree root based on the first XMSS signature
-    () = #spill(skseed, sig_ht, cache_single);
+    () = #spill(skseed, sig_ht, cache_single, cache_parallel);
     root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, pk_fors, adrs, cache_single);
-    () = #unspill(skseed, sig_ht, cache_single);
+    () = #unspill(skseed, sig_ht, cache_single, cache_parallel);
 
     // iteratively compute the XMSS signatures that sign the root of the previous XMSS tree
     offset = XMSS_SIG; // next signature will get placed immediately adjoining the previous one
@@ -124,9 +124,9 @@ fn ht_sign(
         // compute the current XMSS tree's root, unless it's the topmost layer
         // in which case the root will be PK.root (which is not part of the signature)
         if (j < SPX_D-1) {
-            () = #spill(sig_ht, j, offset, cache_single);
+            () = #spill(sig_ht, j, offset, cache_single, cache_parallel);
             root, adrs = __xmss_pkfromsig(root, idx_leaf, sig_xmss, root_prev, adrs, cache_single);
-            () = #unspill(sig_ht, j, offset, cache_single);
+            () = #unspill(sig_ht, j, offset, cache_single, cache_parallel);
         }
 
         () = #unspill(skseed);

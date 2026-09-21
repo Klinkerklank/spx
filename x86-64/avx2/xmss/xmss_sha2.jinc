@@ -75,17 +75,18 @@ fn xmss_node(
     stack u8[XMSS_TREE_SIZE * SPX_N] flat_tree;
 
     // register variables
-    reg u32 layer;       // iterator over the layers
-    reg u32 node;        // node      = horizontal index   of the leftmost  node in the current layer
-    reg u32 rightmost;   // rightmost = horizontal index+1 of the rightmost node in the current layer
-    reg u64 label;       // label of the current node
-    reg u64 lnode;       // label of the left child
-    reg u64 rnode;       // label of the right child
-    reg u32 lnode_i;     // horizontal index of the left child
-    reg u32 lnode_z;     // height of the left child
-    reg u64 node_addr;   // byte address of 'node' in the buffer
-    reg u64 pow;         // temporary variable for computing powers
-    reg u32 exp;         // temporary variable for computing exponents
+    reg u32 layer;     // iterator over the layers
+    reg u32 node;      // node      = horizontal index   of the leftmost  node in the current layer
+    reg u32 rightmost; // rightmost = horizontal index+1 of the rightmost node in the current layer
+    reg u64 label;     // label of the current node
+    reg u64 lnode;     // label of the left child
+    reg u64 rnode;     // label of the right child
+    reg u32 lnode_i;   // horizontal index of the left child
+    reg u32 lnode_z;   // height of the left child
+    reg u64 node_addr; // byte address of 'node' in the buffer
+    reg u64 pow;       // temporary variable for computing powers
+    reg u32 exp;       // temporary variable for computing exponents
+    reg ptr u8[SPX_N] wots_pk; // pointer to subarray with a WOTS+ public key
 
     // parallelised SHA256 register and stack variables
     stack u256[sha256_parallel::STATE_u32_SIZE] state; // state
@@ -129,8 +130,12 @@ fn xmss_node(
                 node_addr *= SPX_N;      // byte address of node
 
                 // compute the WOTS+ public key
-                flat_tree[node_addr : SPX_N], adrs = __wots_pkgen(flat_tree[node_addr : SPX_N], skseed, adrs, cache_single);
-                
+                wots_pk = flat_tree[node_addr : SPX_N]; // get the pointer to the subarray so the full array can be spilled
+                () = #spill(node_addr);
+                wots_pk, adrs = __wots_pkgen(wots_pk, skseed, adrs, cache_single);
+                () = #unspill(node_addr);
+                flat_tree[node_addr : SPX_N] = wots_pk; // redesignate the pointer so the region of the full array is not partial
+
                 () = #unspill(node);
                 // advance to the next uncomputed node in the layer
                 node += 1;
