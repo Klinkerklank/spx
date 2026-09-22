@@ -115,7 +115,7 @@ namespace sha512_parallel {
         (4u64)[0x6c44198c4a475817, 0x6c44198c4a475817, 0x6c44198c4a475817, 0x6c44198c4a475817]
     };
 
-    // initialisation vector for state variables
+    // initialisation vector for the state variables
     u256[STATE_WORD_SIZE] sha512_iv = {
         (4u64)[0x6a09e667f3bcc908, 0x6a09e667f3bcc908, 0x6a09e667f3bcc908, 0x6a09e667f3bcc908],
         (4u64)[0xbb67ae8584caa73b, 0xbb67ae8584caa73b, 0xbb67ae8584caa73b, 0xbb67ae8584caa73b],
@@ -264,8 +264,7 @@ namespace sha512_parallel {
         reg u256 w
     ) -> reg u256
     {
-        reg u256 u;
-        reg u256 v;
+        reg u256 u v;
 
         u  = w; // u = w
         u  = rotate(u, Sigma0_0); // u = w rotate 28
@@ -286,8 +285,7 @@ namespace sha512_parallel {
         reg u256 w
     ) -> reg u256
     {
-        reg u256 u;
-        reg u256 v;
+        reg u256 u v;
 
         u  = w; // u = w
         u  = rotate(u, Sigma1_0); // u = w rotate 14

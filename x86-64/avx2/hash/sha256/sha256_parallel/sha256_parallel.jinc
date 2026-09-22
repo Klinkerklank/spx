@@ -99,7 +99,7 @@ namespace sha256_parallel {
         (8u32)[0xc67178f2, 0xc67178f2, 0xc67178f2, 0xc67178f2, 0xc67178f2, 0xc67178f2, 0xc67178f2, 0xc67178f2]
     };
 
-    // initialisation vector for state variables
+    // initialisation vector for the state variables
     u256[STATE_WORD_SIZE] sha256_iv = {
         (8u32)[0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667],
         (8u32)[0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85],
@@ -244,8 +244,7 @@ namespace sha256_parallel {
         reg u256 w
     ) -> reg u256
     {
-        reg u256 u;
-        reg u256 v;
+        reg u256 u v;
 
         u  = w; // u = w
         u  = rotate(u, Sigma0_0); // u = w rotate 2
@@ -266,8 +265,7 @@ namespace sha256_parallel {
         reg u256 w
     ) -> reg u256
     {
-        reg u256 u;
-        reg u256 v;
+        reg u256 u v;
 
         u  = w; // u = w
         u  = rotate(u, Sigma1_0); // u = w rotate 6
