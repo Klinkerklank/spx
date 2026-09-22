@@ -13,6 +13,7 @@ namespace sha256 {
     param int MSG_BLOCK_WORD_SIZE = MSG_BLOCK_BYTE_SIZE/4; // word = u32
     param int STATE_BYTE_SIZE     = 32;
     param int STATE_WORD_SIZE     = STATE_BYTE_SIZE/4; // word = u32
+    param int WORDS_PER_VECTOR    = 256/32; // word = u32
     param int BYTES_PER_WORD      = 32/8; // word = u32
 
     // σ function constants
@@ -53,17 +54,13 @@ namespace sha256 {
         (8u32)[0xc67178f2, 0xbef9a3f7, 0xa4506ceb, 0x90befffa, 0xc67178f2, 0xbef9a3f7, 0xa4506ceb, 0x90befffa]
     };
 
-    // initialisation vector for state variables
+    // initialisation vector for the state variables
     u256[STATE_WORD_SIZE] sha256_iv = {
-        (8u32)[0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667, 0x6a09e667],
-        (8u32)[0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85, 0xbb67ae85],
-        (8u32)[0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372, 0x3c6ef372],
-        (8u32)[0xa54ff53a, 0xa54ff53a, 0xa54ff53a, 0xa54ff53a, 0xa54ff53a, 0xa54ff53a, 0xa54ff53a, 0xa54ff53a],
-        (8u32)[0x510e527f, 0x510e527f, 0x510e527f, 0x510e527f, 0x510e527f, 0x510e527f, 0x510e527f, 0x510e527f],
-        (8u32)[0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c, 0x9b05688c],
-        (8u32)[0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab, 0x1f83d9ab],
-        (8u32)[0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19, 0x5be0cd19]
+        (8u32)[0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
     };
+
+    // constant used for setting registers to 0
+    u256 zero_vector_256 = (8u32)[0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000];
 
     // big-to-litte-Endian byte-swap mask for 32-bit lanes, duplicated across
     // both 128-bit halves so a single VPSHUFB_256 fixes both blocks
@@ -80,41 +77,21 @@ namespace sha256 {
         0x0b0a0908, 0x03020100, -1, -1,
         0x0b0a0908, 0x03020100, -1, -1];
 
-    // rotate right
-    inline
-    fn rotate(
-        reg u256 w,
-        inline int i
-    ) -> reg u256
-    {
-        reg u256 a;
-
-        a  = w; // a = w
-        a  = #VPSLL_8u32(a,32-i); // a = w << 32-i
-
-        w  = #VPSRL_8u32(w,i); // w = w >> i
-
-        w |= a; // w = (w >> i) || (w << 32-i)
-
-        return w;
-    }
-
     // choice function
     inline
     fn choice(
-        reg u256 x,
-        reg u256 y,
-        reg u256 z
-    ) -> reg u256
+        reg u32 x,
+        reg u32 y,
+        reg u32 z
+    ) -> reg u32
     {
-        reg u256 a b;
+        reg u32 a b;
 
         a  = x; // a = x
         a &= y; // a = x /\ y
 
-        b  = maxval_vector; // b = XOR mask to perform NOT
-        b ^= x; // b = ¬x
-        b &= z; // b = ¬x /\ z
+        b  = !x; // b = ¬x
+        b &= z;  // b = ¬x /\ z
 
         a ^= b; // a = (x /\ y) ^ (¬x /\ z)
 
@@ -124,12 +101,12 @@ namespace sha256 {
     // majority function
     inline
     fn majority(
-        reg u256 x,
-        reg u256 y,
-        reg u256 z
-    ) -> reg u256
+        reg u32 x,
+        reg u32 y,
+        reg u32 z
+    ) -> reg u32
     {
-        reg u256 a b;
+        reg u32 a b;
 
         a  = x; // a = x
         a &= y; // a = x /\ y
@@ -191,21 +168,20 @@ namespace sha256 {
     // Σ0
     inline
     fn Sigma0(
-        reg u256 w
-    ) -> reg u256
+        reg u32 w
+    ) -> reg u32
     {
-        reg u256 u;
-        reg u256 v;
+        reg u32 u v;
 
-        u  = w; // u = w
-        u  = rotate(u, Sigma0_0); // u = w rotate 2
+        u    = w;                 // u = w
+        u >>r= Sigma0_0;          // u = w rotate 2
 
-        v  = w; // v = w
-        v  = rotate(v, Sigma0_1); // v = w rotate 13
-        u ^= v; // u = (w rotate 2) ^ (w rotate 13)
+        v    = w;                 // v = w
+        v >>r= Sigma0_1;          // v = w rotate 13
+        u   ^= v;                 // u = (w rotate 2) ^ (w rotate 13)
 
-        v  = rotate(v, Sigma0_2-Sigma0_1); // v = w rotate 22
-        u ^= v; // w = (w rotate 2) ^ (w rotate 13) ^ (w rotate 22)
+        v >>r= Sigma0_2-Sigma0_1; // v = w rotate 22
+        u   ^= v;                 // w = (w rotate 2) ^ (w rotate 13) ^ (w rotate 22)
 
         return u;
     }
@@ -216,214 +192,30 @@ namespace sha256 {
         reg u256 w
     ) -> reg u256
     {
-        reg u256 u;
-        reg u256 v;
+        reg u256 u v;
 
-        u  = w; // u = w
-        u  = rotate(u, Sigma1_0); // u = w rotate 6
+        u    = w;                 // u = w
+        u >>r= Sigma1_0;          // u = w rotate 6
 
-        v  = w; // v = w
-        v  = rotate(v, Sigma1_1); // v = w rotate 11
-        u ^= v; // u = (w rotate 6) ^ (w rotate 11)
+        v    = w;                 // v = w
+        v >>r= Sigma1_1;          // v = w rotate 11
+        u   ^= v;                 // u = (w rotate 6) ^ (w rotate 11)
 
-        v  = rotate(v, Sigma1_2-Sigma1_1); // v = w rotate 25
-        u ^= v; // w = (w rotate 6) ^ (w rotate 11) ^ (w rotate 25)
+        v >>r= Sigma1_2-Sigma1_1; // v = w rotate 25
+        u   ^= v;                 // w = (w rotate 6) ^ (w rotate 11) ^ (w rotate 25)
 
         return u;
-    }
-
-    // compute one word in the message schedule
-    inline
-    fn compute_word(
-        reg ptr u256[ROUNDS_NUM] schedule, // message schedule
-        inline int word_idx                // word index in the message schedule
-    ) -> reg ptr u256[ROUNDS_NUM] // -> schedule
-    {
-        reg u256 v w;
-
-        w  = schedule[word_idx-15]; // w = sch[i-15]
-        w  = sigma0(w);             // w = σ0(sch[i-15])
-
-        v  = schedule[word_idx-2];  // v = sch[i-2]
-        v  = sigma1(v);             // v = σ1(sch[i-2])
-
-        w = #VPADD_8u32(w, v);      // w = σ1(sch[i-2]) + σ0(sch[i-15])
-
-        v  = schedule[word_idx-7];  // v = sch[i-7]
-        w = #VPADD_8u32(w, v);      // w = σ1(sch[i-2]) + sch[i-7] + σ0(sch[i-15])
-
-        v  = schedule[word_idx-16]; // v = sch[i-16]
-        w = #VPADD_8u32(w, v);      // w = σ1(sch[i-2]) + sch[i-7] + σ0(sch[i-15]) + sch[i-16]
-
-        schedule[word_idx] = w;
-
-        return schedule;
-    }
-
-    // complete the message schedule, assuming the first MSG_BLOCK_WORD_SIZE
-    // words of the schedule already contain the message data
-    inline
-    fn complete_schedule(
-        reg ptr u256[ROUNDS_NUM] schedule
-    ) -> reg ptr u256[ROUNDS_NUM] // -> schedule
-    {
-        inline int word_idx; // index of the words in the schedule
-
-        // compute the rest of the schedule one word at a time using compute_word
-        for word_idx=MSG_BLOCK_WORD_SIZE to ROUNDS_NUM {
-            schedule = compute_word(schedule, word_idx);
-        }
-
-        return schedule;
-    }
-
-    // compute one round of the main loop
-    inline
-    fn round(
-        reg u256[STATE_WORD_SIZE] state,   // Intermediate Hash Values (IHVs)
-        reg ptr u256[ROUNDS_NUM] schedule, // (filled) message schedule
-        inline int round_nr                // round index
-    ) -> reg u256[STATE_WORD_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule
-    {
-        reg u256 t1; // intermediate value t1
-        reg u256 t2; // intermediate value t2
-        reg u256 t;  // temporary variable
-
-        // set initial value of t1
-        t1 = state[7]; // t1 = th
-
-        // add relevant message schedule word
-        t  = schedule[round_nr]; // t  = sch[i]
-        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i]
-
-        // add relevant round constant
-        t  = sha256_k[round_nr]; // t  = k[i]
-        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i] + k[i]
-
-        // add choice(te, tf, tg)
-        t  = choice(state[4], state[5], state[6]); // t  = choice(te, tf, tg)
-        t1 = #VPADD_8u32(t1, t);                   // t1 = th + sch[i] + k[i] + choice(te, tf, tg)
-
-        // add Σ1(te)
-        t  = Sigma1(state[4]);   // t  = Σ1(te)
-        t1 = #VPADD_8u32(t1, t); // t1 = th + sch[i] + k[i] + choice(te, tf, tg) + Σ1(te)
-
-        // update te, tf, tg, and th
-        state[7] = state[6]; // th = tg
-        state[6] = state[5]; // tg = tf
-        state[5] = state[4]; // tf = te
-        state[4] = state[3]; state[4] = #VPADD_8u32(state[4], t1); // te = td + t1
-
-        // set initial value of t2
-        t2 = t1; // t2 = t1
-
-        // add majority(ta, tb, tc)
-        t  = majority(state[0], state[1], state[2]); // t  = majority(ta, tb, tc)
-        t2 = #VPADD_8u32(t2, t);                     // t2 = t1 + majority(ta, tb, tc)
-
-        // add Σ0(ta)
-        t  = Sigma0(state[0]);   // t  = Σ0(ta)
-        t2 = #VPADD_8u32(t2, t); // t2 = t1 + majority(ta, tb, tc) + Σ0(ta)
-
-        // update ta, tb, tc, and td
-        state[3] = state[2]; // td = tc
-        state[2] = state[1]; // tc = tb
-        state[1] = state[0]; // tb = ta
-        state[0] = t2;       // ta = t2
-
-        return state, schedule;
-    }
-
-    // compress the message schedule into the state
-    inline
-    fn compress(
-        reg u256[STATE_WORD_SIZE] state,  // Intermediate Hash Values (IHVs)
-        reg ptr u256[ROUNDS_NUM] schedule // (filled) message schedule
-    ) -> reg u256[STATE_WORD_SIZE], reg ptr u256[ROUNDS_NUM] // -> state, schedule
-    {
-        // register variables
-        reg u256 tmp; // temporary variable for copying purposes
-
-        // stack variables
-        stack u256[STATE_WORD_SIZE] ihv;
-
-        inline int i;
-        inline int round_nr; // round number iterator
-
-        // complete the message schedule
-        // (only the message part is filled before this call, not the computed part yet)
-        schedule = complete_schedule(schedule);
-
-        // save the IHV values before the loop
-        for i=0 to STATE_WORD_SIZE {
-            ihv[i] = state[i];
-        }
-
-        // run the main loop
-        for round_nr=0 to ROUNDS_NUM {
-            state, schedule = round(state, schedule, round_nr);
-        }
-
-        // add to the working variables the IHV values from before the loop
-        for i=0 to STATE_WORD_SIZE {
-            tmp = ihv[i];
-            state[i] = #VPADD_8u32(state[i], tmp);
-        }
-
-        // reset the message part of the schedule
-        // (the computed part will be overwritten by compute_word anyway)
-        tmp = zero_vector_256;
-        for i=0 to MSG_BLOCK_WORD_SIZE {
-            schedule[i] = tmp;
-        }
-
-        return state, schedule;
-    }
-
-    // unpack the vectorised eight-lane state into separate output vectors
-    inline
-    fn unpack_state(
-        reg u256[STATE_WORD_SIZE] state, // vectorised IHVs
-        reg ptr u8[STATE_BYTE_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
-    ) -> reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE] // -> out0, out1, out2, out3, out4, out5, out6, out7
-    {
-        // register variables
-        reg u256 vector; // temporary variable for copying purposes
-        reg u128 upper;  // temporary variable for copying purposes
-        reg u32 word;    // temporary variable for copying purposes
-
-        inline int i;
-
-        for i=0 to STATE_WORD_SIZE {
-            vector = state[i]; // retrieve the entire packed state vector
-
-            // write out0-out3, taking from the lower half of the vector
-            word = #VPEXTR_32(vector, 0); word = #BSWAP_32(word); out0[:u32 i] = word;
-            word = #VPEXTR_32(vector, 1); word = #BSWAP_32(word); out1[:u32 i] = word;
-            word = #VPEXTR_32(vector, 2); word = #BSWAP_32(word); out2[:u32 i] = word;
-            word = #VPEXTR_32(vector, 3); word = #BSWAP_32(word); out3[:u32 i] = word;
-
-            upper = #VEXTRACTI128(vector, 1); // retrieve upper half of the packed state vector
-
-            // write out4-out7, taking from the upper half of the original vector
-            word = #VPEXTR_32(upper, 0); word = #BSWAP_32(word); out4[:u32 i] = word;
-            word = #VPEXTR_32(upper, 1); word = #BSWAP_32(word); out5[:u32 i] = word;
-            word = #VPEXTR_32(upper, 2); word = #BSWAP_32(word); out6[:u32 i] = word;
-            word = #VPEXTR_32(upper, 3); word = #BSWAP_32(word); out7[:u32 i] = word;
-        }
-
-        return out0, out1, out2, out3, out4, out5, out6, out7;
     }
 
     /********** FUNCTIONS INTENDED FOR EXTERNAL USE **********/
 
     // initialise the vectorised SHA256 state from scratch
     fn init_iv(
-        reg ptr u256[STATE_WORD_SIZE] state, // pointer to the state
-        reg ptr u256[ROUNDS_NUM] schedule,   // message schedule
-        reg u64 sch_idx,                     // byte index of current position in message schedule
-        reg u64 bits                         // number of bits processed
-    ) -> reg ptr u256[STATE_WORD_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+        reg ptr u32[STATE_WORD_SIZE] state, // pointer to the state
+        reg ptr u32[ROUNDS_NUM] schedule,   // message schedule
+        reg u64 sch_idx,                    // byte index of current position in message schedule
+        reg u64 bits                        // number of bits processed
+    ) -> reg ptr u32[STATE_WORD_SIZE], reg ptr u32[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
     {
         // register variables
         reg u256 copy; // temporary variable for copying purposes
@@ -431,15 +223,15 @@ namespace sha256 {
         inline int i;
 
         // set the IHVs to the initialisation vectors
-        for i=0 to STATE_WORD_SIZE {
-            copy = sha256_iv[i]; state[i] = copy;
+        for i=0 to STATE_WORD_SIZE/WORDS_PER_VECTOR {
+            copy = sha256_iv[i]; state[:u256 i] = copy;
         }
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
         copy = zero_vector_256;
-        for i=0 to MSG_BLOCK_WORD_SIZE {
-            schedule[i] = copy;
+        for i=0 to MSG_BLOCK_WORD_SIZE/WORDS_PER_VECTOR {
+            schedule[:u256 i] = copy;
         }
 
         sch_idx = 0;
@@ -450,28 +242,28 @@ namespace sha256 {
 
     // initialise the vectorised SHA256 state from a cached state
     fn init_cache(
-        reg ptr u256[STATE_WORD_SIZE] state,      // pointer to the state
-        reg ptr u256[ROUNDS_NUM] schedule,        // message schedule
-        reg u64 sch_idx,                          // byte index of current position in message schedule
-        reg u64 bits,                             // number of bits processed
-        reg ptr u256[STATE_WORD_SIZE] state_cache // cached Intermediate Hash Values (IHVs)
-    ) -> reg ptr u256[STATE_WORD_SIZE], reg ptr u256[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+        reg ptr u32[STATE_WORD_SIZE] state,      // pointer to the state
+        reg ptr u32[ROUNDS_NUM] schedule,        // message schedule
+        reg u64 sch_idx,                         // byte index of current position in message schedule
+        reg u64 bits,                            // number of bits processed
+        reg ptr u32[STATE_WORD_SIZE] state_cache // cached Intermediate Hash Values (IHVs)
+    ) -> reg ptr u32[STATE_WORD_SIZE], reg ptr u32[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
     {
         // register variables
         reg u256 copy; // temporary variable for copying purposes
 
         inline int i;
 
-        // set the cached state
-        for i=0 to STATE_WORD_SIZE {
-            copy = state_cache[i]; state[i] = copy;
+        // set the IHVs to the initialisation vectors
+        for i=0 to STATE_WORD_SIZE/WORDS_PER_VECTOR {
+            copy = sha256_iv[:u256 i]; state[:u256 i] = copy;
         }
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
         copy = zero_vector_256;
-        for i=0 to MSG_BLOCK_WORD_SIZE {
-            schedule[i] = copy;
+        for i=0 to MSG_BLOCK_WORD_SIZE/WORDS_PER_VECTOR {
+            schedule[:u256 i] = copy;
         }
 
         sch_idx = 0;
@@ -489,89 +281,6 @@ namespace sha256 {
         reg ptr u8[STATE_BYTE_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
     ) -> reg ptr u256[ROUNDS_NUM], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE] // -> schedule, out0, out1, out2, out3, out4, out5, out6, out7 // schedule is only returned because it needs to be writable
     {
-        // register variables
-        reg u256[STATE_WORD_SIZE] ihvs; // Intermediate Hash Values (IHVs)
-        reg u256 vector;    // eight-lane vector
-        reg u256 mask;      // bitmask for constructing vectors from bytes
-        reg u64 idx_word;   // temporary variable for computing a word index in the schedule
-        reg u64 idx_byte;   // temporary variable for computing a byte index within a word
-        reg u64 idx_offset; // temporary variable for computing address within a u256 array
-        reg u64 length_hi;  // temporary variable for casting the first half of the length encoding to u32
-        reg u32 length_reg; // temporary variable for byteswapping
-
-        // stack variables
-        stack u32 length; // one word of the length encoding (needs to be stack type for VPBROADCAST_8u32)
-
-        inline int i;
-
-        // put the state in vector registers
-        for i=0 to STATE_WORD_SIZE {
-            ihvs[i] = state[i];
-        }
-
-        idx_word = sch_idx; idx_word >>= 2; // get the word index of the next byte to be placed in the schedule (divide by four)
-        idx_byte = sch_idx; idx_byte &= BYTES_PER_WORD-1; // get the byte index within the word (mod four)
-
-        // determine which pre-computed separator byte mask is needed
-        if (idx_byte == 0) {
-            mask = separator_0_vector;
-        } else if (idx_byte == 1) {
-            mask = separator_1_vector;
-        } else if (idx_byte == 2) {
-            mask = separator_2_vector;
-        } else { // idx_byte == 3
-            mask = separator_3_vector;
-        }
-
-        // set the separator bytes
-        idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
-        vector = schedule.[:u256 idx_offset];    // retrieve the current word
-        vector ^= mask;                          // combine the vector of existing data and the vector with the separator bytes
-        schedule.[:u256 idx_offset] = vector;    // overwrite the vector in the schedule
-        idx_word += 1;                           // any zeroes after the separator byte are effectively already zero padding, so move on to the next word
-
-        // check if the length encoding fits in the current block
-        if (idx_word > MSG_BLOCK_WORD_SIZE-2) {
-            // length encoding does not fit in the current message schedule,
-            // so compress the schedule first
-            // (the schedule started as all-zero, so the zero padding is already set correctly)
-            ihvs, schedule = compress(ihvs, schedule); // compress the message schedule into the state
-        }
-
-        // the 'empty' message parts of the schedule are all zeroes,
-        // so the word index for the length encoding can just be set to the correct position immediately
-        idx_word = MSG_BLOCK_WORD_SIZE-2;
-
-        // get the first half (most significant bits) of the length encoding
-        length_hi = bits;
-        length_hi >>= 32;
-        length_reg = (32u) length_hi;
-
-        // only compute and set the vector if the high half of bits are non-zero
-        if (length_reg != 0) {
-            length = length_reg;
-            vector = #VPBROADCAST_8u32(length);      // copy the length encoding word to all words in the vector
-            idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
-            schedule.[idx_offset] = vector;
-        }
-
-        idx_word += 1; // move on to the second word of the length encoding
-        length_reg = (32u) bits; // get the second half (least significant bits) of the length encoding
-
-        // only compute and set the vector if the low half of bits are non-zero
-        if (length_reg != 0) {
-            length = length_reg;
-            vector = #VPBROADCAST_8u32(length);      // copy the length encoding word to all words in the vector
-            idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
-            schedule.[idx_offset] = vector;
-        }
-
-        // run the final compression
-        ihvs, schedule = compress(ihvs, schedule);
-
-        // convert the vectorised state to separate outputs
-        out0, out1, out2, out3, out4, out5, out6, out7 = unpack_state(ihvs, out0, out1, out2, out3, out4, out5, out6, out7);
-
-        return schedule, out0, out1, out2, out3, out4, out5, out6, out7;
+        
     }
 }
