@@ -145,7 +145,7 @@ fn absorb_fixed(
 
             () = #spill(schedule); // free up space in the word registers
 
-            while (idx_byte < 4) {
+            while (idx_byte < sha256_parallel::BYTES_PER_WORD) {
 
                 // pack one byte from each input into one vector
                 mask = pack_byte(mask, in_byte_idx, idx_byte, in0, in1, in2, in3, in4, in5, in6, in7);
@@ -172,8 +172,9 @@ fn absorb_fixed(
             idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
             schedule.[:u256 idx_offset] = vector;    // store the assembled vector in the schedule
 
-            in_byte_idx += 4; // four bytes of input have been gathered
-            idx_word += 1;    // one word of input has been gathered
+            // one word of input has been gathered
+            in_byte_idx += sha256_parallel::BYTES_PER_WORD;
+            idx_word    += 1;
         }
 
         ihvs, schedule = sha256_parallel::compress(ihvs, schedule); // compress the message schedule into the state

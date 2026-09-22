@@ -533,9 +533,9 @@ namespace sha256_parallel {
     // i.e. add zero padding, add the length encoding, and run the final compression(s)
     fn finalise(
         reg ptr u256[STATE_WORD_SIZE] state, // pointer to the state
-        reg ptr u256[ROUNDS_NUM] schedule,  // message schedule
-        reg u64 sch_idx,                    // byte index of the current position in message schedule
-        reg u64 bits,                       // number of bits processed
+        reg ptr u256[ROUNDS_NUM] schedule,   // message schedule
+        reg u64 sch_idx,                     // byte index of the current position in message schedule
+        reg u64 bits,                        // number of bits processed
         reg ptr u8[STATE_BYTE_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
     ) -> reg ptr u256[ROUNDS_NUM], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE] // -> schedule, out0, out1, out2, out3, out4, out5, out6, out7 // schedule is only returned because it needs to be writable
     {

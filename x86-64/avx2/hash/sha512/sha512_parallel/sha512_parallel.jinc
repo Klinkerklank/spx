@@ -367,7 +367,7 @@ namespace sha512_parallel {
         t1 = #VPADD_4u64(t1, t); // t1 = th + sch[i]
 
         // add relevant round constant
-        t  = sha256_k[round_nr]; // t  = k[i]
+        t  = sha512_k[round_nr]; // t  = k[i]
         t1 = #VPADD_4u64(t1, t); // t1 = th + sch[i] + k[i]
 
         // add choice(te, tf, tg)
@@ -498,7 +498,7 @@ namespace sha512_parallel {
 
         // set the IHVs to the initialisation vectors
         for i=0 to STATE_WORD_SIZE {
-            copy = sha256_iv[i]; state[i] = copy;
+            copy = sha512_iv[i]; state[i] = copy;
         }
 
         // reset the message part of the schedule
@@ -573,7 +573,7 @@ namespace sha512_parallel {
             ihvs[i] = state[i];
         }
 
-        idx_word = sch_idx; idx_word >>= 2; // get the word index of the next byte to be placed in the schedule (divide by four)
+        idx_word = sch_idx; idx_word >>= 3; // get the word index of the next byte to be placed in the schedule (divide by eight)
         idx_byte = sch_idx; idx_byte &= BYTES_PER_WORD-1; // get the byte index within the word (mod eight)
 
         // determine which pre-computed separator byte mask is needed

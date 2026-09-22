@@ -450,27 +450,38 @@ fn __T_k(
 
 /********** PARALLELISED HASHES **********/
 
+// initialise a SHA512 instance from a cached state, and construct and absorb the correct ADRS^c into the state
 fn H_adrs(
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state,       // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,         // message schedule
-    reg u64 sch_idx,                                            // byte index of the current position in message schedule
-    reg u64 bits,                                               // number of bits processed
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state_cache, // Intermediate Hash Values (IHVs)
-    reg ptr u32[8] adrs,                                        // ADRS for the first hash
-    reg u32 tree_index                                          // tree index of the leftmost input node
-) -> reg ptr u256[sha256_parallel::STATE_WORD_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                          // byte index of the current position in message schedule
+    reg u64 bits,                             // number of bits processed
+    reg ptr u8[96] sha2_state_caches,         // combined SHA256 and SHA512 state caches
+    reg ptr u32[8] adrs,                      // ADRS for the first hash
+    reg u32 tree_index                        // tree index of the leftmost input node
+) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
-    reg u32 index; // local copy of tree_index, to prevent modifying tree_index
+    reg u256 state_vector; // temporary variable for copying purposes
+    reg u32 index;         // local copy of tree_index, to prevent modifying tree_index
 
     // stack variables
-    stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^C for every hash
+    stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3;     // ADRS^C for every hash
+    stack u256[SHA2_STATE_WORD_SIZE] state_cache; // vectorised cached SHA512 state
+    stack u64 state_word;                         // temporary variable for copying purposes
 
     inline int i;
 
-    // initialise the SHA256 vectorised state
-    bits = SHA256_IN*8; // exactly one block  of input was consumed to get the cached state
-    state, schedule, sch_idx, bits = sha256_parallel::init_cache(state, schedule, sch_idx, bits, state_cache);
+    // extract the SHA512 state from the combined state cache
+    for i=0 to SHA2_STATE_WORD_SIZE {
+        state_word = sha2_state_caches[:u64 4+i];     // get one word from the state
+        state_vector = #VPBROADCAST_4u64(state_word); // broadcast it to every lane in a 256-bit wide register
+        state_cache[i] = state_vector;                // store the vectorised state word
+    }
+
+    // initialise the SHA512 vectorised state
+    bits = SHA512_IN*8; // exactly one block  of input was consumed to get the cached state
+    state, schedule, sch_idx, bits = sha512_parallel::init_cache(state, schedule, sch_idx, bits, state_cache);
 
     // compute ARSC^C for the first hash
     adrsc0 = __adrs_compress(adrsc0, adrs);
@@ -482,43 +493,35 @@ fn H_adrs(
         adrsc1[:u32 i] = adrsc0[:u32 i];
         adrsc2[:u32 i] = adrsc0[:u32 i];
         adrsc3[:u32 i] = adrsc0[:u32 i];
-        adrsc4[:u32 i] = adrsc0[:u32 i];
-        adrsc5[:u32 i] = adrsc0[:u32 i];
-        adrsc6[:u32 i] = adrsc0[:u32 i];
-        adrsc7[:u32 i] = adrsc0[:u32 i];
     }
 
     // set tree_index for all ADRS^c instances
     index = tree_index; index += 1; // ADRS already had the correct tree index for adrsc0, so skip setting that
     adrsc1 = __adrsc_set_tree_index(adrsc1, index); index += 1;
     adrsc2 = __adrsc_set_tree_index(adrsc2, index); index += 1;
-    adrsc3 = __adrsc_set_tree_index(adrsc3, index); index += 1;
-    adrsc4 = __adrsc_set_tree_index(adrsc4, index); index += 1;
-    adrsc5 = __adrsc_set_tree_index(adrsc5, index); index += 1;
-    adrsc6 = __adrsc_set_tree_index(adrsc6, index); index += 1;
-    adrsc7 = __adrsc_set_tree_index(adrsc7, index);
+    adrsc3 = __adrsc_set_tree_index(adrsc3, index);
 
     // absorb ADRS^C into the parallelised state
-    state, schedule, sch_idx, bits = sha256_parallel_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3, adrsc4, adrsc5, adrsc6, adrsc7);
+    state, schedule, sch_idx, bits = sha512_parallel_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3);
     
     return state, schedule, sch_idx, bits;
 }
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_adrs(
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state,       // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,         // message schedule
-    reg u64 sch_idx,                                            // byte index of the current position in message schedule
-    reg u64 bits,                                               // number of bits processed
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state_cache, // Intermediate Hash Values (IHVs)
-    reg ptr u32[8] adrs,                                        // ADRS for the first hash
-    reg u32 tree_index                                          // tree index of the leftmost input node
-) -> reg ptr u256[sha256_parallel::STATE_WORD_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                          // byte index of the current position in message schedule
+    reg u64 bits,                             // number of bits processed
+    reg ptr u8[96] sha2_state_caches,         // combined SHA256 and SHA512 state caches
+    reg ptr u32[8] adrs,                      // ADRS for the first hash
+    reg u32 tree_index                        // tree index of the leftmost input node
+) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // split live-range of the input parameters into two segments
-    state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; state_cache = state_cache; adrs = adrs; tree_index = tree_index;
+    state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; sha2_state_caches = sha2_state_caches; adrs = adrs; tree_index = tree_index;
 
-    state, schedule, sch_idx, bits = H_adrs(state, schedule, sch_idx, bits, state_cache, adrs, tree_index);
+    state, schedule, sch_idx, bits = H_adrs(state, schedule, sch_idx, bits, sha2_state_caches, adrs, tree_index);
 
     // split live-range of the output parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits;
@@ -526,31 +529,28 @@ fn __H_adrs(
     return state, schedule, sch_idx, bits;
 }
 
+// absorb the child node inputs for every parallel instance
 fn H_children(
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,   // message schedule
-    reg u64 sch_idx,                // byte index of the current position in message schedule
-    reg u64 bits,                   // number of bits processed
-    reg ptr u8[16 * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
-) -> reg ptr u256[sha256_parallel::STATE_WORD_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    reg ptr u256[SHA2_STATE_WORD_SIZE] state,        // Intermediate Hash Values (IHVs)
+    reg ptr u256[SHA2_ROUNDS_NUM] schedule,          // message schedule
+    reg u64 sch_idx,                                 // byte index of the current position in message schedule
+    reg u64 bits,                                    // number of bits processed
+    reg ptr u8[2 * SHA2_H_PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
+) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
-    reg ptr u8[SPX_N] lnode0 lnode1 lnode2 lnode3 lnode4 lnode5 lnode6 lnode7; // left children
-    reg ptr u8[SPX_N] rnode0 rnode1 rnode2 rnode3 rnode4 rnode5 rnode6 rnode7; // right children
+    reg ptr u8[SPX_N] lnode0 lnode1 lnode2 lnode3; // left children
+    reg ptr u8[SPX_N] rnode0 rnode1 rnode2 rnode3; // right children
 
     // get the pointers to all of the left children
     lnode0 = children[(0+0*2) * SPX_N : SPX_N];
     lnode1 = children[(0+1*2) * SPX_N : SPX_N];
     lnode2 = children[(0+2*2) * SPX_N : SPX_N];
     lnode3 = children[(0+3*2) * SPX_N : SPX_N];
-    lnode4 = children[(0+4*2) * SPX_N : SPX_N];
-    lnode5 = children[(0+5*2) * SPX_N : SPX_N];
-    lnode6 = children[(0+6*2) * SPX_N : SPX_N];
-    lnode7 = children[(0+7*2) * SPX_N : SPX_N];
 
     // consume all left children into the parallelised state
     () = #spill(children); // make space in the registers
-    state, schedule, sch_idx, bits = sha256_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, lnode0, lnode1, lnode2, lnode3, lnode4, lnode5, lnode6, lnode7);
+    state, schedule, sch_idx, bits = sha512_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, lnode0, lnode1, lnode2, lnode3);
     () = #unspill(children);
     
     // get the pointers to all of the right children
@@ -558,25 +558,21 @@ fn H_children(
     rnode1 = children[(1+1*2) * SPX_N : SPX_N];
     rnode2 = children[(1+2*2) * SPX_N : SPX_N];
     rnode3 = children[(1+3*2) * SPX_N : SPX_N];
-    rnode4 = children[(1+4*2) * SPX_N : SPX_N];
-    rnode5 = children[(1+5*2) * SPX_N : SPX_N];
-    rnode6 = children[(1+6*2) * SPX_N : SPX_N];
-    rnode7 = children[(1+7*2) * SPX_N : SPX_N];
 
     // consume all right children into the parallelised state
-    state, schedule, sch_idx, bits = sha256_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, rnode0, rnode1, rnode2, rnode3, rnode4, rnode5, rnode6, rnode7);
+    state, schedule, sch_idx, bits = sha512_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, rnode0, rnode1, rnode2, rnode3);
     
     return state, schedule, sch_idx, bits;
 }
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_children(
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,   // message schedule
-    reg u64 sch_idx,                // byte index of the current position in message schedule
-    reg u64 bits,                   // number of bits processed
-    reg ptr u8[16 * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
-) -> reg ptr u256[sha256_parallel::STATE_WORD_SIZE], reg ptr u256[sha256_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    reg ptr u256[SHA2_STATE_WORD_SIZE] state,        // Intermediate Hash Values (IHVs)
+    reg ptr u256[SHA2_ROUNDS_NUM] schedule,          // message schedule
+    reg u64 sch_idx,                                 // byte index of the current position in message schedule
+    reg u64 bits,                                    // number of bits processed
+    reg ptr u8[2 * SHA2_H_PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
+) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; children = children;
@@ -589,20 +585,21 @@ fn __H_children(
     return state, schedule, sch_idx, bits;
 }
 
+// finish the SHA512 computations and write the truncated outputs for every parallel instance
 fn H_digests(
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,   // message schedule
-    reg u64 sch_idx,            // byte index of the current position in message schedule
-    reg u64 bits,               // number of bits processed
-    reg ptr u8[8 * SPX_N] nodes // out: array pointer with space for all output nodes
-) -> reg ptr u8[8 * SPX_N], reg ptr u256[sha256_parallel::ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
+    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                          // byte index of the current position in message schedule
+    reg u64 bits,                             // number of bits processed
+    reg ptr u8[SHA2_H_PARA_DEG * SPX_N] nodes // out: array pointer with space for all output nodes
+) -> reg ptr u8[SHA2_H_PARA_DEG * SPX_N], reg ptr u256[SHA2_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // stack variables
-    stack u8[SHA256_OUT] node0 node1 node2 node3 node4 node5 node6 node7;
+    stack u8[SHA512_OUT] node0 node1 node2 node3;
 
     // finalise all digests and write to the output nodes
     () = #spill(nodes); // free up space in the registers
-    schedule, node0, node1, node2, node3, node4, node5, node6, node7 = sha256_parallel::finalise(state, schedule, sch_idx, bits, node0, node1, node2, node3, node4, node5, node6, node7);
+    schedule, node0, node1, node2, node3 = sha512_parallel::finalise(state, schedule, sch_idx, bits, node0, node1, node2, node3);
     () = #unspill(nodes);
     
     // write (and truncate) the nodes to the output array
@@ -610,22 +607,18 @@ fn H_digests(
     nodes[1*SPX_N : SPX_N] = __copy_nbytes(nodes[1*SPX_N : SPX_N], node1[0 : SPX_N]);
     nodes[2*SPX_N : SPX_N] = __copy_nbytes(nodes[2*SPX_N : SPX_N], node2[0 : SPX_N]);
     nodes[3*SPX_N : SPX_N] = __copy_nbytes(nodes[3*SPX_N : SPX_N], node3[0 : SPX_N]);
-    nodes[4*SPX_N : SPX_N] = __copy_nbytes(nodes[4*SPX_N : SPX_N], node4[0 : SPX_N]);
-    nodes[5*SPX_N : SPX_N] = __copy_nbytes(nodes[5*SPX_N : SPX_N], node5[0 : SPX_N]);
-    nodes[6*SPX_N : SPX_N] = __copy_nbytes(nodes[6*SPX_N : SPX_N], node6[0 : SPX_N]);
-    nodes[7*SPX_N : SPX_N] = __copy_nbytes(nodes[7*SPX_N : SPX_N], node7[0 : SPX_N]);
     
     return nodes, schedule;
 }
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_digests(
-    reg ptr u256[sha256_parallel::STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[sha256_parallel::ROUNDS_NUM] schedule,   // message schedule
-    reg u64 sch_idx,            // byte index of the current position in message schedule
-    reg u64 bits,               // number of bits processed
-    reg ptr u8[8 * SPX_N] nodes // out: array pointer with space for all output nodes
-) -> reg ptr u8[8 * SPX_N], reg ptr u256[sha256_parallel::ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
+    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                          // byte index of the current position in message schedule
+    reg u64 bits,                             // number of bits processed
+    reg ptr u8[SHA2_H_PARA_DEG * SPX_N] nodes // out: array pointer with space for all output nodes
+) -> reg ptr u8[SHA2_H_PARA_DEG * SPX_N], reg ptr u256[SHA2_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; nodes = nodes;

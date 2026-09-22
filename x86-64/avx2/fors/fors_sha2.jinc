@@ -271,7 +271,7 @@ fn fors_node(
                 
                     // advance to the next uncomputed node in the layer
                     () = #unspill(node);
-                    node += 8;
+                    node += SHA2_H_PARA_DEG;
 
                 } else {
 

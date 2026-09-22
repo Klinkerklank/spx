@@ -47,3 +47,18 @@ namespace sha512_compress_fors {
     require "sha512_array/sha512_array.jinc"
     require "sha512_cache/sha512_cache_hash.jinc"
 }
+
+
+
+// already provides the namespace 'sha512_parallel' internally
+require "sha512_parallel/sha512_parallel.jinc"
+
+namespace sha512_parallel_adrsc {
+    param int INPUT_LENGTH = 22;
+    require "sha512_parallel/sha512_parallel_absorb_fixed.jinc"
+}
+
+namespace sha512_parallel_n {
+    param int INPUT_LENGTH = SPX_N;
+    require "sha512_parallel/sha512_parallel_absorb_fixed.jinc"
+}

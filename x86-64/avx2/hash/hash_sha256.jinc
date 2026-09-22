@@ -442,6 +442,7 @@ fn __T_k(
 
 /********** PARALLELISED HASHES **********/
 
+// initialise a SHA256 instance from a cached state, and construct and absorb the correct ADRS^c into the state
 fn H_adrs(
     reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
     reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
@@ -458,8 +459,8 @@ fn H_adrs(
 
     // stack variables
     stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^C for every hash
-    stack u256[SHA2_STATE_WORD_SIZE] state_cache; // vectorised cached SHA256 state
-    stack u32 state_word; // temporary variable for copying purposes
+    stack u256[SHA2_STATE_WORD_SIZE] state_cache;                         // vectorised cached SHA256 state
+    stack u32 state_word;                                                 // temporary variable for copying purposes
 
     inline int i;
 
@@ -528,6 +529,7 @@ fn __H_adrs(
     return state, schedule, sch_idx, bits;
 }
 
+// absorb the child node inputs for every parallel instance
 fn H_children(
     reg ptr u256[SHA2_STATE_WORD_SIZE] state,        // Intermediate Hash Values (IHVs)
     reg ptr u256[SHA2_ROUNDS_NUM] schedule,          // message schedule
@@ -591,6 +593,7 @@ fn __H_children(
     return state, schedule, sch_idx, bits;
 }
 
+// finish the SHA256 computations and write the truncated outputs for every parallel instance
 fn H_digests(
     reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
     reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule

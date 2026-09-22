@@ -94,9 +94,9 @@ fn pack_byte(
 // absorb four independent (but same-length) fixed-size pointer inputs
 fn absorb_fixed(
     reg ptr u256[sha512_parallel::STATE_WORD_SIZE] state, // pointer to the state
-    reg ptr u256[sha512_parallel::ROUNDS_NUM] schedule,  // message schedule
-    reg u64 sch_idx,                                     // byte index of current position in message schedule
-    reg u64 bits,                                        // number of bits processed
+    reg ptr u256[sha512_parallel::ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                                      // byte index of current position in message schedule
+    reg u64 bits,                                         // number of bits processed
     reg ptr u8[INPUT_LENGTH] in0 in1 in2 in3 // inputs
 ) -> reg ptr u256[sha512_parallel::STATE_WORD_SIZE], reg ptr u256[sha512_parallel::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
@@ -126,10 +126,10 @@ fn absorb_fixed(
     in_byte_nr = INPUT_LENGTH; // (counts down to 0) at the start, INPUT_LENGTH number of bytes of input are available
 
     // compute how many bytes of message space are available in the schedule
-    avail_byte_nr  = sha512_parallel::MSG_BLOCK_WORD_SIZE;
+    avail_byte_nr  = sha512_parallel::MSG_BLOCK_BYTE_SIZE;
     avail_byte_nr -= sch_idx;
 
-    idx_word = sch_idx; idx_word >>= 2; // get the word index of the next byte to be placed in the schedule (divide by four)
+    idx_word = sch_idx; idx_word >>= 3; // get the word index of the next byte to be placed in the schedule (divide by eight)
     idx_byte = sch_idx; idx_byte &= sha512_parallel::BYTES_PER_WORD-1; // get the byte index within the word (mod eight)
 
     // if enough input is available, first top off the current schedule and compress
@@ -172,8 +172,9 @@ fn absorb_fixed(
             idx_offset = idx_word; idx_offset <<= 5; // compute the byte address where the u256 word starts
             schedule.[:u256 idx_offset] = vector;    // store the assembled vector in the schedule
 
-            in_byte_idx += 4; // four bytes of input have been gathered
-            idx_word += 1;    // one word of input has been gathered
+            // one word of input has been gathered
+            in_byte_idx += sha512_parallel::BYTES_PER_WORD;
+            idx_word    += 1;
         }
 
         ihvs, schedule = sha512_parallel::compress(ihvs, schedule); // compress the message schedule into the state
@@ -183,7 +184,7 @@ fn absorb_fixed(
         in_byte_nr -= avail_byte_nr; // the number of bytes needed to top off the schedule have been consumed
 
         // if enough input is available, fill entire message schedules and compress
-        while (in_byte_nr >= sha512_parallel::MSG_BLOCK_WORD_SIZE) {
+        while (in_byte_nr >= sha512_parallel::MSG_BLOCK_BYTE_SIZE) {
 
             () = #spill(in_byte_nr); // free up space in the word registers
 
@@ -202,7 +203,7 @@ fn absorb_fixed(
 
             () = #unspill(in_byte_nr);
             
-            in_byte_nr -= sha512_parallel::MSG_BLOCK_WORD_SIZE; // one entire block of input has been consumed
+            in_byte_nr -= sha512_parallel::MSG_BLOCK_BYTE_SIZE; // one entire block of input has been consumed
         }
 
         // message schedule(s) were completed, so now the next message schedule is empty again
@@ -299,7 +300,7 @@ fn absorb_fixed(
     // update schedule byte index
     () = #unspill(sch_idx);
     sch_idx += INPUT_LENGTH;
-    sch_idx &= sha512_parallel::MSG_BLOCK_WORD_SIZE-1;
+    sch_idx &= sha512_parallel::MSG_BLOCK_BYTE_SIZE-1;
 
     // put the vector registers back in state
     () = #unspill(state);
