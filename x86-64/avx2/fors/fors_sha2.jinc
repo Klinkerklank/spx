@@ -65,11 +65,11 @@ fn __forest_label(
 | Generates a FORS private-key value.                          |
 +-------------------------------------------------------------*/
 fn fors_skgen(
-    reg ptr u8[SPX_N] sk,     // output: FORS secret key value
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u32[8] adrs,      // ADRS
-    reg u32 idx,              // secret key index
-    reg ptr u8[96] cache_single    // cached SHA2 state
+    reg ptr u8[SPX_N] sk,            // output: FORS secret key value
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg u32 idx,                     // secret key index
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[SPX_N] // -> sk
 {
     // stack variables
@@ -90,24 +90,24 @@ fn fors_skgen(
     skadrs = __adrs_set_tree_index(skadrs, idx);
 
     // compute the secret key value
-    sk = __PRF(sk, skseed, skadrs, cache_single);
+    sk = __PRF(sk, skseed, skadrs, sha2_state_caches);
 
     return sk;
 }
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __fors_skgen(
-    reg ptr u8[SPX_N] sk,     // output: FORS secret key value
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u32[8] adrs,      // ADRS
-    reg u32 idx,              // secret key index
-    reg ptr u8[96] cache_single    // cached SHA2 state
+    reg ptr u8[SPX_N] sk,            // output: FORS secret key value
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg u32 idx,                     // secret key index
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[SPX_N] // -> sk
 {
     // split live-range of the parameters into two segments
-    sk = sk; skseed = skseed; adrs = adrs; idx = idx; cache_single = cache_single;
+    sk = sk; skseed = skseed; adrs = adrs; idx = idx; sha2_state_caches = sha2_state_caches;
 
-    sk = fors_skgen(sk, skseed, adrs, idx, cache_single);
+    sk = fors_skgen(sk, skseed, adrs, idx, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     sk = sk;
@@ -121,13 +121,12 @@ fn __fors_skgen(
 | (iterative instead of recursive)                             |
 +-------------------------------------------------------------*/
 fn fors_node(
-    reg ptr u8[SPX_N] root,   // output: root of the subtree rooted at i,z
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg u32 i,                // target node index (horizontal)
-    reg u32 z,                // target node height
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] cache_single, // cached SHA2 state
-    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[SPX_N] root,          // output: root of the subtree rooted at i,z
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg u32 i,                       // target node index (horizontal)
+    reg u32 z,                       // target node height
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     () = #spill(root);
@@ -200,14 +199,14 @@ fn fors_node(
                 node_addr *= SPX_N; // node_addr = forest_label(node, layer) * SPX_N
 
                 // compute the FORS secret key value
-                () = #spill(adrs, i, node, node_addr, cache_single, cache_parallel);
-                flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, adrs, node, cache_single);
-                () = #unspill(adrs, i, node, node_addr, cache_single, cache_parallel);
+                () = #spill(adrs, i, node, node_addr, sha2_state_caches);
+                flat_tree[node_addr : SPX_N] = __fors_skgen(flat_tree[node_addr : SPX_N], skseed, adrs, node, sha2_state_caches);
+                () = #unspill(adrs, i, node, node_addr, sha2_state_caches);
 
                 // compute the hash of the FORS secret key value
-                () = #spill(adrs, i, node, node_addr, cache_single, cache_parallel);
-                flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], adrs, cache_single);
-                () = #unspill(adrs, i, node, node_addr, cache_single, cache_parallel);
+                () = #spill(adrs, i, node, node_addr, sha2_state_caches);
+                flat_tree[node_addr : SPX_N] = __F(flat_tree[node_addr : SPX_N], adrs, sha2_state_caches);
+                () = #unspill(adrs, i, node, node_addr, sha2_state_caches);
                 
                 () = #unspill(layer);
 
@@ -250,11 +249,11 @@ fn fors_node(
                 // parallelise SHA-2 node computations if possible
                 if (avail_nodes >= SHA2_H_PARA_DEG) {
 
-                    () = #spill(adrs, node, lnode, node_addr, i, cache_single, cache_parallel); // free up space in the registers
+                    () = #spill(adrs, node, lnode, node_addr, i, sha2_state_caches); // free up space in the registers
 
                     // init the SHA-2 instances from the cached state
                     sch_idx = 0; bits = 0;
-                    state, schedule, sch_idx, bits = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
+                    state, schedule, sch_idx, bits = __H_adrs(state, schedule, sch_idx, bits, sha2_state_caches, adrs, node);
 
                     // absorb all children
                     () = #unspill(lnode);
@@ -268,7 +267,7 @@ fn fors_node(
                     nodes, schedule = __H_digests(state, schedule, sch_idx, bits, nodes);
                     flat_tree[node_addr : SHA2_H_PARA_DEG*SPX_N] = nodes;
                     
-                    () = #unspill(adrs, i, cache_single, cache_parallel);
+                    () = #unspill(adrs, i, sha2_state_caches);
                 
                     // advance to the next uncomputed node in the layer
                     () = #unspill(node);
@@ -287,11 +286,11 @@ fn fors_node(
                     buf_r = __copy_nbytes(buf_r, flat_tree[rnode : SPX_N]);
 
                     // compute node value = H(PK.seed, ADRS, lnode || rnode)
-                    () = #spill(adrs, i, node, cache_single, cache_parallel, node_addr);
+                    () = #spill(adrs, i, node, sha2_state_caches, node_addr);
                     tree_node = flat_tree[node_addr : SPX_N]; // get the pointer to the subarray so the full array can be spilled
-                    tree_node = __H(tree_node, adrs, buf_l, buf_r, cache_single);
+                    tree_node = __H(tree_node, adrs, buf_l, buf_r, sha2_state_caches);
                     flat_tree[node_addr : SPX_N] = tree_node; // redesignate the pointer so the region of the full array is not partial
-                    () = #unspill(adrs, i, node, cache_single, cache_parallel, node_addr);
+                    () = #unspill(adrs, i, node, sha2_state_caches, node_addr);
 
                     // advance to the next node in the layer
                     node += 1;
@@ -320,19 +319,18 @@ fn fors_node(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __fors_node(
-    reg ptr u8[SPX_N] root,      // output: root of the subtree rooted at i,z
-    reg ptr u8[SPX_N] skseed,    // SK.seed
-    reg u32 i,                   // target node index (horizontal)
-    reg u32 z,                   // target node height
-    reg ptr u32[8] adrs,         // ADRS
-    reg ptr u8[96] cache_single, // cached single SHA2 state
-    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[SPX_N] root,          // output: root of the subtree rooted at i,z
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg u32 i,                       // target node index (horizontal)
+    reg u32 z,                       // target node height
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     // split live-range of the parameters into two segments
-    root = root; skseed = skseed; i = i; z = z; adrs = adrs; cache_single = cache_single; cache_parallel = cache_parallel;
+    root = root; skseed = skseed; i = i; z = z; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    root, adrs = fors_node(root, skseed, i, z, adrs, cache_single, cache_parallel);
+    root, adrs = fors_node(root, skseed, i, z, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     root = root; adrs = adrs;
@@ -345,12 +343,11 @@ fn __fors_node(
 | Generates a FORS signature.                                  |
 +-------------------------------------------------------------*/
 fn fors_sign(
-    reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
-    reg ptr u8[SPX_MD_LEN] md,     // message digest
-    reg ptr u8[SPX_N] skseed,      // SK.seed
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single,   // cached SHA2 state
-    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[FORS_SIG] sig_fors,   // output: FORS signature
+    reg ptr u8[SPX_MD_LEN] md,       // message digest
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
 {
     // stack variables
@@ -382,9 +379,9 @@ fn fors_sign(
 
         // compute the i-th FORS tree's secret key value
         node = sig_fors[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
-        () = #spill(skseed, adrs, sig_fors, i, offset, cache_single, cache_parallel);
-        node = __fors_skgen(node, skseed, adrs, idx_leaf, cache_single);
-        () = #unspill(skseed, adrs, sig_fors, i, offset, cache_single, cache_parallel);
+        () = #spill(skseed, adrs, sig_fors, i, offset, sha2_state_caches);
+        node = __fors_skgen(node, skseed, adrs, idx_leaf, sha2_state_caches);
+        () = #unspill(skseed, adrs, sig_fors, i, offset, sha2_state_caches);
         sig_fors[offset : SPX_N] = node; // redesignate the pointer so the region of the full array is not partial
 
         offset += SPX_N; // one n-byte secret key value has been written
@@ -408,9 +405,9 @@ fn fors_sign(
 
             // compute the sibling node
             node = sig_fors[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
-            () = #spill(sig_fors, cache_single, cache_parallel);
-            node, adrs = __fors_node(node, skseed, idx_sib, j, adrs, cache_single, cache_parallel);
-            () = #unspill(sig_fors, cache_single, cache_parallel);
+            () = #spill(sig_fors, sha2_state_caches);
+            node, adrs = __fors_node(node, skseed, idx_sib, j, adrs, sha2_state_caches);
+            () = #unspill(sig_fors, sha2_state_caches);
             sig_fors[offset : SPX_N] = node; // redesignate the pointer so the region of the full array is not partial
 
             () = #unspill(skseed, i, j, offset, s);
@@ -432,18 +429,17 @@ fn fors_sign(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __fors_sign(
-    reg ptr u8[FORS_SIG] sig_fors, // output: FORS signature
-    reg ptr u8[SPX_MD_LEN] md,     // message digest
-    reg ptr u8[SPX_N] skseed,      // SK.seed
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single,   // cached SHA2 state
-    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[FORS_SIG] sig_fors,   // output: FORS signature
+    reg ptr u8[SPX_MD_LEN] md,       // message digest
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[FORS_SIG], reg ptr u32[8] // -> sig_fors, adrs
 {
     // split live-range of the parameters into two segments
-    sig_fors = sig_fors; md = md; skseed = skseed; adrs = adrs; cache_single = cache_single; cache_parallel = cache_parallel;
+    sig_fors = sig_fors; md = md; skseed = skseed; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    sig_fors, adrs = fors_sign(sig_fors, md, skseed, adrs, cache_single, cache_parallel);
+    sig_fors, adrs = fors_sign(sig_fors, md, skseed, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     sig_fors = sig_fors; adrs = adrs;
@@ -456,11 +452,11 @@ fn __fors_sign(
 | Computes a FORS public key from a FORS signature.            |
 +-------------------------------------------------------------*/
 fn fors_pkfromsig(
-    reg ptr u8[SPX_N] pk_fors,     // output: compressed FORS public key
-    reg ptr u8[FORS_SIG] sig_fors, // FORS signature
-    reg ptr u8[SPX_MD_LEN] md,     // message digest
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single    // cached SHA2 state
+    reg ptr u8[SPX_N] pk_fors,       // output: compressed FORS public key
+    reg ptr u8[FORS_SIG] sig_fors,   // FORS signature
+    reg ptr u8[SPX_MD_LEN] md,       // message digest
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_fors, adrs
 {
     () = #spill(pk_fors);
@@ -513,9 +509,9 @@ fn fors_pkfromsig(
         adrs = __adrs_set_tree_index(adrs, idx_leaf);
 
         // compute the hash of the FORS secret key value
-        () = #spill(adrs, sig_fors, i, offset, cache_single);
-        node0 = __F(node0, adrs, cache_single);
-        () = #unspill(adrs, sig_fors, i, offset, cache_single);
+        () = #spill(adrs, sig_fors, i, offset, sha2_state_caches);
+        node0 = __F(node0, adrs, sha2_state_caches);
+        () = #unspill(adrs, sig_fors, i, offset, sha2_state_caches);
 
         offset += SPX_N; // one n-byte secret key value has been consumed
 
@@ -563,9 +559,9 @@ fn fors_pkfromsig(
             }
 
             // compute the parent node
-            () = #spill(adrs, sig_fors, i, offset, cache_single);
-            node1 = __H(node1, adrs, buf0, buf1, cache_single);
-            () = #unspill(adrs, sig_fors, i, offset, cache_single);
+            () = #spill(adrs, sig_fors, i, offset, sha2_state_caches);
+            node1 = __H(node1, adrs, buf0, buf1, sha2_state_caches);
+            () = #unspill(adrs, sig_fors, i, offset, sha2_state_caches);
 
             // save the parent node's value to become the next iteration's child node
             node0 = __copy_nbytes(node0, node1);
@@ -598,24 +594,24 @@ fn fors_pkfromsig(
 
     () = #unspill(pk_fors);
 
-    pk_fors = __T_k(pk_fors, forspkadrs, roots, cache_single);
+    pk_fors = __T_k(pk_fors, forspkadrs, roots, sha2_state_caches);
 
     return pk_fors, adrs;
 }
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __fors_pkfromsig(
-    reg ptr u8[SPX_N] pk_fors,     // output: compressed FORS public key
-    reg ptr u8[FORS_SIG] sig_fors, // FORS signature
-    reg ptr u8[SPX_MD_LEN] md,     // message digest
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single    // cached SHA2 state
+    reg ptr u8[SPX_N] pk_fors,       // output: compressed FORS public key
+    reg ptr u8[FORS_SIG] sig_fors,   // FORS signature
+    reg ptr u8[SPX_MD_LEN] md,       // message digest
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_fors, adrs
 {
     // split live-range of the parameters into two segments
-    pk_fors = pk_fors; sig_fors = sig_fors; md = md; adrs = adrs; cache_single = cache_single;
+    pk_fors = pk_fors; sig_fors = sig_fors; md = md; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    pk_fors, adrs = fors_pkfromsig(pk_fors, sig_fors, md, adrs, cache_single);
+    pk_fors, adrs = fors_pkfromsig(pk_fors, sig_fors, md, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     pk_fors = pk_fors; adrs = adrs;

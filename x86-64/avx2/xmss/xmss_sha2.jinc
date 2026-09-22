@@ -54,13 +54,12 @@ fn __tree_label(
 | (iterative instead of recursive)                             |
 +-------------------------------------------------------------*/
 fn xmss_node(
-    reg ptr u8[SPX_N] root,      // output: root of the subtree rooted at i,z
-    reg ptr u8[SPX_N] skseed,    // SK.seed
-    reg u32 i,                   // target node index (horizontal)
-    reg u32 z,                   // target node height
-    reg ptr u32[8] adrs,         // ADRS
-    reg ptr u8[96] cache_single, // cached single SHA2 state
-    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[SPX_N] root,          // output: root of the subtree rooted at i,z
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg u32 i,                       // target node index (horizontal)
+    reg u32 z,                       // target node height
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     () = #spill(root);
@@ -115,7 +114,7 @@ fn xmss_node(
 
         // iterate over the nodes within the current layer
         while (node < rightmost) {
-            () = #spill(skseed, i, z, layer, node, rightmost, cache_single, cache_parallel); // free up space in the registers
+            () = #spill(skseed, i, z, layer, node, rightmost, sha2_state_caches); // free up space in the registers
 
             if (layer == 0) {
                 // layer-0 leaf node: the node value is a WOTS+ public key
@@ -132,7 +131,7 @@ fn xmss_node(
                 // compute the WOTS+ public key
                 wots_pk = flat_tree[node_addr : SPX_N]; // get the pointer to the subarray so the full array can be spilled
                 () = #spill(node_addr);
-                wots_pk, adrs = __wots_pkgen(wots_pk, skseed, adrs, cache_single);
+                wots_pk, adrs = __wots_pkgen(wots_pk, skseed, adrs, sha2_state_caches);
                 () = #unspill(node_addr);
                 flat_tree[node_addr : SPX_N] = wots_pk; // redesignate the pointer so the region of the full array is not partial
 
@@ -178,7 +177,7 @@ fn xmss_node(
 
                     // init the SHA-2 instances from the cached state
                     sch_idx = 0; bits = 0;
-                    state, schedule, sch_idx, bits = __H_adrs(state, schedule, sch_idx, bits, cache_parallel, adrs, node);
+                    state, schedule, sch_idx, bits = __H_adrs(state, schedule, sch_idx, bits, sha2_state_caches, adrs, node);
 
                     // absorb all children
                     () = #unspill(lnode);
@@ -212,7 +211,7 @@ fn xmss_node(
 
                     // compute node value
                     () = #spill(adrs); // free up space in the registers
-                    flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], adrs, buf_l, buf_r, cache_single);
+                    flat_tree[node_addr : SPX_N] = __H(flat_tree[node_addr : SPX_N], adrs, buf_l, buf_r, sha2_state_caches);
                     () = #unspill(adrs);
                 
                     () = #unspill(node);
@@ -221,7 +220,7 @@ fn xmss_node(
                 }
             }
 
-            () = #unspill(skseed, i, z, layer, rightmost, cache_single, cache_parallel);
+            () = #unspill(skseed, i, z, layer, rightmost, sha2_state_caches);
         }
 
         () = #unspill(z);
@@ -241,19 +240,18 @@ fn xmss_node(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __xmss_node(
-    reg ptr u8[SPX_N] root,      // output: root of the subtree rooted at i,z
-    reg ptr u8[SPX_N] skseed,    // SK.seed
-    reg u32 i,                   // target node index (horizontal)
-    reg u32 z,                   // target node height
-    reg ptr u32[8] adrs,         // ADRS
-    reg ptr u8[96] cache_single, // cached single SHA2 state
-    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[SPX_N] root,          // output: root of the subtree rooted at i,z
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg u32 i,                       // target node index (horizontal)
+    reg u32 z,                       // target node height
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> root, adrs
 {
     // split live-range of the parameters into two segments
-    root = root; skseed = skseed; i = i; z = z; adrs = adrs; cache_single = cache_single; cache_parallel = cache_parallel;
+    root = root; skseed = skseed; i = i; z = z; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    root, adrs = xmss_node(root, skseed, i, z, adrs, cache_single, cache_parallel);
+    root, adrs = xmss_node(root, skseed, i, z, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     root = root; adrs = adrs;
@@ -266,13 +264,12 @@ fn __xmss_node(
 | Generates an XMSS signature.                                 |
 +-------------------------------------------------------------*/
 fn xmss_sign(
-    reg ptr u8[XMSS_SIG] sig_xmss, // output: XMSS signature
-    reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
-    reg ptr u8[SPX_N] skseed,      // SK.seed
-    reg u32 idx,                   // WOTS+ leaf index to sign with
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single,   // cached single SHA2 state
-    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[XMSS_SIG] sig_xmss,   // output: XMSS signature
+    reg ptr u8[SPX_N] m,             // message to sign (XMSS public key or FORS public key)
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg u32 idx,                     // WOTS+ leaf index to sign with
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
     () = #spill(m);
@@ -300,9 +297,9 @@ fn xmss_sign(
 
         // compute the sibling node
         auth_node = sig_xmss[offset : SPX_N]; // get the pointer to the subarray so the full array can be spilled
-        () = #spill(sig_xmss, cache_single, cache_parallel);
-        auth_node, adrs = __xmss_node(auth_node, skseed, k, j, adrs, cache_single, cache_parallel);
-        () = #unspill(sig_xmss, cache_single, cache_parallel);
+        () = #spill(sig_xmss, sha2_state_caches);
+        auth_node, adrs = __xmss_node(auth_node, skseed, k, j, adrs, sha2_state_caches);
+        () = #unspill(sig_xmss, sha2_state_caches);
         sig_xmss[offset : SPX_N] = auth_node; // redesignate the pointer so the region of the full array is not partial
 
         () = #unspill(skseed, idx, j, k, offset);
@@ -324,7 +321,7 @@ fn xmss_sign(
     // compute the WOTS+ signature on the XMSS or FORS public key
     sig_wots = sig_xmss[0 : WOTS_SIG]; // get the pointer to the subarray so the full array can be spilled
     () = #spill(sig_xmss);
-    sig_wots, adrs = __wots_sign(sig_wots, m, skseed, adrs, cache_single);
+    sig_wots, adrs = __wots_sign(sig_wots, m, skseed, adrs, sha2_state_caches);
     () = #unspill(sig_xmss);
     sig_xmss[0 : WOTS_SIG] = sig_wots; // redesignate the pointer so the region of the full array is not partial
 
@@ -333,19 +330,18 @@ fn xmss_sign(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __xmss_sign(
-    reg ptr u8[XMSS_SIG] sig_xmss, // output: XMSS signature
-    reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
-    reg ptr u8[SPX_N] skseed,      // SK.seed
-    reg u32 idx,                   // WOTS+ leaf index to sign with
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single,   // cached single SHA2 state
-    reg ptr u256[SHA2_STATE_WORD_SIZE] cache_parallel // cached vectorised SHA2 state
+    reg ptr u8[XMSS_SIG] sig_xmss,   // output: XMSS signature
+    reg ptr u8[SPX_N] m,             // message to sign (XMSS public key or FORS public key)
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg u32 idx,                     // WOTS+ leaf index to sign with
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // combined SHA256 and SHA512 state caches
 ) -> reg ptr u8[XMSS_SIG], reg ptr u32[8] // -> sig_xmss, adrs
 {
     // split live-range of the parameters into two segments
-    sig_xmss = sig_xmss; m = m; skseed = skseed; idx = idx; adrs = adrs; cache_single = cache_single; cache_parallel = cache_parallel;
+    sig_xmss = sig_xmss; m = m; skseed = skseed; idx = idx; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    sig_xmss, adrs = xmss_sign(sig_xmss, m, skseed, idx, adrs, cache_single, cache_parallel);
+    sig_xmss, adrs = xmss_sign(sig_xmss, m, skseed, idx, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     sig_xmss = sig_xmss; adrs = adrs;
@@ -358,12 +354,12 @@ fn __xmss_sign(
 | Computes an XMSS public key from an XMSS signature.          |
 +-------------------------------------------------------------*/
 fn xmss_pkfromsig(
-    reg ptr u8[SPX_N] pk_xmss,     // output: XMSS tree root (public key)
-    reg u32 idx,                   // WOTS+ leaf index to sign with
-    reg ptr u8[XMSS_SIG] sig_xmss, // XMSS signature
-    reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single    // cached single SHA2 state
+    reg ptr u8[SPX_N] pk_xmss,       // output: XMSS tree root (public key)
+    reg u32 idx,                     // WOTS+ leaf index to sign with
+    reg ptr u8[XMSS_SIG] sig_xmss,   // XMSS signature
+    reg ptr u8[SPX_N] m,             // message to sign (XMSS public key or FORS public key)
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // cached single SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_xmss, adrs
 {
     () = #spill(pk_xmss); // only needed at the end of this function
@@ -391,9 +387,9 @@ fn xmss_pkfromsig(
     sig_wots = sig_xmss[0 : WOTS_SIG];
 
     // compute the WOTS+ public key from the WOTS+ signature
-    () = #spill(idx, sig_xmss, cache_single);
-    node0, adrs = __wots_pkfromsig(node0, sig_wots, m, adrs, cache_single);
-    () = #unspill(idx, sig_xmss, cache_single);
+    () = #spill(idx, sig_xmss, sha2_state_caches);
+    node0, adrs = __wots_pkfromsig(node0, sig_wots, m, adrs, sha2_state_caches);
+    () = #unspill(idx, sig_xmss, sha2_state_caches);
 
     // set the correct values in ADRS for Merkle tree hashing
     adrs = __adrs_set_type_and_clear(adrs, SPX_ADRS_TYPE_TREE);
@@ -446,9 +442,9 @@ fn xmss_pkfromsig(
         }
 
         // compute the parent node
-        () = #spill(adrs, idx, sig_xmss, offset, cache_single);
-        node1 = __H(node1, adrs, buf0, buf1, cache_single);
-        () = #unspill(adrs, idx, sig_xmss, offset, cache_single);
+        () = #spill(adrs, idx, sig_xmss, offset, sha2_state_caches);
+        node1 = __H(node1, adrs, buf0, buf1, sha2_state_caches);
+        () = #unspill(adrs, idx, sig_xmss, offset, sha2_state_caches);
 
         // save the parent node's value to become the next iteration's child node
         node0 = __copy_nbytes(node0, node1);
@@ -471,18 +467,18 @@ fn xmss_pkfromsig(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __xmss_pkfromsig(
-    reg ptr u8[SPX_N] pk_xmss,     // output: XMSS tree root (public key)
-    reg u32 idx,                   // WOTS+ leaf index to sign with
-    reg ptr u8[XMSS_SIG] sig_xmss, // XMSS signature
-    reg ptr u8[SPX_N] m,           // message to sign (XMSS public key or FORS public key)
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[96] cache_single    // cached single SHA2 state
+    reg ptr u8[SPX_N] pk_xmss,       // output: XMSS tree root (public key)
+    reg u32 idx,                     // WOTS+ leaf index to sign with
+    reg ptr u8[XMSS_SIG] sig_xmss,   // XMSS signature
+    reg ptr u8[SPX_N] m,             // message to sign (XMSS public key or FORS public key)
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // cached single SHA2 state
 ) -> reg ptr u8[SPX_N], reg ptr u32[8] // -> pk_xmss, adrs
 {
     // split live-range of the parameters into two segments
-    pk_xmss = pk_xmss; idx = idx; sig_xmss = sig_xmss; m = m; adrs = adrs; cache_single = cache_single;
+    pk_xmss = pk_xmss; idx = idx; sig_xmss = sig_xmss; m = m; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    pk_xmss, adrs = xmss_pkfromsig(pk_xmss, idx, sig_xmss, m, adrs, cache_single);
+    pk_xmss, adrs = xmss_pkfromsig(pk_xmss, idx, sig_xmss, m, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     pk_xmss = pk_xmss; adrs = adrs;
