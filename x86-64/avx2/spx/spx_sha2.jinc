@@ -129,7 +129,7 @@ fn slh_keygen_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(sk, pk, skseed);
-    sha2_state_caches = init_cache(sha2_state_caches, pkseed);
+    sha2_state_caches = init_caches(sha2_state_caches, pkseed);
     () = #unspill(sk, pk, skseed);
 
     // initialise ADRS to the all-zero string
@@ -282,7 +282,7 @@ fn slh_sign_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(skseed, sig_slh, md, idx_leaf);
-    sha2_state_caches = init_cache(sha2_state_caches, pkseed);
+    sha2_state_caches = init_caches(sha2_state_caches, pkseed);
     () = #unspill(skseed, sig_slh, md, idx_leaf);
 
     // compute the FORS signature
@@ -420,7 +420,7 @@ fn slh_verify_internal_(
     // as that state is the same for all PRF, F, H, T_len, and T_k hash calls,
     // with any differences only being present in the second block onwards
     () = #spill(pkroot, sig_slh, idx_leaf);
-    sha2_state_caches = init_cache(sha2_state_caches, pkseed);
+    sha2_state_caches = init_caches(sha2_state_caches, pkseed);
     () = #unspill(pkroot, sig_slh, idx_leaf);
 
     // extract the FORS signature from the overall signature

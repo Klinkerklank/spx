@@ -119,9 +119,6 @@ $(ARCHITECTURE)/ref/active_params.jinc:
 $(ARCHITECTURE)/avx2/active_params.jinc:
 	@echo 'require "../../params/params-spx-$(PARAMETER_SET).jinc" // SPHINCS+ parameters' > $(ARCHITECTURE)/avx2/active_params.jinc
 	@echo 'require "$(HASH_IMPL)" // hash function implementations' >> $(ARCHITECTURE)/avx2/active_params.jinc
-	@if [ -n "$(CACHE_IMPL)" ]; then \
-		echo 'require "$(CACHE_IMPL)" // hash function caching implementation' >> $(ARCHITECTURE)/avx2/active_params.jinc; \
-	fi
 	@echo 'require "$(SPX_IMPL)" // SPHINCS+ SHA2 or SHAKE variant' >> $(ARCHITECTURE)/avx2/active_params.jinc
 
 # make the C parameter header

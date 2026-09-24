@@ -5,10 +5,7 @@
  * author: Dennis op 't Roodt 2026-09-24 (d.n.e.o.t.roodt@tue.nl)
  */
 
-// TODO remove dependecies and delete these three lines
-require "sha256_avx/sha256_compress_avx.jinc"
-require "sha256_avx/sha256_compress_avx2.jinc"
-require "common/sha256_common.jinc"
+require "../../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
 
 // already provides the namespace 'sha256' internally
 require "sha256_single/sha256.jinc"
@@ -43,8 +40,6 @@ namespace sha256_digest {
     require "sha256_single/sha256_absorb_fixed.jinc"
 }
 
-
-
 // already provides the namespace 'sha256_parallel' internally
 require "sha256_parallel/sha256_parallel.jinc"
 
@@ -56,4 +51,40 @@ namespace sha256_parallel_22 {
 namespace sha256_parallel_n {
     param int INPUT_LENGTH = SPX_N;
     require "sha256_parallel/sha256_parallel_absorb_fixed.jinc"
+}
+
+// code for initialising the SHA-2 state cache(s)
+
+// compute the SHA-2 state after consuming exactly one block consisting of PK.seed and zero-padding
+fn init_caches(reg ptr u8[96] sha2_state_caches, reg ptr u8[SPX_N] pkseed) -> reg ptr u8[96]
+{
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
+
+    // stack variables
+    stack u32[SHA2_STATE_WORD_SIZE] state; // SHA2 state
+    stack u32[SHA2_ROUNDS_NUM] schedule;   // message schedule
+    stack u8[SHA256_IN] buf;               // buffer for PK.seed and zero-padding
+
+    inline int i;
+
+    // construct the input block
+    buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], pkseed); // copy PK.seed
+    for i=SPX_N to SHA256_IN {                                 
+        buf[i] = 0x0;                                       // set the zero padding
+    }
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = 0;
+
+    state, schedule, sch_idx, bits = sha256       :: init_iv     (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha256_block :: absorb_fixed(state, schedule, sch_idx, bits, buf);
+
+    // set the state in the cache
+    for i=0 to 8 {                                 
+        sha2_state_caches[:u32 i] = state[i];
+    }
+
+    return sha2_state_caches;
 }
