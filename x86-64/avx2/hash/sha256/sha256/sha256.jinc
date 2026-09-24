@@ -1,7 +1,7 @@
 /* 
  * implementation of SHA256 with an init/absorb/finalise interface
  * 
- * uses an AVX2 compression function adapted from https://github.com/strub/sha256/tree/main 
+ * uses an AVX compression function adapted from https://github.com/strub/sha256/tree/main 
  * 
  * author: Dennis op 't Roodt 2026-09-22 (d.n.e.o.t.roodt@tue.nl)
  */
@@ -11,10 +11,14 @@ namespace sha256 {
     param int ROUNDS_NUM          = 64;
     param int MSG_BLOCK_BYTE_SIZE = 64;
     param int MSG_BLOCK_WORD_SIZE = MSG_BLOCK_BYTE_SIZE/4; // word = u32
+    param int MSG_BLOCK_VECT_SIZE = MSG_BLOCK_BYTE_SIZE/16; // vector = u128
     param int STATE_BYTE_SIZE     = 32;
     param int STATE_WORD_SIZE     = STATE_BYTE_SIZE/4; // word = u32
-    param int WORDS_PER_VECTOR    = 256/32; // word = u32
+    param int LENGTH_BYTE_SIZE    = 8;
     param int BYTES_PER_WORD      = 32/8; // word = u32
+
+    // AVX parameters
+    param int FINAL_ROUND_START_IDX = 48;
 
     // σ function constants
     param int sigma0_0 =  7;
@@ -33,25 +37,23 @@ namespace sha256 {
     param int Sigma1_2 = 25;
 
     // round constants
-    // each u256 entry has the same four u32 constants K[2i+3], K[2i+2], K[2i+1], K[2i] in both
-    // 128-bit halves so that one VPADD_4u64 adds K[2i], K[2i+1], K[2i+2], K[2i+3] to both blocks
-    u256[ROUNDS_NUM / 4] sha256_k = {
-        (8u32)[0xe9b5dba5, 0xb5c0fbcf, 0x71374491, 0x428a2f98, 0xe9b5dba5, 0xb5c0fbcf, 0x71374491, 0x428a2f98],
-        (8u32)[0xab1c5ed5, 0x923f82a4, 0x59f111f1, 0x3956c25b, 0xab1c5ed5, 0x923f82a4, 0x59f111f1, 0x3956c25b],
-        (8u32)[0x550c7dc3, 0x243185be, 0x12835b01, 0xd807aa98, 0x550c7dc3, 0x243185be, 0x12835b01, 0xd807aa98],
-        (8u32)[0xc19bf174, 0x9bdc06a7, 0x80deb1fe, 0x72be5d74, 0xc19bf174, 0x9bdc06a7, 0x80deb1fe, 0x72be5d74],
-        (8u32)[0x240ca1cc, 0x0fc19dc6, 0xefbe4786, 0xe49b69c1, 0x240ca1cc, 0x0fc19dc6, 0xefbe4786, 0xe49b69c1],
-        (8u32)[0x76f988da, 0x5cb0a9dc, 0x4a7484aa, 0x2de92c6f, 0x76f988da, 0x5cb0a9dc, 0x4a7484aa, 0x2de92c6f],
-        (8u32)[0xbf597fc7, 0xb00327c8, 0xa831c66d, 0x983e5152, 0xbf597fc7, 0xb00327c8, 0xa831c66d, 0x983e5152],
-        (8u32)[0x14292967, 0x06ca6351, 0xd5a79147, 0xc6e00bf3, 0x14292967, 0x06ca6351, 0xd5a79147, 0xc6e00bf3],
-        (8u32)[0x53380d13, 0x4d2c6dfc, 0x2e1b2138, 0x27b70a85, 0x53380d13, 0x4d2c6dfc, 0x2e1b2138, 0x27b70a85],
-        (8u32)[0x92722c85, 0x81c2c92e, 0x766a0abb, 0x650a7354, 0x92722c85, 0x81c2c92e, 0x766a0abb, 0x650a7354],
-        (8u32)[0xc76c51a3, 0xc24b8b70, 0xa81a664b, 0xa2bfe8a1, 0xc76c51a3, 0xc24b8b70, 0xa81a664b, 0xa2bfe8a1],
-        (8u32)[0x106aa070, 0xf40e3585, 0xd6990624, 0xd192e819, 0x106aa070, 0xf40e3585, 0xd6990624, 0xd192e819],
-        (8u32)[0x34b0bcb5, 0x2748774c, 0x1e376c08, 0x19a4c116, 0x34b0bcb5, 0x2748774c, 0x1e376c08, 0x19a4c116],
-        (8u32)[0x682e6ff3, 0x5b9cca4f, 0x4ed8aa4a, 0x391c0cb3, 0x682e6ff3, 0x5b9cca4f, 0x4ed8aa4a, 0x391c0cb3],
-        (8u32)[0x8cc70208, 0x84c87814, 0x78a5636f, 0x748f82ee, 0x8cc70208, 0x84c87814, 0x78a5636f, 0x748f82ee],
-        (8u32)[0xc67178f2, 0xbef9a3f7, 0xa4506ceb, 0x90befffa, 0xc67178f2, 0xbef9a3f7, 0xa4506ceb, 0x90befffa]
+    u128[ROUNDS_NUM / 4] sha256_k = {
+        (4u32)[0xe9b5dba5, 0xb5c0fbcf, 0x71374491, 0x428a2f98],
+        (4u32)[0xab1c5ed5, 0x923f82a4, 0x59f111f1, 0x3956c25b],
+        (4u32)[0x550c7dc3, 0x243185be, 0x12835b01, 0xd807aa98],
+        (4u32)[0xc19bf174, 0x9bdc06a7, 0x80deb1fe, 0x72be5d74],
+        (4u32)[0x240ca1cc, 0x0fc19dc6, 0xefbe4786, 0xe49b69c1],
+        (4u32)[0x76f988da, 0x5cb0a9dc, 0x4a7484aa, 0x2de92c6f],
+        (4u32)[0xbf597fc7, 0xb00327c8, 0xa831c66d, 0x983e5152],
+        (4u32)[0x14292967, 0x06ca6351, 0xd5a79147, 0xc6e00bf3],
+        (4u32)[0x53380d13, 0x4d2c6dfc, 0x2e1b2138, 0x27b70a85],
+        (4u32)[0x92722c85, 0x81c2c92e, 0x766a0abb, 0x650a7354],
+        (4u32)[0xc76c51a3, 0xc24b8b70, 0xa81a664b, 0xa2bfe8a1],
+        (4u32)[0x106aa070, 0xf40e3585, 0xd6990624, 0xd192e819],
+        (4u32)[0x34b0bcb5, 0x2748774c, 0x1e376c08, 0x19a4c116],
+        (4u32)[0x682e6ff3, 0x5b9cca4f, 0x4ed8aa4a, 0x391c0cb3],
+        (4u32)[0x8cc70208, 0x84c87814, 0x78a5636f, 0x748f82ee],
+        (4u32)[0xc67178f2, 0xbef9a3f7, 0xa4506ceb, 0x90befffa]
     };
 
     // initialisation vector for the state variables
@@ -62,20 +64,14 @@ namespace sha256 {
     // constant used for setting registers to 0
     u256 zero_vector_256 = (8u32)[0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000];
 
-    // big-to-litte-Endian byte-swap mask for 32-bit lanes, duplicated across
-    // both 128-bit halves so a single VPSHUFB_256 fixes both blocks
-    u256 gshufmask = (8u32)[
-        0x0c0d0e0f, 0x08090a0b, 0x04050607, 0x00010203,
+    // big-to-litte-Endian byte-swap mask for 32-bit lanes
+    u128 gshufmask = (8u32)[
         0x0c0d0e0f, 0x08090a0b, 0x04050607, 0x00010203];
 
     // masks used in sigma1 schedule computation to handle the within-register
-    // data dependency (W[t] depends on W[t-2] which is in the same xmm/ymm)
-    u256 glomask = (8u32)[
-        -1, -1, 0x0b0a0908, 0x03020100,
-        -1, -1, 0x0b0a0908, 0x03020100];
-    u256 ghimask = (8u32)[
-        0x0b0a0908, 0x03020100, -1, -1,
-        0x0b0a0908, 0x03020100, -1, -1];
+    // data dependency (schedule[t] depends on schedule[t-2] which is in the same xmm/ymm)
+    u128 glomask = (4u32)[-1, -1, 0x0b0a0908, 0x03020100];
+    u128 ghimask = (4u32)[0x0b0a0908, 0x03020100, -1, -1];
 
     // choice function
     inline
@@ -87,13 +83,13 @@ namespace sha256 {
     {
         reg u32 a b;
 
-        a  = x; // a = x
-        a &= y; // a = x /\ y
+        a  = x;  // a = x
+        a &= y;  // a = x /\ y
 
         b  = !x; // b = ¬x
         b &= z;  // b = ¬x /\ z
 
-        a ^= b; // a = (x /\ y) ^ (¬x /\ z)
+        a ^= b;  // a = (x /\ y) ^ (¬x /\ z)
 
         return a;
     }
@@ -127,19 +123,19 @@ namespace sha256 {
     // σ0
     inline
     fn sigma0(
-        reg u256 w
-    ) -> reg u256
+        reg u32 w
+    ) -> reg u32
     {
-        reg u256 u;
+        reg u32 u;
 
-        u   = w; // u = w
-        w   = #VPSRL_8u32(w, sigma0_2); // w = w >> 3
+        u    = w;                 // u = w
+        w  >>= sigma0_2;          // w = w >> 3
 
-        u   = rotate(u, sigma0_0); // u = w rotate 7
-        w  ^= u; // w = (w rotate 7) ^ (w >> 3)
+        u >>r= sigma0_0;          // u = w rotate 7
+        w   ^= u;                 // w = (w rotate 7) ^ (w >> 3)
 
-        u   = rotate(u, sigma0_1-sigma0_0); // u = w rotate 18
-        w  ^= u; // w = (w rotate 7) ^ (w rotate 18) ^ (w >> 3)
+        u >>r= sigma0_1-sigma0_0; // u = w rotate 18
+        w   ^= u;                 // w = (w rotate 7) ^ (w rotate 18) ^ (w >> 3)
 
         return w;
     }
@@ -147,20 +143,19 @@ namespace sha256 {
     // σ1
     inline
     fn sigma1(
-        reg u256 w
-    ) -> reg u256
+        reg u32 w
+    ) -> reg u32
     {
-        reg u256 u;
+        reg u32 u;
 
-        u   = w; // u = w
+        u    = w;                 // u = w
+        w  >>= sigma1_2;          // w = w >> 10
 
-        w   = #VPSRL_8u32(w, sigma1_2); // w = w >> 10
+        u >>r= sigma1_0;          // u = w rotate 17
+        w   ^= u;                 // w = (w rotate 17) ^ (w >> 10)
 
-        u   = rotate(u, sigma1_0); // u = w rotate 17
-        w  ^= u; // w = (w rotate 17) ^ (w >> 10)
-
-        u   = rotate(u, sigma1_1-sigma1_0); // u = w rotate 19
-        w  ^= u; // w = (w rotate 17) ^ (w rotate 19) ^ (w >> 10)
+        u >>r= sigma1_1-sigma1_0; // u = w rotate 19
+        w   ^= u;                 // w = (w rotate 17) ^ (w rotate 19) ^ (w >> 10)
 
         return w;
     }
@@ -189,10 +184,10 @@ namespace sha256 {
     // Σ1
     inline
     fn Sigma1(
-        reg u256 w
-    ) -> reg u256
+        reg u32 w
+    ) -> reg u32
     {
-        reg u256 u v;
+        reg u32 u v;
 
         u    = w;                 // u = w
         u >>r= Sigma1_0;          // u = w rotate 6
@@ -205,6 +200,261 @@ namespace sha256 {
         u   ^= v;                 // w = (w rotate 6) ^ (w rotate 11) ^ (w rotate 25)
 
         return u;
+    }
+
+    inline
+    fn rotate(
+        reg u128[4] in
+    ) -> reg u128[4]
+    {
+        reg u128 tmp;
+
+        tmp   = in[0];
+        in[0] = in[1];
+        in[1] = in[2];
+        in[2] = in[3];
+        in[3] = tmp;
+        return in;
+    }
+
+    inline
+    fn update(
+        reg u128[4] x,
+        reg u128 k,
+        reg u128 lomask,
+        reg u128 himask
+    ) -> reg u128[4], reg u128
+    {
+        reg u128[4] t;
+        reg u128 tmp;
+
+        t[0] = #VPALIGNR_128(x[1], x[0], 4);
+        t[3] = #VPALIGNR_128(x[3], x[2], 4);
+
+        t[2] = #VPSRL_4u32(t[0], sigma0_0);
+        x[0] = #VPADD_4u32(x[0], t[3]);
+        t[3] = #VPSRL_4u32(t[0], sigma0_2);
+        t[1] = #VPSLL_4u32(t[0], 32 - sigma0_1);
+
+        t[0] = t[3] ^ t[2];
+        t[3] = #VPSHUFD_128(x[3], 0xfa);
+        t[2] = #VPSRL_4u32(t[2], sigma0_1 - sigma0_0);
+        t[0] = t[0] ^ t[1];
+        t[0] = t[0] ^ t[2];
+
+        t[1] = #VPSLL_4u32(t[1], sigma0_1 - sigma0_0);
+        t[2] = #VPSRL_4u32(t[3], sigma1_2);
+
+        t[3] = #VPSRL_2u64(t[3], sigma1_0);
+        tmp  = t[0] ^ t[1];
+        x[0] = #VPADD_4u32(x[0], tmp);  
+
+        t[2] = t[2] ^ t[3];
+        t[3] = #VPSRL_2u64(t[3], sigma1_1 - sigma1_0);
+        t[2] = t[2] ^ t[3];
+        t[2] = #VPSHUFB_128(t[2], lomask);
+        x[0] = #VPADD_4u32(x[0], t[2]);
+
+        t[3] = #VPSHUFD_128(x[0], 0x50);
+        t[2] = #VPSRL_4u32(t[3], sigma1_2);
+        t[3] = #VPSRL_2u64(t[3], sigma1_0);
+        t[2] = t[2] ^ t[3];
+
+        t[3] = #VPSRL_2u64(t[3], sigma1_1 - sigma1_0);
+        tmp  = t[2] ^ t[3];
+        tmp  = #VPSHUFB_128(tmp, himask);
+        x[0] = #VPADD_4u32(x[0], tmp);
+
+        x = rotate(x);
+
+        tmp = #VPADD_4u32(x[3], k);
+
+        return x, tmp;
+    }
+
+    inline
+    fn load_data(
+        reg ptr u8[MSG_BLOCK_BYTE_SIZE] data,
+        reg ptr u32[ROUNDS_NUM] schedule
+    ) -> reg u128[MSG_BLOCK_VECT_SIZE], reg ptr u32[ROUNDS_NUM]
+    {
+        reg u128[MSG_BLOCK_VECT_SIZE] x;
+        reg u128 k;
+
+        inline int i;
+
+        for i = 0 to MSG_BLOCK_VECT_SIZE {
+            x[i] = data[:u128 i];
+            x[i] = #VPSHUFB_128(x[i], gshufmask);
+            k = sha256_k[i];
+            k = #VPADD_4u32(x[i], k);
+            schedule[:u128 i] = k;
+        }
+
+        return x, schedule;
+    }
+
+    inline
+    fn rotate_state(
+        reg ptr u32[STATE_WORD_SIZE] state
+    ) -> reg ptr u32[STATE_WORD_SIZE]
+    {
+        reg u32 tmp, w7;
+        inline int i;
+
+        w7 = state[7];
+        for i = 7 downto 0 {
+            tmp = state[i-1];
+            state[i] = tmp;
+        }
+        state[0] = w7;
+
+        return state;
+    }
+
+    inline
+    fn accumulate_state(
+        reg ptr u32[STATE_WORD_SIZE] out,
+        reg ptr u32[STATE_WORD_SIZE] in
+    ) -> reg ptr u32[STATE_WORD_SIZE]
+    {
+        inline int i;
+        reg u128 tmp;
+
+        for i = 0 to STATE_u128_SIZE {
+            tmp = in[:u128 i];
+            tmp = #VPADD_4u32(tmp, out[:u128 i]);
+            out[:u128 i] = tmp;
+        }
+
+        return out;
+    }
+
+    inline
+    fn copy_state(
+        reg ptr u32[STATE_WORD_SIZE] out,
+        reg ptr u32[STATE_WORD_SIZE] in
+    ) -> reg ptr u32[STATE_WORD_SIZE]
+    {
+        inline int i;
+        reg u128 tmp;
+
+        for i = 0 to STATE_u128_SIZE {
+            tmp = in[:u128 i];
+            out[:u128 i] = tmp;
+        }
+        return out;
+    }
+
+    inline
+    fn round(
+        reg ptr u32[STATE_WORD_SIZE] state,
+        reg u32 x,
+        inline int k
+    ) -> reg ptr u32[STATE_WORD_SIZE]
+    {
+        reg u32 t, tmp, w0, w1, w2;
+
+        t  = state[4];
+        t  = Sigma1(t);
+        t += state[7];
+        t += x;
+
+        w0   = state[4];
+        w1   = state[5];
+        w2   = state[6];
+        tmp  = Ch(w0, w1, w2);
+        t   += tmp;
+        t   += k;
+
+        state[3] += t;
+
+        w0   = state[0];
+        w1   = state[1];
+        w2   = state[2];
+        tmp  = Maj(w0, w1, w2);
+        t   += tmp;
+        w0   = Sigma0(w0);
+        t   += w0;
+
+        state[7] = t;
+
+        state = rotate_state(state);
+
+        return state;
+    }
+
+    inline
+    fn round_0_47(
+        reg ptr u32[STATE_WORD_SIZE] state,
+        reg u128[MSG_BLOCK_VECT_SIZE] x,
+        reg ptr u32[ROUNDS_NUM] schedule
+    ) -> reg ptr u32[STATE_WORD_SIZE], reg ptr u32[ROUNDS_NUM]
+    {
+        reg u128 lomask = glomask;
+        reg u128 himask = ghimask;
+        reg u128 k, y;
+        reg ptr u128[ROUNDS_NUM / 4] k256p;
+
+        reg u64 j;
+        inline int i;
+
+        k256p = sha256_k;
+
+        for i = 0 to 3 {
+            j = 0;
+            while (j < MSG_BLOCK_BYTE_SIZE) {
+                k     = k256p.[:u128 j + MSG_BLOCK_BYTE_SIZE * (i + 1)];
+                x, y  = update(x, k, lomask, himask);
+
+                state = round(state, schedule.[:u32 (j     )], 0);
+                state = round(state, schedule.[:u32 (j +  4)], 0);
+                state = round(state, schedule.[:u32 (j +  8)], 0);
+                state = round(state, schedule.[:u32 (j + 12)], 0);
+
+                schedule.[:u128 j] = y;
+
+                j += MSG_BLOCK_BYTE_SIZE;
+            }
+        }
+
+        return state, schedule;
+    }
+
+    inline
+    fn round_48_63(
+        reg ptr u32[STATE_WORD_SIZE] state,
+        reg ptr u32[ROUNDS_NUM] schedule
+    ) -> reg ptr u32[STATE_WORD_SIZE]
+    {
+        inline int i;
+        reg u32 x;
+
+        for i = FINAL_ROUND_START_IDX to ROUNDS_NUM {
+            x = schedule[:u32 (i & 0xf)];
+            state = round(state, x, 0);
+        }
+
+        return state;
+    }
+
+    inline
+    fn compress(
+        reg ptr u32[STATE_WORD_SIZE] state,
+        reg ptr u8[MSG_BLOCK_BYTE_SIZE] data
+    ) -> reg ptr u32[STATE_WORD_SIZE]
+    {
+        stack u32[STATE_WORD_SIZE] cstate;
+        stack u32[ROUNDS_NUM] schedule;
+        reg u128[MSG_BLOCK_VECT_SIZE] x;
+
+        cstate = copy_state(cstate, state);
+        x, schedule = load_data(data, schedule);
+        cstate, schedule = round_0_47(cstate, x, schedule);
+        cstate = round_48_63(cstate, schedule);
+        state = accumulate_state(state, cstate);
+
+        return state;
     }
 
     /********** FUNCTIONS INTENDED FOR EXTERNAL USE **********/
@@ -223,14 +473,14 @@ namespace sha256 {
         inline int i;
 
         // set the IHVs to the initialisation vectors
-        for i=0 to STATE_WORD_SIZE/WORDS_PER_VECTOR {
+        for i=0 to STATE_WORD_SIZE {
             copy = sha256_iv[i]; state[:u256 i] = copy;
         }
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
         copy = zero_vector_256;
-        for i=0 to MSG_BLOCK_WORD_SIZE/WORDS_PER_VECTOR {
+        for i=0 to MSG_BLOCK_WORD_SIZE {
             schedule[:u256 i] = copy;
         }
 
@@ -255,14 +505,14 @@ namespace sha256 {
         inline int i;
 
         // set the IHVs to the initialisation vectors
-        for i=0 to STATE_WORD_SIZE/WORDS_PER_VECTOR {
+        for i=0 to STATE_WORD_SIZE {
             copy = sha256_iv[:u256 i]; state[:u256 i] = copy;
         }
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
         copy = zero_vector_256;
-        for i=0 to MSG_BLOCK_WORD_SIZE/WORDS_PER_VECTOR {
+        for i=0 to MSG_BLOCK_WORD_SIZE {
             schedule[:u256 i] = copy;
         }
 
@@ -271,16 +521,150 @@ namespace sha256 {
         return state, schedule, sch_idx, bits;
     }
 
+    fn absorb_variable(
+        reg ptr u32[STATE_WORD_SIZE] state, // pointer to the state
+        reg ptr u32[ROUNDS_NUM] schedule,   // message schedule
+        reg u64 sch_idx,                    // byte index of the current position in the message schedule
+        reg u64 bits,                       // number of bits processed
+        reg u64 in_ptr,                     // pointer to the input
+        reg u64 in_len                      // bytelength of the input
+    ) -> reg ptr u32[STATE_WORD_SIZE], reg ptr u32[ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    {
+        reg u64 avail;
+        reg u64 target;
+        reg u64 length;
+
+        length   = in_len; // get the bytelength of the input
+        length <<= 3;      // convert to number of bits
+        
+        () = #spill(bits, length); // free up space in the registers
+
+
+        // compute how many bytes of input can be absorbed into the current schedule
+        avail  = MSG_BLOCK_BYTE_SIZE;
+        avail -= sch_idx;
+
+        // if enough message bytes are present, fill the current block and run the compression function once
+        if (in_len >= avail) {
+
+            // fill the rest of the block
+            while (sch_idx < MSG_BLOCK_BYTE_SIZE) {
+                schedule[:u8 sch_idx] = [:u8 in_ptr];
+                sch_idx += 1;
+                in_ptr  += 1;
+            }
+
+            // run the compression function
+            () = #spill(in_ptr, in_len, avail);
+            state, schedule = compress(state, schedule);
+            () = #unspill(in_ptr, in_len, avail);
+
+            sch_idx = 0;
+            in_len -= avail; // 'avail' number of bytes consumed
+        }
+
+        // if enough message bytes are present, process full blocks of message bytes
+        while (in_len >= MSG_BLOCK_BYTE_SIZE) {
+            // fill the rest of the block
+            while (sch_idx < MSG_BLOCK_BYTE_SIZE) {
+                schedule[:u8 sch_idx] = [:u8 in_ptr];
+                sch_idx += 1;
+                in_ptr  += 1;
+            }
+
+            // run the compression function
+            () = #spill(in_ptr, in_len);
+            state, schedule = compress(state, schedule);
+            () = #unspill(in_ptr, in_len);
+
+            sch_idx = 0;
+            in_len -= MSG_BLOCK_BYTE_SIZE; // one block of bytes consumed
+        }
+
+        // write the remainder of the message bytes to schedule and update sch_idx
+        target = sch_idx; target += in_len;
+        while (sch_idx < target) {
+            schedule[:u8 sch_idx] = [:u8 in_ptr];
+            sch_idx += 1;
+            in_ptr  += 1;
+        }
+        
+        () = #unspill(bits, length);
+
+        bits += length; // add the bitlength of the input to the total number of consumed bits
+
+        return state, schedule, sch_idx, bits;
+    }
+
     // finalise the SHA256 computation,
     // i.e. add zero padding, add the length encoding, and run the final compression(s)
     fn finalise(
-        reg ptr u256[STATE_WORD_SIZE] state, // pointer to the state
-        reg ptr u256[ROUNDS_NUM] schedule,   // message schedule
-        reg u64 sch_idx,                     // byte index of the current position in message schedule
-        reg u64 bits,                        // number of bits processed
-        reg ptr u8[STATE_BYTE_SIZE] out0 out1 out2 out3 out4 out5 out6 out7 // outputs
-    ) -> reg ptr u256[ROUNDS_NUM], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE], reg ptr u8[STATE_BYTE_SIZE] // -> schedule, out0, out1, out2, out3, out4, out5, out6, out7 // schedule is only returned because it needs to be writable
+        reg ptr u32[STATE_WORD_SIZE] state, // pointer to the state
+        reg ptr u32[ROUNDS_NUM] schedule,   // message schedule
+        reg u64 sch_idx,                    // byte index of the current position in the message schedule
+        reg u64 bits,                       // number of bits processed
+        reg ptr u8[STATE_BYTE_SIZE] output  // output buffer
+    ) -> reg ptr u32[ROUNDS_NUM], reg ptr u8[STATE_BYTE_SIZE] // -> schedule, output // schedule is only returned because it needs to be writable
     {
+        // register variables
+        reg u32 swap; // temporary variable for byteswapping purposes
+
+        () = #spill(bits); // only needed at the end of the function
+
+        // set separation byte after input to 0x80
+        schedule[:u8 sch_idx] = 0x80;
+        sch_idx += 1;
+
+        // if the separation byte topped off the block, run the compression function
+        if (sch_idx == MSG_BLOCK_BYTE_SIZE) {
+            state, schedule = compress(state, schedule);
+            sch_idx = 0;
+        }
+
+        // check whether the length encoding fits in the current block
+        if (sch_idx < MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) { // length encoding fits in the current block
+            // set the zero padding, leaving space for the length encoding
+            while (sch_idx < MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) {
+                schedule[:u8 sch_idx] = 0x00;
+                sch_idx += 1;
+            }
+        } else { // length encoding does NOT fit in the current block
+            // fill the rest of the block with zero padding
+            while (sch_idx < MSG_BLOCK_BYTE_SIZE) {
+                schedule[:u8 sch_idx] = 0x00;
+                sch_idx += 1;
+            }
+
+            // run the compression function
+            state, schedule = compress(state, schedule);
+            sch_idx = 0;
+            
+            // set more zero padding, leaving space for the length encoding
+            while (sch_idx < MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) {
+                schedule[:u8 sch_idx] = 0x00;
+                sch_idx += 1;
+            }
+        }
+
+        () = #unspill(bits);
+
+        // set the length encoding
+        // length encoding is 64 bits = 8 bytes
+        sch_idx = MSG_BLOCK_BYTE_SIZE-1;
+        while(sch_idx >= MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) {
+            schedule[:u8 sch_idx] = (8u) bits;
+            bits   >>= 8;
+            sch_idx -= 1;
+        }
         
+        // run the compression function
+        state, schedule = compress(state, schedule);
+
+        // write the state to the output
+        for i=0 to STATE_WORD_SIZE {
+            swap = state[i]; swap = #BSWAP_32(swap); output[:u32 i] = swap;
+        }
+
+        return state, schedule;
     }
 }
