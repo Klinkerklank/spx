@@ -1,21 +1,24 @@
 /* 
- * implementation of SHA256 with an init/absorb/finalise interface
- * 
- * uses an AVX compression function adapted from https://github.com/strub/sha256/tree/main 
+ * implementation of SHA256 with an init/absorb/finalise interface, with an AVX
+ * compression function adapted from https://github.com/strub/sha256/tree/main 
  * 
  * author: Dennis op 't Roodt 2026-09-22 (d.n.e.o.t.roodt@tue.nl)
  */
 
 namespace sha256 {
+
     // SHA-256 parameters
     param int ROUNDS_NUM          = 64;
-    param int MSG_BLOCK_BYTE_SIZE = 64;
-    param int MSG_BLOCK_WORD_SIZE = MSG_BLOCK_BYTE_SIZE/4; // word = u32
-    param int MSG_BLOCK_VECT_SIZE = MSG_BLOCK_BYTE_SIZE/16; // vector = u128
+    param int MSG_BLOCK_BYTE_SIZE = 64;                     // word   = u8
+    param int MSG_BLOCK_WORD_SIZE = MSG_BLOCK_BYTE_SIZE/4;  // word   = u32
+    param int MSG_BLOCK_u128_SIZE = MSG_BLOCK_BYTE_SIZE/16;
+    param int MSG_BLOCK_u256_SIZE = MSG_BLOCK_BYTE_SIZE/32;
     param int STATE_BYTE_SIZE     = 32;
-    param int STATE_WORD_SIZE     = STATE_BYTE_SIZE/4; // word = u32
+    param int STATE_WORD_SIZE     = STATE_BYTE_SIZE/4;      // word   = u32
+    param int STATE_u128_SIZE     = STATE_BYTE_SIZE/16;
+    param int STATE_u256_SIZE     = STATE_BYTE_SIZE/32;
     param int LENGTH_BYTE_SIZE    = 8;
-    param int BYTES_PER_WORD      = 32/8; // word = u32
+    param int BYTES_PER_WORD      = 32/8;                   // word   = u32
 
     // AVX parameters
     param int FINAL_ROUND_START_IDX = 48;
@@ -57,16 +60,16 @@ namespace sha256 {
     };
 
     // initialisation vector for the state variables
-    u256[STATE_WORD_SIZE] sha256_iv = {
-        (8u32)[0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
+    u256[STATE_u256_SIZE] sha256_iv = {
+        // (8u32)[0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
+        (8u32)[0x5be0cd19, 0x1f83d9ab, 0x9b05688c, 0x510e527f, 0xa54ff53a, 0x3c6ef372, 0xbb67ae85, 0x6a09e667]
     };
 
     // constant used for setting registers to 0
     u256 zero_vector_256 = (8u32)[0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000];
 
     // big-to-litte-Endian byte-swap mask for 32-bit lanes
-    u128 gshufmask = (8u32)[
-        0x0c0d0e0f, 0x08090a0b, 0x04050607, 0x00010203];
+    u128 gshufmask = (4u32)[0x0c0d0e0f, 0x08090a0b, 0x04050607, 0x00010203];
 
     // masks used in sigma1 schedule computation to handle the within-register
     // data dependency (schedule[t] depends on schedule[t-2] which is in the same xmm/ymm)
@@ -274,17 +277,16 @@ namespace sha256 {
 
     inline
     fn load_data(
-        reg ptr u8[MSG_BLOCK_BYTE_SIZE] data,
         reg ptr u32[ROUNDS_NUM] schedule
-    ) -> reg u128[MSG_BLOCK_VECT_SIZE], reg ptr u32[ROUNDS_NUM]
+    ) -> reg u128[MSG_BLOCK_u128_SIZE], reg ptr u32[ROUNDS_NUM]
     {
-        reg u128[MSG_BLOCK_VECT_SIZE] x;
+        reg u128[MSG_BLOCK_u128_SIZE] x;
         reg u128 k;
 
         inline int i;
 
-        for i = 0 to MSG_BLOCK_VECT_SIZE {
-            x[i] = data[:u128 i];
+        for i = 0 to MSG_BLOCK_u128_SIZE {
+            x[i] = schedule[:u128 i];
             x[i] = #VPSHUFB_128(x[i], gshufmask);
             k = sha256_k[i];
             k = #VPADD_4u32(x[i], k);
@@ -363,7 +365,7 @@ namespace sha256 {
         w0   = state[4];
         w1   = state[5];
         w2   = state[6];
-        tmp  = Ch(w0, w1, w2);
+        tmp  = choice(w0, w1, w2);
         t   += tmp;
         t   += k;
 
@@ -372,7 +374,7 @@ namespace sha256 {
         w0   = state[0];
         w1   = state[1];
         w2   = state[2];
-        tmp  = Maj(w0, w1, w2);
+        tmp  = majority(w0, w1, w2);
         t   += tmp;
         w0   = Sigma0(w0);
         t   += w0;
@@ -387,7 +389,7 @@ namespace sha256 {
     inline
     fn round_0_47(
         reg ptr u32[STATE_WORD_SIZE] state,
-        reg u128[MSG_BLOCK_VECT_SIZE] x,
+        reg u128[MSG_BLOCK_u128_SIZE] x,
         reg ptr u32[ROUNDS_NUM] schedule
     ) -> reg ptr u32[STATE_WORD_SIZE], reg ptr u32[ROUNDS_NUM]
     {
@@ -414,7 +416,7 @@ namespace sha256 {
 
                 schedule.[:u128 j] = y;
 
-                j += MSG_BLOCK_BYTE_SIZE;
+                j += 16;
             }
         }
 
@@ -440,21 +442,41 @@ namespace sha256 {
 
     inline
     fn compress(
-        reg ptr u32[STATE_WORD_SIZE] state,
-        reg ptr u8[MSG_BLOCK_BYTE_SIZE] data
-    ) -> reg ptr u32[STATE_WORD_SIZE]
+        reg ptr u32[STATE_WORD_SIZE] state, // pointer to the state
+        reg ptr u32[ROUNDS_NUM] schedule    // message schedule
+    ) -> reg ptr u32[STATE_WORD_SIZE], reg ptr u32[ROUNDS_NUM] // -> state, schedule
     {
-        stack u32[STATE_WORD_SIZE] cstate;
-        stack u32[ROUNDS_NUM] schedule;
-        reg u128[MSG_BLOCK_VECT_SIZE] x;
+        // register variables
+        reg u128[MSG_BLOCK_u128_SIZE] x;
+        reg u256 copy;
 
+        // stack variables
+        stack u32[STATE_WORD_SIZE] cstate;
+
+        inline int i;
+
+        // copy the state into cstate (such that state can later be added to cstate)
         cstate = copy_state(cstate, state);
-        x, schedule = load_data(data, schedule);
+
+        // initialise the ring buffer from the first schedule words
+        x, schedule = load_data(schedule);
+
+        // run the first rounds of the main loop
         cstate, schedule = round_0_47(cstate, x, schedule);
+
+        // run the final rounds of the main loop
         cstate = round_48_63(cstate, schedule);
+
+        // add the state values from before the loop to the current values
         state = accumulate_state(state, cstate);
 
-        return state;
+        // reset the message part of the schedule
+        copy = zero_vector_256;
+        for i=0 to MSG_BLOCK_BYTE_SIZE / 32 { // use the alrgest size of register (u256) to set as many bytes at once as possible
+            schedule[:u256 i] = copy;
+        }
+
+        return state, schedule;
     }
 
     /********** FUNCTIONS INTENDED FOR EXTERNAL USE **********/
@@ -473,14 +495,14 @@ namespace sha256 {
         inline int i;
 
         // set the IHVs to the initialisation vectors
-        for i=0 to STATE_WORD_SIZE {
+        for i=0 to STATE_u256_SIZE {
             copy = sha256_iv[i]; state[:u256 i] = copy;
         }
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
         copy = zero_vector_256;
-        for i=0 to MSG_BLOCK_WORD_SIZE {
+        for i=0 to MSG_BLOCK_BYTE_SIZE / 32 {
             schedule[:u256 i] = copy;
         }
 
@@ -505,14 +527,14 @@ namespace sha256 {
         inline int i;
 
         // set the IHVs to the initialisation vectors
-        for i=0 to STATE_WORD_SIZE {
-            copy = sha256_iv[:u256 i]; state[:u256 i] = copy;
+        for i=0 to STATE_u256_SIZE {
+            copy = state_cache[:u256 i]; state[:u256 i] = copy;
         }
 
         // reset the message part of the schedule
         // (the computed part will be overwritten by compute_word anyway)
         copy = zero_vector_256;
-        for i=0 to MSG_BLOCK_WORD_SIZE {
+        for i=0 to MSG_BLOCK_u256_SIZE {
             schedule[:u256 i] = copy;
         }
 
@@ -609,7 +631,17 @@ namespace sha256 {
         // register variables
         reg u32 swap; // temporary variable for byteswapping purposes
 
+        // stack variables
+        stack u32[STATE_WORD_SIZE] ihvs; // Intermediate Hash Values (IHVs)
+
+        inline int i;
+
         () = #spill(bits); // only needed at the end of the function
+
+        // put the state in registers
+        for i=0 to STATE_WORD_SIZE {
+            ihvs[i] = state[i];
+        }
 
         // set separation byte after input to 0x80
         schedule[:u8 sch_idx] = 0x80;
@@ -617,7 +649,7 @@ namespace sha256 {
 
         // if the separation byte topped off the block, run the compression function
         if (sch_idx == MSG_BLOCK_BYTE_SIZE) {
-            state, schedule = compress(state, schedule);
+            ihvs, schedule = compress(ihvs, schedule);
             sch_idx = 0;
         }
 
@@ -636,7 +668,7 @@ namespace sha256 {
             }
 
             // run the compression function
-            state, schedule = compress(state, schedule);
+            ihvs, schedule = compress(ihvs, schedule);
             sch_idx = 0;
             
             // set more zero padding, leaving space for the length encoding
@@ -658,13 +690,13 @@ namespace sha256 {
         }
         
         // run the compression function
-        state, schedule = compress(state, schedule);
+        ihvs, schedule = compress(ihvs, schedule);
 
         // write the state to the output
         for i=0 to STATE_WORD_SIZE {
-            swap = state[i]; swap = #BSWAP_32(swap); output[:u32 i] = swap;
+            swap = ihvs[i]; swap = #BSWAP_32(swap); output[:u32 i] = swap;
         }
 
-        return state, schedule;
+        return schedule, output;
     }
 }

@@ -50,6 +50,21 @@ namespace sha256_compress_fors {
 
 
 
+// already provides the namespace 'sha256' internally
+require "sha256_single/sha256.jinc"
+
+namespace sha256_adrsc {
+    param int INPUT_LENGTH = 22;
+    require "sha256_single/sha256_absorb_fixed.jinc"
+}
+
+namespace sha256_n {
+    param int INPUT_LENGTH = SPX_N;
+    require "sha256_single/sha256_absorb_fixed.jinc"
+}
+
+
+
 // already provides the namespace 'sha256_parallel' internally
 require "sha256_parallel/sha256_parallel.jinc"
 

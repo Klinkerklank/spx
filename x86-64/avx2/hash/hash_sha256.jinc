@@ -172,31 +172,77 @@ fn __PRF_msg(
     return out;
 }
 
+// // PRF(PK.seed, SK.seed, ADRS) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || SK.seed))
+// fn PRF(
+//     reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
+//     reg ptr u8[SPX_N] skseed, // SK.seed
+//     reg ptr u32[8] adrs,      // ADRS
+//     reg ptr u8[96] sha2_state_caches    // cached SHA2 state
+// ) -> reg ptr u8[SPX_N] // -> out
+// {
+//     () = #spill(out); // not needed until the end of the function
+
+//     // stack buffer that will contain the concatenated inputs
+//     stack u8[22 + SPX_N] buf;
+
+//     // buffer for the output
+//     stack u8[SHA256_OUT] digest;
+
+//     // buf = ADRS^c
+//     buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
+
+//     // buf = ADRS^c || SK.seed
+//     buf[22 : SPX_N] = __copy_nbytes(buf[22 : SPX_N], skseed);
+
+//     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
+//     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
+//     digest = sha256_tl_1n::sha256_cached(digest, buf, sha2_state_caches);
+
+//     () = #unspill(out);
+
+//     // truncate the digest to the correct length by copying only the first SPX_N bytes
+//     out = __copy_nbytes(out, digest[0 : SPX_N]);
+//     return out;
+// }
+
 // PRF(PK.seed, SK.seed, ADRS) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || SK.seed))
 fn PRF(
-    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // not needed until the end of the function
 
-    // stack buffer that will contain the concatenated inputs
-    stack u8[22 + SPX_N] buf;
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
 
-    // buffer for the output
-    stack u8[SHA256_OUT] digest;
+    // stack variables
+    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA256 state
+    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA256 state
+    stack u8[22] adrsc;                          // buffer for ADRS^c
+    stack u8[SHA256_OUT] digest;                 // buffer for the output
+    stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
 
-    // buf = ADRS^c
-    buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
+    inline int i;
 
-    // buf = ADRS^c || SK.seed
-    buf[22 : SPX_N] = __copy_nbytes(buf[22 : SPX_N], skseed);
+    // adrsc = ADRS^c
+    adrsc = __adrs_compress(adrsc, adrs);
 
-    // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
-    // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha256_tl_1n::sha256_cached(digest, buf, h_cache);
+    // extract the SHA256 state from the combined state cache
+    for i=0 to SHA2_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
+    }
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = SHA256_IN*8;
+
+    state, schedule, sch_idx, bits =         sha256::init_cache(state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits =     sha256_n::absorb_fixed(state, schedule, sch_idx, bits, skseed);
+    schedule, digest               =           sha256::finalise(state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -207,16 +253,16 @@ fn PRF(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __PRF(
-    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; skseed = skseed; adrs = adrs; h_cache = h_cache;
+    out = out; skseed = skseed; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    out = PRF(out, skseed, adrs, h_cache);
+    out = PRF(out, skseed, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -228,7 +274,7 @@ fn __PRF(
 fn F(
     reg ptr u8[SPX_N] out,    // both input and output (F is in-place)
     reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches    // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // stack buffer that will contain the concatenated inputs
@@ -246,7 +292,7 @@ fn F(
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_1)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha256_tl_1n::sha256_cached(digest, buf, h_cache);
+    digest = sha256_tl_1n::sha256_cached(digest, buf, sha2_state_caches);
 
     () = #unspill(out);
 
@@ -259,13 +305,13 @@ inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin co
 fn __F(
     reg ptr u8[SPX_N] out,    // both input and output (F is in-place)
     reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches    // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; adrs = adrs; h_cache = h_cache;
+    out = out; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    out = F(out, adrs, h_cache);
+    out = F(out, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -279,7 +325,7 @@ fn H(
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[SPX_N] in1,    // first part of the concatenation
     reg ptr u8[SPX_N] in2,    // second part of the concatenation
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches    // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // not needed until the end of the function
@@ -299,7 +345,7 @@ fn H(
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_2)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha256_tl_2n::sha256_cached(digest, buf, h_cache);
+    digest = sha256_tl_2n::sha256_cached(digest, buf, sha2_state_caches);
 
     () = #unspill(out);
 
@@ -314,13 +360,13 @@ fn __H(
     reg ptr u32[8] adrs,      // ADRS
     reg ptr u8[SPX_N] in1,    // first part of the concatenation
     reg ptr u8[SPX_N] in2,    // second part of the concatenation
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches    // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; adrs = adrs; in1 = in1; in2 = in2; h_cache = h_cache;
+    out = out; adrs = adrs; in1 = in1; in2 = in2; sha2_state_caches = sha2_state_caches;
 
-    out = H(out, adrs, in1, in2, h_cache);
+    out = H(out, adrs, in1, in2, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -333,7 +379,7 @@ fn T_len(
     reg ptr u8[SPX_N] out,            // output: buffer the result gets written to
     reg ptr u32[8] adrs,              // ADRS
     reg ptr u8[SPX_LEN*SPX_N] chains, // concatenation of all chain end values in a WOTS instance
-    reg ptr u8[96] h_cache            // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches            // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // not needed until the end of the function
@@ -356,7 +402,7 @@ fn T_len(
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_len)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha256_compress_wots::sha256_cached(digest, buf, h_cache);
+    digest = sha256_compress_wots::sha256_cached(digest, buf, sha2_state_caches);
 
     () = #unspill(out);
 
@@ -370,13 +416,13 @@ fn __T_len(
     reg ptr u8[SPX_N] out,            // output: buffer the result gets written to
     reg ptr u32[8] adrs,              // ADRS
     reg ptr u8[SPX_LEN*SPX_N] chains, // concatenation of all chain end values in a WOTS instance
-    reg ptr u8[96] h_cache            // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches            // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; adrs = adrs; chains = chains; h_cache = h_cache;
+    out = out; adrs = adrs; chains = chains; sha2_state_caches = sha2_state_caches;
 
-    out = T_len(out, adrs, chains, h_cache);
+    out = T_len(out, adrs, chains, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -389,7 +435,7 @@ fn T_k(
     reg ptr u8[SPX_N] out,         // output: buffer the result gets written to
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[SPX_K*SPX_N] roots, // concatenation of all roots in a FORS forest
-    reg ptr u8[96] h_cache         // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches         // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // not needed until the end of the function
@@ -412,7 +458,7 @@ fn T_k(
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_k)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha256_compress_fors::sha256_cached(digest, buf, h_cache);
+    digest = sha256_compress_fors::sha256_cached(digest, buf, sha2_state_caches);
 
     () = #unspill(out);
 
@@ -426,13 +472,13 @@ fn __T_k(
     reg ptr u8[SPX_N] out,         // output: buffer the result gets written to
     reg ptr u32[8] adrs,           // ADRS
     reg ptr u8[SPX_K*SPX_N] roots, // concatenation of all roots in a FORS forest
-    reg ptr u8[96] h_cache         // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches         // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; adrs = adrs; roots = roots; h_cache = h_cache;
+    out = out; adrs = adrs; roots = roots; sha2_state_caches = sha2_state_caches;
 
-    out = T_k(out, adrs, roots, h_cache);
+    out = T_k(out, adrs, roots, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
