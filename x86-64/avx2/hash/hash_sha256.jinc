@@ -130,46 +130,72 @@ fn PRF_msg(
     () = #spill(out); // not needed until the end of the function
 
     // register variables
-    reg u64 xor; // temporary variable for computing XORs
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
+    reg u64 xor;     // temporary variable for computing XORs
 
     // stack variables
-    stack u8[SHA256_IN] key;               // buffer for the key
-    stack u8[SHA256_IN + SPX_N] ibuf;      // buffer for inner hash call
-    stack u8[SHA256_IN + SHA256_OUT] obuf; // buffer for outer hash call
-    stack u8[SHA256_OUT] hmac;
-    
+    stack u8[SHA256_OUT] inner;            // buffer for the inner hash digest
+    stack u32[SHA2_STATE_WORD_SIZE] state; // SHA2 state
+    stack u32[SHA2_ROUNDS_NUM] schedule;   // message schedule
+    stack u8[SHA256_IN] buf;               // buffer for internal hash output
+    stack u8[SHA256_OUT] hmac;             // buffer for HMAC output
+    stack u8[2] sep; // separator between the prefix and the context (and message): zero-byte and context length
+
     inline int i;
 
     // set key = SK.prf || 00..0
-    key[0 : SPX_N] = __copy_nbytes(key[0 : SPX_N], skprf); // first part of the key is SK.prf
-    for i=SPX_N to SHA256_IN { key[i] = 0; } // pad the rest of the key with zeroes
+    buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], skprf); // first part of the key is SK.prf
+    for i=SPX_N to SHA256_IN { buf[i] = 0x0; }             // pad the rest of the key with zeroes
 
-    // compute ibuf = (key XOR ipad) eight bytes at a time
+    // compute buf = (key XOR ipad) eight bytes at a time
     // reading a u64 word of a byte array incurs an Endianness byteswap,
     // but we also write a u64 word to a byte array which undoes the byteswap
     for i=0 to SHA256_IN/8 {
-        xor = 0x3636363636363636; // set ipad
-        xor ^= key[:u64 i];       // bitwise xor ipad with the key
-        ibuf[:u64 i] = xor;
-    }
-    // compute obuf = (key XOR opad) eight bytes at a time
-    // reading a u64 word of a byte array incurs an Endianness byteswap,
-    // but we also write a u64 word to a byte array which undoes the byteswap
-    for i=0 to SHA256_IN/8 {
-        xor = 0x5C5C5C5C5C5C5C5C; // set opad
-        xor ^= key[:u64 i];       // bitwise xor opad with the key
-        obuf[:u64 i] = xor;
+        xor  = 0x3636363636363636; // set ipad
+        xor ^= buf[:u64 i];        // compute key ^ ipad
+        buf[:u64 i] = xor;
     }
 
-    // append optrand to ibuf
-    // i.e. ibuf = (key xor ipad) || optrand
-    ibuf[SHA256_IN : SPX_N] = __copy_nbytes(ibuf[SHA256_IN : SPX_N], optrand);
+    // prepare the context separator
+    sep[0] = 0x0; sep[1] = (8u) ctx_len;
+    
+    () = #spill(msg_ptr); // resolves 'conflicting variables ctx_ptr and msg_ptr'
+    () = #spill(msg_len); // resolves 'conflicting variables ctx_len and msg_len'
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = 0;
 
     // compute inner = sha256((key xor ipad) || optrand || M)
-    obuf[SHA256_IN : SHA256_OUT] = sha256_hmac_inner::sha256_absorb(obuf[SHA256_IN : SHA256_OUT], ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
+    state, schedule, sch_idx, bits = sha256       :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha256_block :: absorb_fixed   (state, schedule, sch_idx, bits, buf);
+    state, schedule, sch_idx, bits = sha256_n     :: absorb_fixed   (state, schedule, sch_idx, bits, optrand);
+    state, schedule, sch_idx, bits = sha256_2     :: absorb_fixed   (state, schedule, sch_idx, bits, sep);
+    state, schedule, sch_idx, bits = sha256       :: absorb_variable(state, schedule, sch_idx, bits, ctx_ptr, ctx_len);
+    () = #unspill(msg_ptr, msg_len);
+    state, schedule, sch_idx, bits = sha256       :: absorb_variable(state, schedule, sch_idx, bits, msg_ptr, msg_len);
+    schedule, inner                = sha256       :: finalise       (state, schedule, sch_idx, bits, inner);
+
+    // compute buf = (key XOR opad) eight bytes at a time
+    // reading a u64 word of a byte array incurs an Endianness byteswap,
+    // but we also write a u64 word to a byte array which undoes the byteswap
+    for i=0 to SHA256_IN/8 {
+        // bitwise xor (ipad ^ opad) with buf, as
+        // buf = (key xor ipad), so
+        // buf xor (ipad ^ opad) = (key xor ipad) xor (ipad ^ opad) = key ^ opad
+        xor  = 0x6A6A6A6A6A6A6A6A; // set (ipad ^ opad)
+        xor ^= buf[:u64 i];        // compute key ^ opad
+        buf[:u64 i] = xor;
+    }
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = 0;
 
     // compute hmac = sha256((key xor opad) || inner)
-    hmac = sha256_hmac_outer::sha256(hmac, obuf);
+    state, schedule, sch_idx, bits = sha256        :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha256_block  :: absorb_fixed   (state, schedule, sch_idx, bits, buf);
+    state, schedule, sch_idx, bits = sha256_digest :: absorb_fixed   (state, schedule, sch_idx, bits, inner);
+    schedule, hmac                 = sha256        :: finalise       (state, schedule, sch_idx, bits, hmac);
 
     () = #unspill(out);
 
@@ -605,7 +631,7 @@ fn H_adrs(
     adrsc7 = __adrsc_set_tree_index(adrsc7, index);
 
     // absorb ADRS^C into the parallelised state
-    state, schedule, sch_idx, bits = sha256_parallel_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3, adrsc4, adrsc5, adrsc6, adrsc7);
+    state, schedule, sch_idx, bits = sha256_parallel_22::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3, adrsc4, adrsc5, adrsc6, adrsc7);
     
     return state, schedule, sch_idx, bits;
 }

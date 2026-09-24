@@ -1,18 +1,14 @@
+/* 
+ * namespaces for the single-input and parallel SHA256 implementations,
+ * and for the fixed-length input absortion functions
+ * 
+ * author: Dennis op 't Roodt 2026-09-24 (d.n.e.o.t.roodt@tue.nl)
+ */
+
+// TODO remove dependecies and delete these three lines
 require "sha256_avx/sha256_compress_avx.jinc"
 require "sha256_avx/sha256_compress_avx2.jinc"
 require "common/sha256_common.jinc"
-
-namespace sha256_hmac_inner {
-    param int PREFIXLEN = SHA256_IN + SPX_N;
-    require "sha256_absorb/sha256_absorb.jinc"
-}
-
-namespace sha256_hmac_outer {
-    param int INLEN = SHA256_IN + SHA256_OUT;
-    require "sha256_array/sha256_array.jinc"
-}
-
-
 
 // already provides the namespace 'sha256' internally
 require "sha256_single/sha256.jinc"
@@ -37,12 +33,22 @@ namespace sha256_mgf1 {
     require "sha256_single/sha256_absorb_fixed.jinc"
 }
 
+namespace sha256_block {
+    param int INPUT_LENGTH = SHA256_IN;
+    require "sha256_single/sha256_absorb_fixed.jinc"
+}
+
+namespace sha256_digest {
+    param int INPUT_LENGTH = SHA256_OUT;
+    require "sha256_single/sha256_absorb_fixed.jinc"
+}
+
 
 
 // already provides the namespace 'sha256_parallel' internally
 require "sha256_parallel/sha256_parallel.jinc"
 
-namespace sha256_parallel_adrsc {
+namespace sha256_parallel_22 {
     param int INPUT_LENGTH = 22;
     require "sha256_parallel/sha256_parallel_absorb_fixed.jinc"
 }
