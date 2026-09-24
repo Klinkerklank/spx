@@ -12,28 +12,28 @@ namespace sha256_hmac_outer {
     require "sha256_array/sha256_array.jinc"
 }
 
-namespace sha256_mgf1_msg {
-    param int PREFIXLEN = 3*SPX_N;
-    require "sha256_absorb/sha256_absorb.jinc"
-}
-
-namespace sha256_mgf1_seed {
-    param int INLEN = 2*SPX_N + SHA256_OUT + 4;
-    require "sha256_array/sha256_array.jinc"
-}
-
 
 
 // already provides the namespace 'sha256' internally
 require "sha256_single/sha256.jinc"
 
-namespace sha256_adrsc {
+namespace sha256_n {
+    param int INPUT_LENGTH = SPX_N;
+    require "sha256_single/sha256_absorb_fixed.jinc"
+}
+
+namespace sha256_22 {
     param int INPUT_LENGTH = 22;
     require "sha256_single/sha256_absorb_fixed.jinc"
 }
 
-namespace sha256_n {
-    param int INPUT_LENGTH = SPX_N;
+namespace sha256_2 {
+    param int INPUT_LENGTH = 2;
+    require "sha256_single/sha256_absorb_fixed.jinc"
+}
+
+namespace sha256_mgf1 {
+    param int INPUT_LENGTH = 2*SPX_N + SHA256_OUT + 4;
     require "sha256_single/sha256_absorb_fixed.jinc"
 }
 

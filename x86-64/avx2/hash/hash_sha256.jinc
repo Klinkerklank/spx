@@ -21,43 +21,71 @@ fn H_msg(
     reg u64 msg_len           // message length
 ) -> reg ptr u8[SPX_M] // -> out
 {
-    () = #spill(out); // only needed at the end of the function
+    () = #spill(out); // not needed until the end of the function
+
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u8[3*SPX_N] buf; // buffer for the inner hash call
+    stack u32[SHA2_STATE_WORD_SIZE] state;   // SHA2 state
+    reg ptr u8[SHA256_OUT] digest;           // buffer for the output
+    stack u32[SHA2_ROUNDS_NUM] schedule;     // message schedule
     stack u8[2*SPX_N + SHA256_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
     stack u8[((SPX_M + SHA256_OUT - 1) / SHA256_OUT) * SHA256_OUT] concat; // concatenated hash outputs
-    
+    stack u8[2] sep; // separator between the prefix and the context (and message): zero-byte and context length
+
     inline int i;
     inline int hash_nr;
+    
+    // prepare the known parts of the seed buffer
+    seed[0 : SPX_N]     = __copy_nbytes(seed[0 : SPX_N], r);          // copy R into the buffer
+    seed[SPX_N : SPX_N] = __copy_nbytes(seed[SPX_N : SPX_N], pkseed); // copy PK.seed into the buffer
+    seed.[:u32 2*SPX_N + SHA256_OUT] = 0; // set the counter to 0
 
-    // copy R into both buffers
-    buf[0 : SPX_N]  = __copy_nbytes(buf[0 : SPX_N],  r);
-    seed[0 : SPX_N] = __copy_nbytes(seed[0 : SPX_N], r);
+    // prepare the context separator
+    sep[0] = 0x0; sep[1] = (8u) ctx_len;
+    
+    () = #spill(msg_ptr); // resolves 'conflicting variables ctx_ptr and msg_ptr'
+    () = #spill(msg_len); // resolves 'conflicting variables ctx_len and msg_len'
+    () = #spill(pkseed);  // resolves 'conflicting variables r and pkseed'
+    () = #spill(pkroot);  // resolves 'conflicting variables r and pkroot'
 
-    // copy PK.seed into both buffers
-    buf[SPX_N : SPX_N]  = __copy_nbytes(buf[SPX_N : SPX_N],  pkseed);
-    seed[SPX_N : SPX_N] = __copy_nbytes(seed[SPX_N : SPX_N], pkseed);
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = 0;
 
-    // copy PK.root into the inner buffer
-    buf[2*SPX_N : SPX_N] = __copy_nbytes(buf[2*SPX_N : SPX_N], pkroot);
-
-    // compute the inner hash value = sha256(R || PK.seed || PK.root || M)
-    seed[2*SPX_N : SHA256_OUT] = sha256_mgf1_msg::sha256_absorb(seed[2*SPX_N : SHA256_OUT], buf, ctx_ptr, ctx_len, msg_ptr, msg_len);
-
-    // set the first three of the four bytes of the counter to 0
-    // (for all approved parameter sets, we will never need > 255 hash output concatenations)
-    for i=0 to 3 { seed[2*SPX_N + SHA256_OUT + i] = 0; }
+    // compute the inner hash value = sha256(R || PK.seed || PK.root || 0x00 || ctx_len || M) and write it into the seed buffer
+    state, schedule, sch_idx, bits = sha256   :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha256_n :: absorb_fixed   (state, schedule, sch_idx, bits, r);
+    () = #unspill(pkseed);
+    state, schedule, sch_idx, bits = sha256_n :: absorb_fixed   (state, schedule, sch_idx, bits, pkseed);
+    () = #unspill(pkroot);
+    state, schedule, sch_idx, bits = sha256_n :: absorb_fixed   (state, schedule, sch_idx, bits, pkroot);
+    state, schedule, sch_idx, bits = sha256_2 :: absorb_fixed   (state, schedule, sch_idx, bits, sep);
+    state, schedule, sch_idx, bits = sha256   :: absorb_variable(state, schedule, sch_idx, bits, ctx_ptr, ctx_len);
+    () = #unspill(msg_ptr, msg_len);
+    state, schedule, sch_idx, bits = sha256   :: absorb_variable(state, schedule, sch_idx, bits, msg_ptr, msg_len);
+    digest = seed[2*SPX_N : SHA256_OUT];
+    schedule, digest               = sha256   :: finalise       (state, schedule, sch_idx, bits, digest);
+    seed[2*SPX_N : SHA256_OUT] = digest;
     
     // need ceil(SPX_M / SHA256_OUT) hashes of SHA256_OUT bytes each, to surpass at least SPX_M bytes
     for hash_nr=0 to (SPX_M + SHA256_OUT - 1) / SHA256_OUT {
-        // set the last byte of 'seed' to the hash iteration counter
+        // set only the last byte of 'seed' to the hash iteration counter
+        // (for all approved parameter sets, we will never need > 255 hash output concatenations)
         seed[2*SPX_N + SHA256_OUT + 3] = (8u) hash_nr;
+
+        // initialise the sch_idx and bits variables
+        sch_idx = 0; bits = 0;
         
         // compute sha256(seed), where seed includes the counter
-        concat[hash_nr*SHA256_OUT : SHA256_OUT] = sha256_mgf1_seed::sha256(concat[hash_nr*SHA256_OUT : SHA256_OUT], seed);
+        state, schedule, sch_idx, bits = sha256      :: init_iv        (state, schedule, sch_idx, bits);
+        state, schedule, sch_idx, bits = sha256_mgf1 :: absorb_fixed   (state, schedule, sch_idx, bits, seed);
+        digest = concat[hash_nr*SHA256_OUT : SHA256_OUT];
+        schedule, digest               = sha256      :: finalise       (state, schedule, sch_idx, bits, digest);
+        concat[hash_nr*SHA256_OUT : SHA256_OUT] = digest;
     }
-    
+
     () = #unspill(out);
     
     // truncate the concatenated hash outputs to the correct length by copying only the first SPX_M bytes
@@ -187,8 +215,8 @@ fn PRF(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA256 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA256 state
+    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
     stack u8[22] adrsc;                          // buffer for ADRS^c
     stack u8[SHA256_OUT] digest;                 // buffer for the output
     stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
@@ -198,7 +226,7 @@ fn PRF(
     // adrsc = ADRS^c
     adrsc = __adrs_compress(adrsc, adrs);
 
-    // extract the SHA256 state from the combined state cache
+    // extract the SHA-2 state from the combined state cache
     for i=0 to SHA2_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
@@ -208,10 +236,10 @@ fn PRF(
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    state, schedule, sch_idx, bits =         sha256::init_cache(state, schedule, sch_idx, bits, state_cache);
-    state, schedule, sch_idx, bits = sha256_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc);
-    state, schedule, sch_idx, bits =     sha256_n::absorb_fixed(state, schedule, sch_idx, bits, skseed);
-    schedule, digest               =           sha256::finalise(state, schedule, sch_idx, bits, digest);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, skseed);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -253,8 +281,8 @@ fn F(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA256 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA256 state
+    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
     stack u8[22] adrsc;                          // buffer for ADRS^c
     stack u8[SHA256_OUT] digest;                 // buffer for the output
     stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
@@ -264,7 +292,7 @@ fn F(
     // adrsc = ADRS^c
     adrsc = __adrs_compress(adrsc, adrs);
 
-    // extract the SHA256 state from the combined state cache
+    // extract the SHA-2 state from the combined state cache
     for i=0 to SHA2_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
@@ -274,10 +302,10 @@ fn F(
     
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_1)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    state, schedule, sch_idx, bits =         sha256::init_cache(state, schedule, sch_idx, bits, state_cache);
-    state, schedule, sch_idx, bits = sha256_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc);
-    state, schedule, sch_idx, bits =     sha256_n::absorb_fixed(state, schedule, sch_idx, bits, out);
-    schedule, digest               =           sha256::finalise(state, schedule, sch_idx, bits, digest);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, out);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -320,8 +348,8 @@ fn H(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA256 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA256 state
+    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
     stack u8[22] adrsc;                          // buffer for ADRS^c
     stack u8[SHA256_OUT] digest;                 // buffer for the output
     stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
@@ -331,7 +359,7 @@ fn H(
     // adrsc = ADRS^c
     adrsc = __adrs_compress(adrsc, adrs);
 
-    // extract the SHA256 state from the combined state cache
+    // extract the SHA-2 state from the combined state cache
     for i=0 to SHA2_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
@@ -343,12 +371,12 @@ fn H(
     
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_2)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    state, schedule, sch_idx, bits =       sha256::  init_cache(state, schedule, sch_idx, bits, state_cache);
-    state, schedule, sch_idx, bits = sha256_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc);
-    state, schedule, sch_idx, bits =     sha256_n::absorb_fixed(state, schedule, sch_idx, bits, in1);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, in1);
     () = #unspill(in2);
-    state, schedule, sch_idx, bits =     sha256_n::absorb_fixed(state, schedule, sch_idx, bits, in2);
-    schedule, digest               =       sha256::    finalise(state, schedule, sch_idx, bits, digest);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, in2);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -392,8 +420,8 @@ fn T_len(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA256 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA256 state
+    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
     stack u8[22] adrsc;                          // buffer for ADRS^c
     stack u8[SHA256_OUT] digest;                 // buffer for the output
     stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
@@ -403,7 +431,7 @@ fn T_len(
     // adrsc = ADRS^c
     adrsc = __adrs_compress(adrsc, adrs);
 
-    // extract the SHA256 state from the combined state cache
+    // extract the SHA-2 state from the combined state cache
     for i=0 to SHA2_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
@@ -413,12 +441,12 @@ fn T_len(
     
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_len)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    state, schedule, sch_idx, bits =       sha256::  init_cache(state, schedule, sch_idx, bits, state_cache);
-    state, schedule, sch_idx, bits = sha256_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
     for i=0 to SPX_LEN { // absorb all chain values
-    state, schedule, sch_idx, bits =     sha256_n::absorb_fixed(state, schedule, sch_idx, bits, chains[i*SPX_N : SPX_N]);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, chains[i*SPX_N : SPX_N]);
     }
-    schedule, digest               =       sha256::    finalise(state, schedule, sch_idx, bits, digest);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -461,8 +489,8 @@ fn T_k(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA256 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA256 state
+    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
     stack u8[22] adrsc;                          // buffer for ADRS^c
     stack u8[SHA256_OUT] digest;                 // buffer for the output
     stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
@@ -472,7 +500,7 @@ fn T_k(
     // adrsc = ADRS^c
     adrsc = __adrs_compress(adrsc, adrs);
 
-    // extract the SHA256 state from the combined state cache
+    // extract the SHA-2 state from the combined state cache
     for i=0 to SHA2_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
@@ -482,12 +510,12 @@ fn T_k(
     
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_k)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    state, schedule, sch_idx, bits =       sha256::  init_cache(state, schedule, sch_idx, bits, state_cache);
-    state, schedule, sch_idx, bits = sha256_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
     for i=0 to SPX_K { // absorb all FORS root values
-    state, schedule, sch_idx, bits =     sha256_n::absorb_fixed(state, schedule, sch_idx, bits, roots[i*SPX_N : SPX_N]);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, roots[i*SPX_N : SPX_N]);
     }
-    schedule, digest               =       sha256::    finalise(state, schedule, sch_idx, bits, digest);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -534,12 +562,12 @@ fn H_adrs(
 
     // stack variables
     stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^C for every hash
-    stack u256[SHA2_STATE_WORD_SIZE] state_cache;                         // vectorised cached SHA256 state
+    stack u256[SHA2_STATE_WORD_SIZE] state_cache;                         // vectorised cached SHA-2 state
     stack u32 state_word;                                                 // temporary variable for copying purposes
 
     inline int i;
 
-    // extract the SHA256 state from the combined state cache
+    // extract the SHA-2 state from the combined state cache
     for i=0 to SHA2_STATE_WORD_SIZE {
         state_word = sha2_state_caches[:u32 i];       // get one word from the state
         state_vector = #VPBROADCAST_8u32(state_word); // broadcast it to every lane in a 256-bit wide register
