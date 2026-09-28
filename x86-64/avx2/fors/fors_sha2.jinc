@@ -155,10 +155,10 @@ fn fors_node(
     reg ptr u8[SPX_N] tree_node; // pointer to subarray with a FORS tree node
 
     // parallelised SHA-2 register and stack variables
-    stack u256[SHA2_STATE_WORD_SIZE] state;       // state
-    stack u256[SHA2_ROUNDS_NUM] schedule;         // message schedule
-    reg ptr u8[2*SHA2_H_PARA_DEG*SPX_N] children; // pointer to subarray with the child nodes
-    reg ptr u8[SHA2_H_PARA_DEG*SPX_N] nodes;      // pointer to subarray with the computed nodes
+    stack u256[PARA_STATE_WORD_SIZE] state; // state
+    stack u256[PARA_ROUNDS_NUM] schedule;   // message schedule
+    reg ptr u8[2*PARA_DEG*SPX_N] children;  // pointer to subarray with the child nodes
+    reg ptr u8[PARA_DEG*SPX_N] nodes;       // pointer to subarray with the computed nodes
     reg u64 sch_idx;     // schedule index
     reg u64 bits;        // number of bits consumed
     reg u32 avail_nodes; // temporary variable for computing whether there are enough nodes on the current layer to parallel hash
@@ -247,7 +247,7 @@ fn fors_node(
                 avail_nodes -= node;
                 
                 // parallelise SHA-2 node computations if possible
-                if (avail_nodes >= SHA2_H_PARA_DEG) {
+                if (avail_nodes >= PARA_DEG) {
 
                     () = #spill(adrs, node, lnode, node_addr, i, sha2_state_caches); // free up space in the registers
 
@@ -257,21 +257,21 @@ fn fors_node(
 
                     // absorb all children
                     () = #unspill(lnode);
-                    children = flat_tree[lnode : 2*SHA2_H_PARA_DEG*SPX_N];
+                    children = flat_tree[lnode : 2*PARA_DEG*SPX_N];
                     state, schedule, sch_idx, bits = __H_children(state, schedule, sch_idx, bits, children);
-                    flat_tree[lnode : 2*SHA2_H_PARA_DEG*SPX_N] = children;
+                    flat_tree[lnode : 2*PARA_DEG*SPX_N] = children;
 
                     // finalise and write the digests
                     () = #unspill(node_addr);
-                    nodes = flat_tree[node_addr : SHA2_H_PARA_DEG*SPX_N];
+                    nodes = flat_tree[node_addr : PARA_DEG*SPX_N];
                     nodes, schedule = __H_digests(state, schedule, sch_idx, bits, nodes);
-                    flat_tree[node_addr : SHA2_H_PARA_DEG*SPX_N] = nodes;
+                    flat_tree[node_addr : PARA_DEG*SPX_N] = nodes;
                     
                     () = #unspill(adrs, i, sha2_state_caches);
                 
                     // advance to the next uncomputed node in the layer
                     () = #unspill(node);
-                    node += SHA2_H_PARA_DEG;
+                    node += PARA_DEG;
 
                 } else {
 
