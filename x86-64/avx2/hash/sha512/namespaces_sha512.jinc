@@ -1,5 +1,5 @@
 /* 
- * namespaces for the single-input and parallel SHA512 implementations,
+ * namespaces for the single-input and parallel SHA256 and SHA512 implementations,
  * and for the fixed-length input absortion functions
  * 
  * author: Dennis op 't Roodt 2026-09-28 (d.n.e.o.t.roodt@tue.nl)

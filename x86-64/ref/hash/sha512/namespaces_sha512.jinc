@@ -1,41 +1,59 @@
-require "common/sha512_common.jinc"
+/* 
+ * namespaces for the single-input SHA256 and SHA512 implementations,
+ * and for the fixed-length input absortion functions
+ * 
+ * author: Dennis op 't Roodt 2026-09-28 (d.n.e.o.t.roodt@tue.nl)
+ */
 
-namespace sha512_hmac_inner {
-    param int PREFIXLEN = SHA512_IN + SPX_N;
-    require "sha512_absorb/sha512_absorb.jinc"
+require "../../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
+
+// already provides the namespace 'sha256' internally
+require "../sha256/sha256_single/sha256.jinc"
+
+namespace sha256_n {
+    param int INPUT_LENGTH = SPX_N;
+    require "../sha256/sha256_single/sha256_absorb_fixed.jinc"
 }
 
-namespace sha512_hmac_outer {
-    param int INLEN = SHA512_IN + SHA512_OUT;
-    require "sha512_array/sha512_array.jinc"
+namespace sha256_22 {
+    param int INPUT_LENGTH = 22;
+    require "../sha256/sha256_single/sha256_absorb_fixed.jinc"
 }
 
-namespace sha512_mgf1_msg {
-    param int PREFIXLEN = 3*SPX_N;
-    require "sha512_absorb/sha512_absorb.jinc"
+namespace sha256_block {
+    param int INPUT_LENGTH = SHA256_IN;
+    require "../sha256/sha256_single/sha256_absorb_fixed.jinc"
 }
 
-namespace sha512_mgf1_seed {
-    param int INLEN = 2*SPX_N + SHA512_OUT + 4;
-    require "sha512_array/sha512_array.jinc"
+// already provides the namespace 'sha512' internally
+require "sha512_single/sha512.jinc"
+
+namespace sha512_n {
+    param int INPUT_LENGTH = SPX_N;
+    require "sha512_single/sha512_absorb_fixed.jinc"
 }
 
-namespace sha512_tl_1n {
-    param int INLEN = SHA512_IN + 22 + SPX_N;
-    require "sha512_array/sha512_array.jinc"
+namespace sha512_22 {
+    param int INPUT_LENGTH = 22;
+    require "sha512_single/sha512_absorb_fixed.jinc"
 }
 
-namespace sha512_tl_2n {
-    param int INLEN = SHA512_IN + 22 + 2*SPX_N;
-    require "sha512_array/sha512_array.jinc"
+namespace sha512_2 {
+    param int INPUT_LENGTH = 2;
+    require "sha512_single/sha512_absorb_fixed.jinc"
 }
 
-namespace sha512_compress_wots {
-    param int INLEN = SHA512_IN + 22 + SPX_LEN*SPX_N;
-    require "sha512_array/sha512_array.jinc"
+namespace sha512_mgf1 {
+    param int INPUT_LENGTH = 2*SPX_N + SHA512_OUT + 4;
+    require "sha512_single/sha512_absorb_fixed.jinc"
 }
 
-namespace sha512_compress_fors {
-    param int INLEN = SHA512_IN + 22 + SPX_K*SPX_N;
-    require "sha512_array/sha512_array.jinc"
+namespace sha512_block {
+    param int INPUT_LENGTH = SHA512_IN;
+    require "sha512_single/sha512_absorb_fixed.jinc"
+}
+
+namespace sha512_digest {
+    param int INPUT_LENGTH = SHA512_OUT;
+    require "sha512_single/sha512_absorb_fixed.jinc"
 }

@@ -24,12 +24,12 @@ fn H_msg(
     () = #spill(out); // not needed until the end of the function
 
     // register variables
-    reg u64 sch_idx; // schedule index
-    reg u64 bits;    // number of bits consumed
+    reg u64 sch_idx;               // schedule index
+    reg u64 bits;                  // number of bits consumed
+    reg ptr u8[SHA256_OUT] digest; // buffer for the output
 
     // stack variables
     stack u32[SHA256_STATE_WORD_SIZE] state; // SHA2 state
-    reg ptr u8[SHA256_OUT] digest;           // buffer for the output
     stack u32[SHA256_ROUNDS_NUM] schedule;   // message schedule
     stack u8[2*SPX_N + SHA256_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
     stack u8[((SPX_M + SHA256_OUT - 1) / SHA256_OUT) * SHA256_OUT] concat; // concatenated hash outputs
