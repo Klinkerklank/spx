@@ -587,7 +587,7 @@ fn H_adrs(
     reg u32 index;         // local copy of tree_index, to prevent modifying tree_index
 
     // stack variables
-    stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^C for every hash
+    stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^c for every hash
     stack u256[PARA_STATE_WORD_SIZE] state_cache;                         // vectorised cached SHA-2 state
     stack u32 state_word;                                                 // temporary variable for copying purposes
 
@@ -630,7 +630,7 @@ fn H_adrs(
     adrsc6 = __adrsc_set_tree_index(adrsc6, index); index += 1;
     adrsc7 = __adrsc_set_tree_index(adrsc7, index);
 
-    // absorb ADRS^C into the parallelised state
+    // absorb ADRS^c into the parallelised state
     state, schedule, sch_idx, bits = sha256_parallel_22::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3, adrsc4, adrsc5, adrsc6, adrsc7);
     
     return state, schedule, sch_idx, bits;

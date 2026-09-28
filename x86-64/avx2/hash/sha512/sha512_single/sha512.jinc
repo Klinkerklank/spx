@@ -415,8 +415,8 @@ namespace sha512 {
 
         for i = 0 to 4 {
             j = 0;
-            while (j < 16 * MSG_BLOCK_BYTE_SIZE) {
-                k     = k512p.[:u128 j + 16 * MSG_BLOCK_BYTE_SIZE * (i + 1)];
+            while (j < MSG_BLOCK_BYTE_SIZE) {
+                k     = k512p.[:u128 j + MSG_BLOCK_BYTE_SIZE * (i + 1)];
                 x, y  = update(x, k);
 
                 state = round(state, schedule.[:u64 (j     )], 0);
