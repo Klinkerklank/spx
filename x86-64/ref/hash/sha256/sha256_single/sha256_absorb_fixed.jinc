@@ -1,0 +1,83 @@
+/* 
+ * SHA256 function for absorbing fixed-size arrays of inputs,
+ * where the input length INPUT_LENGTH is known at compile time
+ * (which is why this file needs to be included in a namespace
+ * that defines that length)
+ * 
+ * author: Dennis op 't Roodt 2026-09-24 (d.n.e.o.t.roodt@tue.nl)
+ */
+
+/********** FUNCTIONS INTENDED FOR EXTERNAL USE **********/
+
+// absorb eight independent (but same-length) fixed-size pointer inputs
+fn absorb_fixed(
+    reg ptr u32[sha256::STATE_WORD_SIZE] state, // pointer to the state
+    reg ptr u32[sha256::ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                            // byte index of the current position in the message schedule
+    reg u64 bits,                               // number of bits processed
+    reg ptr u8[INPUT_LENGTH] input              // input buffer
+) -> reg ptr u32[sha256::STATE_WORD_SIZE], reg ptr u32[sha256::ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+{
+    reg u64 avail;
+    reg u64 in_ptr;
+    reg u64 in_len;
+    reg u64 target;
+
+    () = #spill(bits); // free up space in the registers
+
+    in_ptr = 0;
+    in_len = INPUT_LENGTH;
+    avail  = sha256::MSG_BLOCK_BYTE_SIZE;
+    avail -= sch_idx;
+
+    // if enough input bytes are present, fill the current block and run the compression function once
+    if (in_len >= avail) {
+
+        // fill the rest of the block
+        while (sch_idx < sha256::MSG_BLOCK_BYTE_SIZE) {
+            schedule[:u8 sch_idx] = input[in_ptr];
+            sch_idx += 1;
+            in_ptr  += 1;
+        }
+
+        // run the compression function
+        () = #spill(input, in_ptr, in_len, avail);
+        state, schedule = sha256::compress(state, schedule);
+        () = #unspill(input, in_ptr, in_len, avail);
+
+        sch_idx = 0;
+        in_len -= avail; // 'avail' number of bytes consumed
+    }
+
+    // if enough input bytes are present, process full blocks of input bytes
+    while (in_len >= sha256::MSG_BLOCK_BYTE_SIZE) {
+
+        // fill the rest of the block
+        while (sch_idx < sha256::MSG_BLOCK_BYTE_SIZE) {
+            schedule[:u8 sch_idx] = input[in_ptr];
+            sch_idx += 1;
+            in_ptr  += 1;
+        }
+
+        // run the compression function
+        () = #spill(input, in_ptr, in_len);
+        state, schedule = sha256::compress(state, schedule);
+        () = #unspill(input, in_ptr, in_len);
+
+        sch_idx = 0;
+        in_len -= sha256::MSG_BLOCK_BYTE_SIZE; // one block of input consumed
+    }
+
+    // write the remainder of the input bytes to schedule and update sch_idx
+    target = sch_idx; target += in_len;
+    while (sch_idx < target) {
+        schedule[:u8 sch_idx] = input[in_ptr];
+        sch_idx += 1;
+        in_ptr  += 1;
+    }
+
+    () = #unspill(bits);
+    bits += 8*INPUT_LENGTH; // add the bitlength of the input to the total number of consumed bits
+
+    return state, schedule, sch_idx, bits;
+}
