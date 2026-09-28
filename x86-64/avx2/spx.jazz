@@ -1,3 +1,9 @@
+/* 
+ * SLH-DSA export algorithms
+ * 
+ * author: Dennis op 't Roodt 2026-09-28 (d.n.e.o.t.roodt@tue.nl)
+ */
+ 
 require "active_params.jinc" // SPHINCS+ parameters
 // active_params.jinc in turn requires the chosen parameter file with the concrete parameter values
 
