@@ -1,10 +1,9 @@
 /* 
  * SHA512 hash function instantiations
  * 
- * author: Dennis op 't Roodt 2026-09-17 (d.n.e.o.t.roodt@tue.nl)
+ * author: Dennis op 't Roodt 2026-09-28 (d.n.e.o.t.roodt@tue.nl)
  */
 
-require "sha256/core_hash_sha256.jinc"
 require "sha512/core_hash_sha512.jinc"
 require "../adrs/adrs.jinc" // ADRS data structure
 
@@ -22,47 +21,71 @@ fn H_msg(
     reg u64 msg_len           // message length
 ) -> reg ptr u8[SPX_M] // -> out
 {
-    () = #spill(out); // only needed at the end of the function
+    () = #spill(out); // not needed until the end of the function
+
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u8[3*SPX_N] buf; // buffer for the inner hash call
+    stack u64[SHA512_STATE_WORD_SIZE] state; // SHA2 state
+    reg ptr u8[SHA512_OUT] digest;           // buffer for the output
+    stack u64[SHA512_ROUNDS_NUM] schedule;   // message schedule
     stack u8[2*SPX_N + SHA512_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
     stack u8[((SPX_M + SHA512_OUT - 1) / SHA512_OUT) * SHA512_OUT] concat; // concatenated hash outputs
-    
+    stack u8[2] sep; // separator between the prefix and the context (and message): zero-byte and context length
+
     inline int i;
     inline int hash_nr;
     
-    () = #spill(pkseed, pkroot); // resolves 'conflicting variables r and pkseed and pkroot'
+    // prepare the known parts of the seed buffer
+    seed[0 : SPX_N]     = __copy_nbytes(seed[0 : SPX_N], r);          // copy R into the buffer
+    seed[SPX_N : SPX_N] = __copy_nbytes(seed[SPX_N : SPX_N], pkseed); // copy PK.seed into the buffer
+    seed.[:u32 2*SPX_N + SHA512_OUT] = 0; // set the counter to 0
 
-    // copy R into both buffers
-    buf[0 : SPX_N]  = __copy_nbytes(buf[0 : SPX_N],  r);
-    seed[0 : SPX_N] = __copy_nbytes(seed[0 : SPX_N], r);
+    // prepare the context separator
+    sep[0] = 0x0; sep[1] = (8u) ctx_len;
+    
+    () = #spill(msg_ptr); // resolves 'conflicting variables ctx_ptr and msg_ptr'
+    () = #spill(msg_len); // resolves 'conflicting variables ctx_len and msg_len'
+    () = #spill(pkseed);  // resolves 'conflicting variables r and pkseed'
+    () = #spill(pkroot);  // resolves 'conflicting variables r and pkroot'
 
-    // copy PK.seed into both buffers
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = 0;
+
+    // compute the inner hash value = sha512(R || PK.seed || PK.root || 0x00 || ctx_len || M) and write it into the seed buffer
+    state, schedule, sch_idx, bits = sha512   :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha512_n :: absorb_fixed   (state, schedule, sch_idx, bits, r);
     () = #unspill(pkseed);
-    buf[SPX_N : SPX_N]  = __copy_nbytes(buf[SPX_N : SPX_N],  pkseed);
-    seed[SPX_N : SPX_N] = __copy_nbytes(seed[SPX_N : SPX_N], pkseed);
-
-    // copy PK.root into the inner buffer
+    state, schedule, sch_idx, bits = sha512_n :: absorb_fixed   (state, schedule, sch_idx, bits, pkseed);
     () = #unspill(pkroot);
-    buf[2*SPX_N : SPX_N] = __copy_nbytes(buf[2*SPX_N : SPX_N], pkroot);
-
-    // compute the inner hash value = sha512(R || PK.seed || PK.root || M)
-    seed[2*SPX_N : SHA512_OUT] = sha512_mgf1_msg::sha512_absorb(seed[2*SPX_N : SHA512_OUT], buf, ctx_ptr, ctx_len, msg_ptr, msg_len);
-
-    // set the first three of the four bytes of the counter to 0
-    // (for all approved parameter sets, we will never need > 255 hash output concatenations)
-    for i=0 to 3 { seed[2*SPX_N + SHA512_OUT + i] = 0; }
+    state, schedule, sch_idx, bits = sha512_n :: absorb_fixed   (state, schedule, sch_idx, bits, pkroot);
+    state, schedule, sch_idx, bits = sha512_2 :: absorb_fixed   (state, schedule, sch_idx, bits, sep);
+    state, schedule, sch_idx, bits = sha512   :: absorb_variable(state, schedule, sch_idx, bits, ctx_ptr, ctx_len);
+    () = #unspill(msg_ptr, msg_len);
+    state, schedule, sch_idx, bits = sha512   :: absorb_variable(state, schedule, sch_idx, bits, msg_ptr, msg_len);
+    digest = seed[2*SPX_N : SHA512_OUT];
+    schedule, digest               = sha512   :: finalise       (state, schedule, sch_idx, bits, digest);
+    seed[2*SPX_N : SHA512_OUT] = digest;
     
     // need ceil(SPX_M / SHA512_OUT) hashes of SHA512_OUT bytes each, to surpass at least SPX_M bytes
     for hash_nr=0 to (SPX_M + SHA512_OUT - 1) / SHA512_OUT {
-        // set the last byte of 'seed' to the hash iteration counter
+        // set only the last byte of 'seed' to the hash iteration counter
+        // (for all approved parameter sets, we will never need > 255 hash output concatenations)
         seed[2*SPX_N + SHA512_OUT + 3] = (8u) hash_nr;
+
+        // initialise the sch_idx and bits variables
+        sch_idx = 0; bits = 0;
         
         // compute sha512(seed), where seed includes the counter
-        concat[hash_nr*SHA512_OUT : SHA512_OUT] = sha512_mgf1_seed::sha512(concat[hash_nr*SHA512_OUT : SHA512_OUT], seed);
+        state, schedule, sch_idx, bits = sha512      :: init_iv        (state, schedule, sch_idx, bits);
+        state, schedule, sch_idx, bits = sha512_mgf1 :: absorb_fixed   (state, schedule, sch_idx, bits, seed);
+        digest = concat[hash_nr*SHA512_OUT : SHA512_OUT];
+        schedule, digest               = sha512      :: finalise       (state, schedule, sch_idx, bits, digest);
+        concat[hash_nr*SHA512_OUT : SHA512_OUT] = digest;
     }
-    
+
     () = #unspill(out);
     
     // truncate the concatenated hash outputs to the correct length by copying only the first SPX_M bytes
@@ -107,49 +130,72 @@ fn PRF_msg(
     () = #spill(out); // not needed until the end of the function
 
     // register variables
-    reg u64 xor; // temporary variable for computing XORs
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
+    reg u64 xor;     // temporary variable for computing XORs
 
     // stack variables
-    stack u8[SHA512_IN] key;               // buffer for the key
-    stack u8[SHA512_IN + SPX_N] ibuf;      // buffer for inner hash call
-    stack u8[SHA512_IN + SHA512_OUT] obuf; // buffer for outer hash call
-    stack u8[SHA512_OUT] hmac;
-    
+    stack u8[SHA512_OUT] inner;              // buffer for the inner hash digest
+    stack u64[SHA512_STATE_WORD_SIZE] state; // SHA2 state
+    stack u64[SHA512_ROUNDS_NUM] schedule;   // message schedule
+    stack u8[SHA512_IN] buf;                 // buffer for internal hash output
+    stack u8[SHA512_OUT] hmac;               // buffer for HMAC output
+    stack u8[2] sep; // separator between the prefix and the context (and message): zero-byte and context length
+
     inline int i;
-    
-    () = #spill(optrand); // resolves 'conflicting variables skprf and optrand'
 
     // set key = SK.prf || 00..0
-    key[0 : SPX_N] = __copy_nbytes(key[0 : SPX_N], skprf); // first part of the key is SK.prf
-    for i=SPX_N to SHA512_IN { key[i] = 0; } // pad the rest of the key with zeroes
+    buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], skprf); // first part of the key is SK.prf
+    for i=SPX_N to SHA512_IN { buf[i] = 0x0; }             // pad the rest of the key with zeroes
 
-    // compute ibuf = (key XOR ipad) eight bytes at a time
+    // compute buf = (key XOR ipad) eight bytes at a time
     // reading a u64 word of a byte array incurs an Endianness byteswap,
     // but we also write a u64 word to a byte array which undoes the byteswap
     for i=0 to SHA512_IN/8 {
-        xor = 0x3636363636363636; // set ipad
-        xor ^= key[:u64 i];       // bitwise xor ipad with the key
-        ibuf[:u64 i] = xor;
-    }
-    // compute obuf = (key XOR opad) eight bytes at a time
-    // reading a u64 word of a byte array incurs an Endianness byteswap,
-    // but we also write a u64 word to a byte array which undoes the byteswap
-    for i=0 to SHA512_IN/8 {
-        xor = 0x5C5C5C5C5C5C5C5C; // set opad
-        xor ^= key[:u64 i];       // bitwise xor opad with the key
-        obuf[:u64 i] = xor;
+        xor  = 0x3636363636363636; // set ipad
+        xor ^= buf[:u64 i];        // compute key ^ ipad
+        buf[:u64 i] = xor;
     }
 
-    // append optrand to ibuf
-    // i.e. ibuf = (key xor ipad) || optrand
-    () = #unspill(optrand);
-    ibuf[SHA512_IN : SPX_N] = __copy_nbytes(ibuf[SHA512_IN : SPX_N], optrand);
+    // prepare the context separator
+    sep[0] = 0x0; sep[1] = (8u) ctx_len;
+    
+    () = #spill(msg_ptr); // resolves 'conflicting variables ctx_ptr and msg_ptr'
+    () = #spill(msg_len); // resolves 'conflicting variables ctx_len and msg_len'
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = 0;
 
     // compute inner = sha512((key xor ipad) || optrand || M)
-    obuf[SHA512_IN : SHA512_OUT] = sha512_hmac_inner::sha512_absorb(obuf[SHA512_IN : SHA512_OUT], ibuf, ctx_ptr, ctx_len, msg_ptr, msg_len);
+    state, schedule, sch_idx, bits = sha512       :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha512_block :: absorb_fixed   (state, schedule, sch_idx, bits, buf);
+    state, schedule, sch_idx, bits = sha512_n     :: absorb_fixed   (state, schedule, sch_idx, bits, optrand);
+    state, schedule, sch_idx, bits = sha512_2     :: absorb_fixed   (state, schedule, sch_idx, bits, sep);
+    state, schedule, sch_idx, bits = sha512       :: absorb_variable(state, schedule, sch_idx, bits, ctx_ptr, ctx_len);
+    () = #unspill(msg_ptr, msg_len);
+    state, schedule, sch_idx, bits = sha512       :: absorb_variable(state, schedule, sch_idx, bits, msg_ptr, msg_len);
+    schedule, inner                = sha512       :: finalise       (state, schedule, sch_idx, bits, inner);
+
+    // compute buf = (key XOR opad) eight bytes at a time
+    // reading a u64 word of a byte array incurs an Endianness byteswap,
+    // but we also write a u64 word to a byte array which undoes the byteswap
+    for i=0 to SHA512_IN/8 {
+        // bitwise xor (ipad ^ opad) with buf, as
+        // buf = (key xor ipad), so
+        // buf xor (ipad ^ opad) = (key xor ipad) xor (ipad ^ opad) = key ^ opad
+        xor  = 0x6A6A6A6A6A6A6A6A; // set (ipad ^ opad)
+        xor ^= buf[:u64 i];        // compute key ^ opad
+        buf[:u64 i] = xor;
+    }
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = 0;
 
     // compute hmac = sha512((key xor opad) || inner)
-    hmac = sha512_hmac_outer::sha512(hmac, obuf);
+    state, schedule, sch_idx, bits = sha512        :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha512_block  :: absorb_fixed   (state, schedule, sch_idx, bits, buf);
+    state, schedule, sch_idx, bits = sha512_digest :: absorb_fixed   (state, schedule, sch_idx, bits, inner);
+    schedule, hmac                 = sha512        :: finalise       (state, schedule, sch_idx, bits, hmac);
 
     () = #unspill(out);
 
@@ -182,29 +228,44 @@ fn __PRF_msg(
 
 // PRF(PK.seed, SK.seed, ADRS) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || SK.seed))
 fn PRF(
-    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // not needed until the end of the function
 
-    // stack buffer that will contain the concatenated inputs
-    stack u8[22 + SPX_N] buf;
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
 
-    // buffer for the output
-    stack u8[SHA256_OUT] digest;
+    // stack variables
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
-    // buf = ADRS^c
-    buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
+    inline int i;
 
-    // buf = ADRS^c || SK.seed
-    buf[22 : SPX_N] = __copy_nbytes(buf[22 : SPX_N], skseed);
+    // adrsc = ADRS^c
+    adrsc = __adrs_compress(adrsc, adrs);
+
+    // extract the SHA-2 state from the combined state cache
+    for i=0 to SHA256_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
+    }
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = SHA256_IN*8;
 
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || SK.seed)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha256_tl_1n::sha256_cached(digest, buf, h_cache);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, skseed);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -215,16 +276,16 @@ fn PRF(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __PRF(
-    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u8[SPX_N] skseed, // SK.seed
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u8[SPX_N] skseed,        // SK.seed
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; skseed = skseed; adrs = adrs; h_cache = h_cache;
+    out = out; skseed = skseed; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    out = PRF(out, skseed, adrs, h_cache);
+    out = PRF(out, skseed, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -234,27 +295,43 @@ fn __PRF(
 
 // F(PK.seed, ADRS, M_1) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_1))
 fn F(
-    reg ptr u8[SPX_N] out,    // both input and output (F is in-place)
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // both input and output (F is in-place)
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
-    // stack buffer that will contain the concatenated inputs
-    stack u8[22 + SPX_N] buf;
+    () = #spill(out); // not needed until the end of the function
 
-    // buffer for the output
-    stack u8[SHA256_OUT] digest;
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
 
-    // buf = ADRS^c
-    buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
+    // stack variables
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
-    // buf = ADRS^c || M_1
-    buf[22 : SPX_N] = __copy_nbytes(buf[22 : SPX_N], out);
-    () = #spill(out); // only needed again at the end of the function
+    inline int i;
 
+    // adrsc = ADRS^c
+    adrsc = __adrs_compress(adrsc, adrs);
+
+    // extract the SHA-2 state from the combined state cache
+    for i=0 to SHA256_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
+    }
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = SHA256_IN*8;
+    
     // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_1)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha256_tl_1n::sha256_cached(digest, buf, h_cache);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, out);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -265,15 +342,15 @@ fn F(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __F(
-    reg ptr u8[SPX_N] out,    // both input and output (F is in-place)
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // both input and output (F is in-place)
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; adrs = adrs; h_cache = h_cache;
+    out = out; adrs = adrs; sha2_state_caches = sha2_state_caches;
 
-    out = F(out, adrs, h_cache);
+    out = F(out, adrs, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -283,31 +360,49 @@ fn __F(
 
 // H(PK.seed, ADRS, M_2) = Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_2))
 fn H(
-    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[SPX_N] in1,    // first part of the concatenation
-    reg ptr u8[SPX_N] in2,    // second part of the concatenation
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[SPX_N] in1,           // first part of the concatenation
+    reg ptr u8[SPX_N] in2,           // second part of the concatenation
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // not needed until the end of the function
 
-    // stack buffer that will contain the concatenated inputs
-    stack u8[22 + 2*SPX_N] buf;
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
 
-    // buffer for the output
-    stack u8[SHA512_OUT] digest;
+    // stack variables
+    stack u64[SHA512_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u64[SHA512_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA512_OUT] digest;                   // buffer for the output
+    stack u64[SHA512_ROUNDS_NUM] schedule;         // message schedule
 
-    // buf = ADRS^c
-    buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
+    inline int i;
 
-    // buf = ADRS^c || M_2
-    buf[22       : SPX_N] = __copy_nbytes(buf[22       : SPX_N], in1);
-    buf[22+SPX_N : SPX_N] = __copy_nbytes(buf[22+SPX_N : SPX_N], in2);
+    // adrsc = ADRS^c
+    adrsc = __adrs_compress(adrsc, adrs);
 
+    // extract the SHA-2 state from the combined state cache
+    for i=0 to SHA512_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u64 4 + i]; // get and set one word from the state
+    }
+
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = SHA512_IN*8;
+    
+    () = #spill(in2); // resolves 'conflicting variables in1 and in2'
+    
     // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_2)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha512_tl_2n::sha512_cached(digest, buf, h_cache);
+    state, schedule, sch_idx, bits = sha512    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha512_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha512_n  :: absorb_fixed(state, schedule, sch_idx, bits, in1);
+    () = #unspill(in2);
+    state, schedule, sch_idx, bits = sha512_n  :: absorb_fixed(state, schedule, sch_idx, bits, in2);
+    schedule, digest               = sha512    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -318,17 +413,17 @@ fn H(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H(
-    reg ptr u8[SPX_N] out,    // output: buffer the result gets written to
-    reg ptr u32[8] adrs,      // ADRS
-    reg ptr u8[SPX_N] in1,    // first part of the concatenation
-    reg ptr u8[SPX_N] in2,    // second part of the concatenation
-    reg ptr u8[96] h_cache    // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[SPX_N] in1,           // first part of the concatenation
+    reg ptr u8[SPX_N] in2,           // second part of the concatenation
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; adrs = adrs; in1 = in1; in2 = in2; h_cache = h_cache;
+    out = out; adrs = adrs; in1 = in1; in2 = in2; sha2_state_caches = sha2_state_caches;
 
-    out = H(out, adrs, in1, in2, h_cache);
+    out = H(out, adrs, in1, in2, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -341,34 +436,47 @@ fn T_len(
     reg ptr u8[SPX_N] out,            // output: buffer the result gets written to
     reg ptr u32[8] adrs,              // ADRS
     reg ptr u8[SPX_LEN*SPX_N] chains, // concatenation of all chain end values in a WOTS instance
-    reg ptr u8[96] h_cache            // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches  // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // not needed until the end of the function
 
-    // stack buffer that will contain the concatenated inputs
-    stack u8[22 + SPX_LEN*SPX_N] buf;
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
 
-    // buffer for the output
-    stack u8[SHA512_OUT] digest;
+    // stack variables
+    stack u64[SHA512_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u64[SHA512_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA512_OUT] digest;                   // buffer for the output
+    stack u64[SHA512_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
-    // buf = ADRS^c
-    buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
+    // adrsc = ADRS^c
+    adrsc = __adrs_compress(adrsc, adrs);
 
-    // buf = ADRS^c || M_len
-    for i=0 to SPX_LEN {
-        buf[22+i*SPX_N : SPX_N] = __copy_nbytes(buf[22+i*SPX_N : SPX_N], chains[i*SPX_N : SPX_N]);
+    // extract the SHA-2 state from the combined state cache
+    for i=0 to SHA512_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u64 4 + i]; // get and set one word from the state
     }
 
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = SHA512_IN*8;
+    
     // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_len)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha512_compress_wots::sha512_cached(digest, buf, h_cache);
+    state, schedule, sch_idx, bits = sha512    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha512_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    for i=0 to SPX_LEN { // absorb all chain values
+    state, schedule, sch_idx, bits = sha512_n  :: absorb_fixed(state, schedule, sch_idx, bits, chains[i*SPX_N : SPX_N]);
+    }
+    schedule, digest               = sha512    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
-    // truncate the message digest to the correct length by copying only the first SPX_N bytes
+    // truncate the digest to the correct length by copying only the first SPX_N bytes
     out = __copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
@@ -378,13 +486,13 @@ fn __T_len(
     reg ptr u8[SPX_N] out,            // output: buffer the result gets written to
     reg ptr u32[8] adrs,              // ADRS
     reg ptr u8[SPX_LEN*SPX_N] chains, // concatenation of all chain end values in a WOTS instance
-    reg ptr u8[96] h_cache            // cached SHA2 state
+    reg ptr u8[96] sha2_state_caches  // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; adrs = adrs; chains = chains; h_cache = h_cache;
+    out = out; adrs = adrs; chains = chains; sha2_state_caches = sha2_state_caches;
 
-    out = T_len(out, adrs, chains, h_cache);
+    out = T_len(out, adrs, chains, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -394,53 +502,66 @@ fn __T_len(
 
 // T_k(PK.seed, ADRS, M_k) = Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_k))
 fn T_k(
-    reg ptr u8[SPX_N] out,        // output: buffer the result gets written to
-    reg ptr u32[8] adrs,          // ADRS
-    reg ptr u8[SPX_K*SPX_N] roots, // concatenation of all roots in a FORS forest
-    reg ptr u8[96] h_cache         // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[SPX_K*SPX_N] roots,   // concatenation of all roots in a FORS forest
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     () = #spill(out); // not needed until the end of the function
 
-    // stack buffer that will contain the concatenated inputs
-    stack u8[22 + SPX_K*SPX_N] buf;
+    // register variables
+    reg u64 sch_idx; // schedule index
+    reg u64 bits;    // number of bits consumed
 
-    // buffer for the output
-    stack u8[SHA512_OUT] digest;
+    // stack variables
+    stack u64[SHA512_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u64[SHA512_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA512_OUT] digest;                   // buffer for the output
+    stack u64[SHA512_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
-    // buf = ADRS^c
-    buf[0 : 22] = __adrs_compress(buf[0 : 22], adrs);
+    // adrsc = ADRS^c
+    adrsc = __adrs_compress(adrsc, adrs);
 
-    // buf = ADRS^c || M_k
-    for i=0 to SPX_K {
-        buf[22+i*SPX_N : SPX_N] = __copy_nbytes(buf[22+i*SPX_N : SPX_N], roots[i*SPX_N : SPX_N]);
+    // extract the SHA-2 state from the combined state cache
+    for i=0 to SHA512_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u64 4 + i]; // get and set one word from the state
     }
 
+    // initialise the sch_idx and bits variables
+    sch_idx = 0; bits = SHA512_IN*8;
+    
     // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_k)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    digest = sha512_compress_fors::sha512_cached(digest, buf, h_cache);
+    state, schedule, sch_idx, bits = sha512    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha512_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    for i=0 to SPX_K { // absorb all FORS root values
+    state, schedule, sch_idx, bits = sha512_n  :: absorb_fixed(state, schedule, sch_idx, bits, roots[i*SPX_N : SPX_N]);
+    }
+    schedule, digest               = sha512    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
-    // truncate the message digest to the correct length by copying only the first SPX_N bytes
+    // truncate the digest to the correct length by copying only the first SPX_N bytes
     out = __copy_nbytes(out, digest[0 : SPX_N]);
     return out;
 }
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __T_k(
-    reg ptr u8[SPX_N] out,         // output: buffer the result gets written to
-    reg ptr u32[8] adrs,           // ADRS
-    reg ptr u8[SPX_K*SPX_N] roots, // concatenation of all roots in a FORS forest
-    reg ptr u8[96] h_cache         // cached SHA2 state
+    reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
+    reg ptr u32[8] adrs,             // ADRS
+    reg ptr u8[SPX_K*SPX_N] roots,   // concatenation of all roots in a FORS forest
+    reg ptr u8[96] sha2_state_caches // cached SHA2 state
 ) -> reg ptr u8[SPX_N] // -> out
 {
     // split live-range of the input parameters into two segments
-    out = out; adrs = adrs; roots = roots; h_cache = h_cache;
+    out = out; adrs = adrs; roots = roots; sha2_state_caches = sha2_state_caches;
 
-    out = T_k(out, adrs, roots, h_cache);
+    out = T_k(out, adrs, roots, sha2_state_caches);
 
     // split live-range of the output parameters into two segments
     out = out;
@@ -452,14 +573,14 @@ fn __T_k(
 
 // initialise a SHA512 instance from a cached state, and construct and absorb the correct ADRS^c into the state
 fn H_adrs(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
     reg u64 sch_idx,                          // byte index of the current position in message schedule
     reg u64 bits,                             // number of bits processed
     reg ptr u8[96] sha2_state_caches,         // combined SHA256 and SHA512 state caches
     reg ptr u32[8] adrs,                      // ADRS for the first hash
     reg u32 tree_index                        // tree index of the leftmost input node
-) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
     reg u256 state_vector; // temporary variable for copying purposes
@@ -467,13 +588,13 @@ fn H_adrs(
 
     // stack variables
     stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3;     // ADRS^C for every hash
-    stack u256[SHA2_STATE_WORD_SIZE] state_cache; // vectorised cached SHA512 state
+    stack u256[PARA_STATE_WORD_SIZE] state_cache; // vectorised cached SHA512 state
     stack u64 state_word;                         // temporary variable for copying purposes
 
     inline int i;
 
     // extract the SHA512 state from the combined state cache
-    for i=0 to SHA2_STATE_WORD_SIZE {
+    for i=0 to PARA_STATE_WORD_SIZE {
         state_word = sha2_state_caches[:u64 4+i];     // get one word from the state
         state_vector = #VPBROADCAST_4u64(state_word); // broadcast it to every lane in a 256-bit wide register
         state_cache[i] = state_vector;                // store the vectorised state word
@@ -502,21 +623,21 @@ fn H_adrs(
     adrsc3 = __adrsc_set_tree_index(adrsc3, index);
 
     // absorb ADRS^C into the parallelised state
-    state, schedule, sch_idx, bits = sha512_parallel_adrsc::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3);
+    state, schedule, sch_idx, bits = sha512_parallel_22::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3);
     
     return state, schedule, sch_idx, bits;
 }
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_adrs(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
     reg u64 sch_idx,                          // byte index of the current position in message schedule
     reg u64 bits,                             // number of bits processed
     reg ptr u8[96] sha2_state_caches,         // combined SHA256 and SHA512 state caches
     reg ptr u32[8] adrs,                      // ADRS for the first hash
     reg u32 tree_index                        // tree index of the leftmost input node
-) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; sha2_state_caches = sha2_state_caches; adrs = adrs; tree_index = tree_index;
@@ -531,12 +652,12 @@ fn __H_adrs(
 
 // absorb the child node inputs for every parallel instance
 fn H_children(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state,        // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,          // message schedule
-    reg u64 sch_idx,                                 // byte index of the current position in message schedule
-    reg u64 bits,                                    // number of bits processed
-    reg ptr u8[2 * SHA2_H_PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
-) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                          // byte index of the current position in message schedule
+    reg u64 bits,                             // number of bits processed
+    reg ptr u8[2 * PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
+) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
     reg ptr u8[SPX_N] lnode0 lnode1 lnode2 lnode3; // left children
@@ -567,12 +688,12 @@ fn H_children(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_children(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state,        // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,          // message schedule
-    reg u64 sch_idx,                                 // byte index of the current position in message schedule
-    reg u64 bits,                                    // number of bits processed
-    reg ptr u8[2 * SHA2_H_PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
-) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                          // byte index of the current position in message schedule
+    reg u64 bits,                             // number of bits processed
+    reg ptr u8[2 * PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
+) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; children = children;
@@ -587,12 +708,12 @@ fn __H_children(
 
 // finish the SHA512 computations and write the truncated outputs for every parallel instance
 fn H_digests(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
     reg u64 sch_idx,                          // byte index of the current position in message schedule
     reg u64 bits,                             // number of bits processed
-    reg ptr u8[SHA2_H_PARA_DEG * SPX_N] nodes // out: array pointer with space for all output nodes
-) -> reg ptr u8[SHA2_H_PARA_DEG * SPX_N], reg ptr u256[SHA2_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
+    reg ptr u8[PARA_DEG * SPX_N] nodes        // out: array pointer with space for all output nodes
+) -> reg ptr u8[PARA_DEG * SPX_N], reg ptr u256[PARA_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // stack variables
     stack u8[SHA512_OUT] node0 node1 node2 node3;
@@ -613,12 +734,12 @@ fn H_digests(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_digests(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
     reg u64 sch_idx,                          // byte index of the current position in message schedule
     reg u64 bits,                             // number of bits processed
-    reg ptr u8[SHA2_H_PARA_DEG * SPX_N] nodes // out: array pointer with space for all output nodes
-) -> reg ptr u8[SHA2_H_PARA_DEG * SPX_N], reg ptr u256[SHA2_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
+    reg ptr u8[PARA_DEG * SPX_N] nodes        // out: array pointer with space for all output nodes
+) -> reg ptr u8[PARA_DEG * SPX_N], reg ptr u256[PARA_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; nodes = nodes;

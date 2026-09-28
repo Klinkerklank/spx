@@ -7,9 +7,9 @@
 
 namespace sha256 {
 
-    // SHA-256 parameters
+    // SHA256 parameters
     param int ROUNDS_NUM          = 64;
-    param int MSG_BLOCK_BYTE_SIZE = 64;                     // word   = u8
+    param int MSG_BLOCK_BYTE_SIZE = 64;
     param int MSG_BLOCK_WORD_SIZE = MSG_BLOCK_BYTE_SIZE/4;  // word   = u32
     param int MSG_BLOCK_u128_SIZE = MSG_BLOCK_BYTE_SIZE/16;
     param int MSG_BLOCK_u256_SIZE = MSG_BLOCK_BYTE_SIZE/32;
@@ -17,7 +17,7 @@ namespace sha256 {
     param int STATE_WORD_SIZE     = STATE_BYTE_SIZE/4;      // word   = u32
     param int STATE_u128_SIZE     = STATE_BYTE_SIZE/16;
     param int STATE_u256_SIZE     = STATE_BYTE_SIZE/32;
-    param int LENGTH_BYTE_SIZE    = 8;
+    param int LENGTH_BYTE_SIZE    = 8;                      // length = u64
     param int BYTES_PER_WORD      = 32/8;                   // word   = u32
 
     // AVX parameters
@@ -61,7 +61,6 @@ namespace sha256 {
 
     // initialisation vector for the state variables
     u256[STATE_u256_SIZE] sha256_iv = {
-        // (8u32)[0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
         (8u32)[0x5be0cd19, 0x1f83d9ab, 0x9b05688c, 0x510e527f, 0xa54ff53a, 0x3c6ef372, 0xbb67ae85, 0x6a09e667]
     };
 
@@ -207,8 +206,8 @@ namespace sha256 {
 
     inline
     fn rotate(
-        reg u128[4] in
-    ) -> reg u128[4]
+        reg u128[MSG_BLOCK_u128_SIZE] in
+    ) -> reg u128[MSG_BLOCK_u128_SIZE]
     {
         reg u128 tmp;
 
@@ -217,59 +216,56 @@ namespace sha256 {
         in[1] = in[2];
         in[2] = in[3];
         in[3] = tmp;
+
         return in;
     }
 
     inline
     fn update(
-        reg u128[4] x,
+        reg u128[MSG_BLOCK_u128_SIZE] x,
         reg u128 k,
         reg u128 lomask,
         reg u128 himask
-    ) -> reg u128[4], reg u128
+    ) -> reg u128[MSG_BLOCK_u128_SIZE], reg u128
     {
-        reg u128[4] t;
+        reg u128[MSG_BLOCK_u128_SIZE] t;
         reg u128 tmp;
 
         t[0] = #VPALIGNR_128(x[1], x[0], 4);
         t[3] = #VPALIGNR_128(x[3], x[2], 4);
 
+        // sigma0
         t[2] = #VPSRL_4u32(t[0], sigma0_0);
         x[0] = #VPADD_4u32(x[0], t[3]);
         t[3] = #VPSRL_4u32(t[0], sigma0_2);
         t[1] = #VPSLL_4u32(t[0], 32 - sigma0_1);
-
         t[0] = t[3] ^ t[2];
         t[3] = #VPSHUFD_128(x[3], 0xfa);
         t[2] = #VPSRL_4u32(t[2], sigma0_1 - sigma0_0);
         t[0] = t[0] ^ t[1];
         t[0] = t[0] ^ t[2];
-
         t[1] = #VPSLL_4u32(t[1], sigma0_1 - sigma0_0);
-        t[2] = #VPSRL_4u32(t[3], sigma1_2);
 
+        // sigma1
+        t[2] = #VPSRL_4u32(t[3], sigma1_2);
         t[3] = #VPSRL_2u64(t[3], sigma1_0);
         tmp  = t[0] ^ t[1];
         x[0] = #VPADD_4u32(x[0], tmp);  
-
         t[2] = t[2] ^ t[3];
         t[3] = #VPSRL_2u64(t[3], sigma1_1 - sigma1_0);
         t[2] = t[2] ^ t[3];
         t[2] = #VPSHUFB_128(t[2], lomask);
         x[0] = #VPADD_4u32(x[0], t[2]);
-
         t[3] = #VPSHUFD_128(x[0], 0x50);
         t[2] = #VPSRL_4u32(t[3], sigma1_2);
         t[3] = #VPSRL_2u64(t[3], sigma1_0);
         t[2] = t[2] ^ t[3];
-
         t[3] = #VPSRL_2u64(t[3], sigma1_1 - sigma1_0);
         tmp  = t[2] ^ t[3];
         tmp  = #VPSHUFB_128(tmp, himask);
         x[0] = #VPADD_4u32(x[0], tmp);
 
         x = rotate(x);
-
         tmp = #VPADD_4u32(x[3], k);
 
         return x, tmp;
@@ -472,7 +468,7 @@ namespace sha256 {
 
         // reset the message part of the schedule
         copy = zero_vector_256;
-        for i=0 to MSG_BLOCK_BYTE_SIZE / 32 { // use the alrgest size of register (u256) to set as many bytes at once as possible
+        for i=0 to MSG_BLOCK_u256_SIZE { // use the largest size of register (u256) to set as many bytes at once as possible
             schedule[:u256 i] = copy;
         }
 
@@ -500,9 +496,9 @@ namespace sha256 {
         }
 
         // reset the message part of the schedule
-        // (the computed part will be overwritten by compute_word anyway)
+        // (the computed part will be overwritten anyway)
         copy = zero_vector_256;
-        for i=0 to MSG_BLOCK_BYTE_SIZE / 32 {
+        for i=0 to MSG_BLOCK_u256_SIZE {
             schedule[:u256 i] = copy;
         }
 
@@ -532,7 +528,7 @@ namespace sha256 {
         }
 
         // reset the message part of the schedule
-        // (the computed part will be overwritten by compute_word anyway)
+        // (the computed part will be overwritten anyway)
         copy = zero_vector_256;
         for i=0 to MSG_BLOCK_u256_SIZE {
             schedule[:u256 i] = copy;
@@ -587,6 +583,7 @@ namespace sha256 {
 
         // if enough message bytes are present, process full blocks of message bytes
         while (in_len >= MSG_BLOCK_BYTE_SIZE) {
+
             // fill the rest of the block
             while (sch_idx < MSG_BLOCK_BYTE_SIZE) {
                 schedule[:u8 sch_idx] = [:u8 in_ptr];
@@ -654,34 +651,15 @@ namespace sha256 {
         }
 
         // check whether the length encoding fits in the current block
-        if (sch_idx < MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) { // length encoding fits in the current block
-            // set the zero padding, leaving space for the length encoding
-            while (sch_idx < MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) {
-                schedule[:u8 sch_idx] = 0x00;
-                sch_idx += 1;
-            }
-        } else { // length encoding does NOT fit in the current block
-            // fill the rest of the block with zero padding
-            while (sch_idx < MSG_BLOCK_BYTE_SIZE) {
-                schedule[:u8 sch_idx] = 0x00;
-                sch_idx += 1;
-            }
-
+        if (sch_idx >= MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) { // length encoding does NOT fit in the current block
             // run the compression function
+            // (the rest of the message block is already zero, no need to set it)
             ihvs, schedule = compress(ihvs, schedule);
-            sch_idx = 0;
-            
-            // set more zero padding, leaving space for the length encoding
-            while (sch_idx < MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) {
-                schedule[:u8 sch_idx] = 0x00;
-                sch_idx += 1;
-            }
         }
 
         () = #unspill(bits);
 
         // set the length encoding
-        // length encoding is 64 bits = 8 bytes
         sch_idx = MSG_BLOCK_BYTE_SIZE-1;
         while(sch_idx >= MSG_BLOCK_BYTE_SIZE-LENGTH_BYTE_SIZE) {
             schedule[:u8 sch_idx] = (8u) bits;

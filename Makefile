@@ -92,12 +92,10 @@ endif
 # relative to the implementation folder
 ifneq (,$(filter sha2-128s sha2-128f,$(PARAMETER_SET)))
     HASH_IMPL = hash/hash_sha256.jinc
-    CACHE_IMPL = hash/sha256/sha256_cache/sha256_cache.jinc
     SPX_IMPL = spx/spx_sha2.jinc
 endif
 ifneq (,$(filter sha2-192s sha2-192f sha2-256s sha2-256f,$(PARAMETER_SET)))
     HASH_IMPL = hash/hash_sha512.jinc
-    CACHE_IMPL = hash/sha512/sha512_cache/sha512_cache.jinc
     SPX_IMPL = spx/spx_sha2.jinc
 endif
 ifneq (,$(filter shake-128s shake-128f shake-192s shake-192f shake-256s shake-256f,$(PARAMETER_SET)))
@@ -119,7 +117,7 @@ $(ARCHITECTURE)/ref/active_params.jinc:
 $(ARCHITECTURE)/avx2/active_params.jinc:
 	@echo 'require "../../params/params-spx-$(PARAMETER_SET).jinc" // SPHINCS+ parameters' > $(ARCHITECTURE)/avx2/active_params.jinc
 	@echo 'require "$(HASH_IMPL)" // hash function implementations' >> $(ARCHITECTURE)/avx2/active_params.jinc
-	@echo 'require "$(SPX_IMPL)" // SPHINCS+ SHA2 or SHAKE variant' >> $(ARCHITECTURE)/avx2/active_params.jinc
+	@echo 'require "$(SPX_IMPL)" // SPHINCS+ SHA2 or SHAKE variant (relevant for caching)' >> $(ARCHITECTURE)/avx2/active_params.jinc
 
 # make the C parameter header
 $(PARAM_HEADER):

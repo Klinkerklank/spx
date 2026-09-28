@@ -1,7 +1,7 @@
 /* 
  * SHA256 hash function instantiations
  * 
- * author: Dennis op 't Roodt 2026-09-17 (d.n.e.o.t.roodt@tue.nl)
+ * author: Dennis op 't Roodt 2026-09-24 (d.n.e.o.t.roodt@tue.nl)
  */
 
 require "sha256/core_hash_sha256.jinc"
@@ -28,9 +28,9 @@ fn H_msg(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;   // SHA2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state; // SHA2 state
     reg ptr u8[SHA256_OUT] digest;           // buffer for the output
-    stack u32[SHA2_ROUNDS_NUM] schedule;     // message schedule
+    stack u32[SHA256_ROUNDS_NUM] schedule;   // message schedule
     stack u8[2*SPX_N + SHA256_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
     stack u8[((SPX_M + SHA256_OUT - 1) / SHA256_OUT) * SHA256_OUT] concat; // concatenated hash outputs
     stack u8[2] sep; // separator between the prefix and the context (and message): zero-byte and context length
@@ -135,11 +135,11 @@ fn PRF_msg(
     reg u64 xor;     // temporary variable for computing XORs
 
     // stack variables
-    stack u8[SHA256_OUT] inner;            // buffer for the inner hash digest
-    stack u32[SHA2_STATE_WORD_SIZE] state; // SHA2 state
-    stack u32[SHA2_ROUNDS_NUM] schedule;   // message schedule
-    stack u8[SHA256_IN] buf;               // buffer for internal hash output
-    stack u8[SHA256_OUT] hmac;             // buffer for HMAC output
+    stack u8[SHA256_OUT] inner;              // buffer for the inner hash digest
+    stack u32[SHA256_STATE_WORD_SIZE] state; // SHA2 state
+    stack u32[SHA256_ROUNDS_NUM] schedule;   // message schedule
+    stack u8[SHA256_IN] buf;                 // buffer for internal hash output
+    stack u8[SHA256_OUT] hmac;               // buffer for HMAC output
     stack u8[2] sep; // separator between the prefix and the context (and message): zero-byte and context length
 
     inline int i;
@@ -241,11 +241,11 @@ fn PRF(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
-    stack u8[22] adrsc;                          // buffer for ADRS^c
-    stack u8[SHA256_OUT] digest;                 // buffer for the output
-    stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
@@ -253,7 +253,7 @@ fn PRF(
     adrsc = __adrs_compress(adrsc, adrs);
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA2_STATE_WORD_SIZE {
+    for i=0 to SHA256_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
 
@@ -307,11 +307,11 @@ fn F(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
-    stack u8[22] adrsc;                          // buffer for ADRS^c
-    stack u8[SHA256_OUT] digest;                 // buffer for the output
-    stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
@@ -319,7 +319,7 @@ fn F(
     adrsc = __adrs_compress(adrsc, adrs);
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA2_STATE_WORD_SIZE {
+    for i=0 to SHA256_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
 
@@ -374,11 +374,11 @@ fn H(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
-    stack u8[22] adrsc;                          // buffer for ADRS^c
-    stack u8[SHA256_OUT] digest;                 // buffer for the output
-    stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
@@ -386,7 +386,7 @@ fn H(
     adrsc = __adrs_compress(adrsc, adrs);
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA2_STATE_WORD_SIZE {
+    for i=0 to SHA256_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
 
@@ -446,11 +446,11 @@ fn T_len(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
-    stack u8[22] adrsc;                          // buffer for ADRS^c
-    stack u8[SHA256_OUT] digest;                 // buffer for the output
-    stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
@@ -458,7 +458,7 @@ fn T_len(
     adrsc = __adrs_compress(adrsc, adrs);
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA2_STATE_WORD_SIZE {
+    for i=0 to SHA256_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
 
@@ -515,11 +515,11 @@ fn T_k(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state;       // SHA-2 state
-    stack u32[SHA2_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
-    stack u8[22] adrsc;                          // buffer for ADRS^c
-    stack u8[SHA256_OUT] digest;                 // buffer for the output
-    stack u32[SHA2_ROUNDS_NUM] schedule;         // message schedule
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u8[22] adrsc;                            // buffer for ADRS^c
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
@@ -527,7 +527,7 @@ fn T_k(
     adrsc = __adrs_compress(adrsc, adrs);
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA2_STATE_WORD_SIZE {
+    for i=0 to SHA256_STATE_WORD_SIZE {
         state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
 
@@ -573,14 +573,14 @@ fn __T_k(
 
 // initialise a SHA256 instance from a cached state, and construct and absorb the correct ADRS^c into the state
 fn H_adrs(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
     reg u64 sch_idx,                          // byte index of the current position in message schedule
     reg u64 bits,                             // number of bits processed
     reg ptr u8[96] sha2_state_caches,         // combined SHA256 and SHA512 state caches
     reg ptr u32[8] adrs,                      // ADRS for the first hash
     reg u32 tree_index                        // tree index of the leftmost input node
-) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
     reg u256 state_vector; // temporary variable for copying purposes
@@ -588,13 +588,13 @@ fn H_adrs(
 
     // stack variables
     stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^C for every hash
-    stack u256[SHA2_STATE_WORD_SIZE] state_cache;                         // vectorised cached SHA-2 state
+    stack u256[PARA_STATE_WORD_SIZE] state_cache;                         // vectorised cached SHA-2 state
     stack u32 state_word;                                                 // temporary variable for copying purposes
 
     inline int i;
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA2_STATE_WORD_SIZE {
+    for i=0 to PARA_STATE_WORD_SIZE {
         state_word = sha2_state_caches[:u32 i];       // get one word from the state
         state_vector = #VPBROADCAST_8u32(state_word); // broadcast it to every lane in a 256-bit wide register
         state_cache[i] = state_vector;                // store the vectorised state word
@@ -638,14 +638,14 @@ fn H_adrs(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_adrs(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
     reg u64 sch_idx,                          // byte index of the current position in message schedule
     reg u64 bits,                             // number of bits processed
     reg ptr u8[96] sha2_state_caches,         // combined SHA256 and SHA512 state caches
     reg ptr u32[8] adrs,                      // ADRS for the first hash
     reg u32 tree_index                        // tree index of the leftmost input node
-) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; sha2_state_caches = sha2_state_caches; adrs = adrs; tree_index = tree_index;
@@ -660,12 +660,12 @@ fn __H_adrs(
 
 // absorb the child node inputs for every parallel instance
 fn H_children(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state,        // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,          // message schedule
-    reg u64 sch_idx,                                 // byte index of the current position in message schedule
-    reg u64 bits,                                    // number of bits processed
-    reg ptr u8[2 * SHA2_H_PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
-) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                          // byte index of the current position in message schedule
+    reg u64 bits,                             // number of bits processed
+    reg ptr u8[2 * PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
+) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
     reg ptr u8[SPX_N] lnode0 lnode1 lnode2 lnode3 lnode4 lnode5 lnode6 lnode7; // left children
@@ -704,12 +704,12 @@ fn H_children(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_children(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state,        // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,          // message schedule
-    reg u64 sch_idx,                                 // byte index of the current position in message schedule
-    reg u64 bits,                                    // number of bits processed
-    reg ptr u8[2 * SHA2_H_PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
-) -> reg ptr u256[SHA2_STATE_WORD_SIZE], reg ptr u256[SHA2_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
+    reg u64 sch_idx,                          // byte index of the current position in message schedule
+    reg u64 bits,                             // number of bits processed
+    reg ptr u8[2 * PARA_DEG * SPX_N] children // array pointer containing all children (interleaved left/right/left/.../right)
+) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; children = children;
@@ -724,12 +724,12 @@ fn __H_children(
 
 // finish the SHA256 computations and write the truncated outputs for every parallel instance
 fn H_digests(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
     reg u64 sch_idx,                          // byte index of the current position in message schedule
     reg u64 bits,                             // number of bits processed
-    reg ptr u8[SHA2_H_PARA_DEG * SPX_N] nodes // out: array pointer with space for all output nodes
-) -> reg ptr u8[SHA2_H_PARA_DEG * SPX_N], reg ptr u256[SHA2_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
+    reg ptr u8[PARA_DEG * SPX_N] nodes        // out: array pointer with space for all output nodes
+) -> reg ptr u8[PARA_DEG * SPX_N], reg ptr u256[PARA_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // stack variables
     stack u8[SHA256_OUT] node0 node1 node2 node3 node4 node5 node6 node7;
@@ -754,12 +754,12 @@ fn H_digests(
 
 inline // inline wrapper that splits parameter live-ranges, to aid the Jasmin compiler
 fn __H_digests(
-    reg ptr u256[SHA2_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
-    reg ptr u256[SHA2_ROUNDS_NUM] schedule,   // message schedule
+    reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
+    reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
     reg u64 sch_idx,                          // byte index of the current position in message schedule
     reg u64 bits,                             // number of bits processed
-    reg ptr u8[SHA2_H_PARA_DEG * SPX_N] nodes // out: array pointer with space for all output nodes
-) -> reg ptr u8[SHA2_H_PARA_DEG * SPX_N], reg ptr u256[SHA2_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
+    reg ptr u8[PARA_DEG * SPX_N] nodes        // out: array pointer with space for all output nodes
+) -> reg ptr u8[PARA_DEG * SPX_N], reg ptr u256[PARA_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // split live-range of the input parameters into two segments
     state = state; schedule = schedule; sch_idx = sch_idx; bits = bits; nodes = nodes;

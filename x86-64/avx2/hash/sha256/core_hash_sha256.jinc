@@ -56,6 +56,8 @@ namespace sha256_parallel_n {
 // code for initialising the SHA-2 state cache(s)
 
 // compute the SHA-2 state after consuming exactly one block consisting of PK.seed and zero-padding
+// the first eight u32 words are the SHA256 cache, the latter eight u64 words are the SHA512 cache
+// (SHA512 is not present in the current parameter set, but the size of the overall cache must be fixed)
 fn init_caches(reg ptr u8[96] sha2_state_caches, reg ptr u8[SPX_N] pkseed) -> reg ptr u8[96]
 {
     // register variables
@@ -63,9 +65,9 @@ fn init_caches(reg ptr u8[96] sha2_state_caches, reg ptr u8[SPX_N] pkseed) -> re
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u32[SHA2_STATE_WORD_SIZE] state; // SHA2 state
-    stack u32[SHA2_ROUNDS_NUM] schedule;   // message schedule
-    stack u8[SHA256_IN] buf;               // buffer for PK.seed and zero-padding
+    stack u32[SHA256_STATE_WORD_SIZE] state; // SHA2 state
+    stack u32[SHA256_ROUNDS_NUM] schedule;   // message schedule
+    stack u8[SHA256_IN] buf;                 // buffer for PK.seed and zero-padding
 
     inline int i;
 
