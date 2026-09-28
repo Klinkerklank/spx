@@ -4,9 +4,9 @@
  * author: Dennis op 't Roodt 2026-09-28 (d.n.e.o.t.roodt@tue.nl)
  */
 
-require "sha512/namespaces_sha512.jinc"
-require "../adrs/adrs.jinc" // ADRS data structure
-require "../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
+require "namespaces_sha512.jinc"
+require "../../adrs/adrs.jinc" // ADRS data structure
+require "../../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
 
 // H_msg(R, PK.seed, PK.root, M) = MGF1-SHA-512(R || PK.seed || SHA-512(R || PK.seed || PK.root || M), m)
 fn H_msg(

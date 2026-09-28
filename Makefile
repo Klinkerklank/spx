@@ -91,15 +91,15 @@ endif
 # select the correct hash function implementation file,
 # relative to the implementation folder
 ifneq (,$(filter sha2-128s sha2-128f,$(PARAMETER_SET)))
-    HASH_IMPL = hash/tweakable_hashes_sha256.jinc
+    HASH_IMPL = hash/sha256/tweakable_hashes_sha256.jinc
     SPX_IMPL = spx/spx_sha2.jinc
 endif
 ifneq (,$(filter sha2-192s sha2-192f sha2-256s sha2-256f,$(PARAMETER_SET)))
-    HASH_IMPL = hash/tweakable_hashes_sha512.jinc
+    HASH_IMPL = hash/sha512/tweakable_hashes_sha512.jinc
     SPX_IMPL = spx/spx_sha2.jinc
 endif
 ifneq (,$(filter shake-128s shake-128f shake-192s shake-192f shake-256s shake-256f,$(PARAMETER_SET)))
-    HASH_IMPL = hash/tweakable_hashes_shake256.jinc
+    HASH_IMPL = hash/shake256/tweakable_hashes_shake256.jinc
     SPX_IMPL = spx/spx_shake.jinc
 endif
 

@@ -1,15 +1,14 @@
 /* 
- * SHA512 hash function instantiations
+ * SHA256 hash function instantiations
  * 
- * author: Dennis op 't Roodt 2026-09-28 (d.n.e.o.t.roodt@tue.nl)
+ * author: Dennis op 't Roodt 2026-09-24 (d.n.e.o.t.roodt@tue.nl)
  */
 
-require "sha512/namespaces_sha512.jinc"
-require "../adrs/adrs.jinc" // ADRS data structure
+require "namespaces_sha256.jinc"
+require "../../adrs/adrs.jinc" // ADRS data structure
+require "../../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
 
-require "../stdlib/memcpy/memcpy.jinc" // for copying SPX_N-byte strings
-
-// H_msg(R, PK.seed, PK.root, M) = MGF1-SHA-512(R || PK.seed || SHA-512(R || PK.seed || PK.root || M), m)
+// H_msg(R, PK.seed, PK.root, M) = MGF1-SHA-256(R || PK.seed || SHA-256(R || PK.seed || PK.root || M), m)
 fn H_msg(
     reg ptr u8[SPX_M] out,    // output: buffer the result gets written to
     reg ptr u8[SPX_N] r,      // message randomiser
@@ -24,15 +23,15 @@ fn H_msg(
     () = #spill(out); // not needed until the end of the function
 
     // register variables
-    reg u64 sch_idx; // schedule index
-    reg u64 bits;    // number of bits consumed
+    reg u64 sch_idx;               // schedule index
+    reg u64 bits;                  // number of bits consumed
+    reg ptr u8[SHA256_OUT] digest; // buffer for the output
 
     // stack variables
-    stack u64[SHA512_STATE_WORD_SIZE] state; // SHA2 state
-    reg ptr u8[SHA512_OUT] digest;           // buffer for the output
-    stack u64[SHA512_ROUNDS_NUM] schedule;   // message schedule
-    stack u8[2*SPX_N + SHA512_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
-    stack u8[((SPX_M + SHA512_OUT - 1) / SHA512_OUT) * SHA512_OUT] concat; // concatenated hash outputs
+    stack u32[SHA256_STATE_WORD_SIZE] state; // SHA2 state
+    stack u32[SHA256_ROUNDS_NUM] schedule;   // message schedule
+    stack u8[2*SPX_N + SHA256_OUT + 4] seed; // buffer for the seed concatenated with a 4-byte counter
+    stack u8[((SPX_M + SHA256_OUT - 1) / SHA256_OUT) * SHA256_OUT] concat; // concatenated hash outputs
     stack u8[2] sep; // separator between the prefix and the context (and message): zero-byte and context length
 
     inline int i;
@@ -41,7 +40,7 @@ fn H_msg(
     // prepare the known parts of the seed buffer
     seed[0 : SPX_N]     = __copy_nbytes(seed[0 : SPX_N], r);          // copy R into the buffer
     seed[SPX_N : SPX_N] = __copy_nbytes(seed[SPX_N : SPX_N], pkseed); // copy PK.seed into the buffer
-    seed.[:u32 2*SPX_N + SHA512_OUT] = 0; // set the counter to 0
+    seed.[:u32 2*SPX_N + SHA256_OUT] = 0; // set the counter to 0
 
     // prepare the context separator
     sep[0] = 0x0; sep[1] = (8u) ctx_len;
@@ -54,36 +53,36 @@ fn H_msg(
     // initialise the sch_idx and bits variables
     sch_idx = 0; bits = 0;
 
-    // compute the inner hash value = sha512(R || PK.seed || PK.root || 0x00 || ctx_len || M) and write it into the seed buffer
-    state, schedule, sch_idx, bits = sha512   :: init_iv        (state, schedule, sch_idx, bits);
-    state, schedule, sch_idx, bits = sha512_n :: absorb_fixed   (state, schedule, sch_idx, bits, r);
+    // compute the inner hash value = sha256(R || PK.seed || PK.root || 0x00 || ctx_len || M) and write it into the seed buffer
+    state, schedule, sch_idx, bits = sha256   :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha256_n :: absorb_fixed   (state, schedule, sch_idx, bits, r);
     () = #unspill(pkseed);
-    state, schedule, sch_idx, bits = sha512_n :: absorb_fixed   (state, schedule, sch_idx, bits, pkseed);
+    state, schedule, sch_idx, bits = sha256_n :: absorb_fixed   (state, schedule, sch_idx, bits, pkseed);
     () = #unspill(pkroot);
-    state, schedule, sch_idx, bits = sha512_n :: absorb_fixed   (state, schedule, sch_idx, bits, pkroot);
-    state, schedule, sch_idx, bits = sha512_2 :: absorb_fixed   (state, schedule, sch_idx, bits, sep);
-    state, schedule, sch_idx, bits = sha512   :: absorb_variable(state, schedule, sch_idx, bits, ctx_ptr, ctx_len);
+    state, schedule, sch_idx, bits = sha256_n :: absorb_fixed   (state, schedule, sch_idx, bits, pkroot);
+    state, schedule, sch_idx, bits = sha256_2 :: absorb_fixed   (state, schedule, sch_idx, bits, sep);
+    state, schedule, sch_idx, bits = sha256   :: absorb_variable(state, schedule, sch_idx, bits, ctx_ptr, ctx_len);
     () = #unspill(msg_ptr, msg_len);
-    state, schedule, sch_idx, bits = sha512   :: absorb_variable(state, schedule, sch_idx, bits, msg_ptr, msg_len);
-    digest = seed[2*SPX_N : SHA512_OUT];
-    schedule, digest               = sha512   :: finalise       (state, schedule, sch_idx, bits, digest);
-    seed[2*SPX_N : SHA512_OUT] = digest;
+    state, schedule, sch_idx, bits = sha256   :: absorb_variable(state, schedule, sch_idx, bits, msg_ptr, msg_len);
+    digest = seed[2*SPX_N : SHA256_OUT];
+    schedule, digest               = sha256   :: finalise       (state, schedule, sch_idx, bits, digest);
+    seed[2*SPX_N : SHA256_OUT] = digest;
     
-    // need ceil(SPX_M / SHA512_OUT) hashes of SHA512_OUT bytes each, to surpass at least SPX_M bytes
-    for hash_nr=0 to (SPX_M + SHA512_OUT - 1) / SHA512_OUT {
+    // need ceil(SPX_M / SHA256_OUT) hashes of SHA256_OUT bytes each, to surpass at least SPX_M bytes
+    for hash_nr=0 to (SPX_M + SHA256_OUT - 1) / SHA256_OUT {
         // set only the last byte of 'seed' to the hash iteration counter
         // (for all approved parameter sets, we will never need > 255 hash output concatenations)
-        seed[2*SPX_N + SHA512_OUT + 3] = (8u) hash_nr;
+        seed[2*SPX_N + SHA256_OUT + 3] = (8u) hash_nr;
 
         // initialise the sch_idx and bits variables
         sch_idx = 0; bits = 0;
         
-        // compute sha512(seed), where seed includes the counter
-        state, schedule, sch_idx, bits = sha512      :: init_iv        (state, schedule, sch_idx, bits);
-        state, schedule, sch_idx, bits = sha512_mgf1 :: absorb_fixed   (state, schedule, sch_idx, bits, seed);
-        digest = concat[hash_nr*SHA512_OUT : SHA512_OUT];
-        schedule, digest               = sha512      :: finalise       (state, schedule, sch_idx, bits, digest);
-        concat[hash_nr*SHA512_OUT : SHA512_OUT] = digest;
+        // compute sha256(seed), where seed includes the counter
+        state, schedule, sch_idx, bits = sha256      :: init_iv        (state, schedule, sch_idx, bits);
+        state, schedule, sch_idx, bits = sha256_mgf1 :: absorb_fixed   (state, schedule, sch_idx, bits, seed);
+        digest = concat[hash_nr*SHA256_OUT : SHA256_OUT];
+        schedule, digest               = sha256      :: finalise       (state, schedule, sch_idx, bits, digest);
+        concat[hash_nr*SHA256_OUT : SHA256_OUT] = digest;
     }
 
     () = #unspill(out);
@@ -116,7 +115,7 @@ fn __H_msg(
     return out;
 }
 
-// PRF_msg(SK.prf, optrand, M) = Trunc_n(HMAC-SHA-512(SK.prf, optrand || M))
+// PRF_msg(SK.prf, optrand, M) = Trunc_n(HMAC-SHA-256(SK.prf, optrand || M))
 fn PRF_msg(
     reg ptr u8[SPX_N] out,     // output: buffer the result gets written to
     reg ptr u8[SPX_N] skprf,   // SK.prf
@@ -135,23 +134,23 @@ fn PRF_msg(
     reg u64 xor;     // temporary variable for computing XORs
 
     // stack variables
-    stack u8[SHA512_OUT] inner;              // buffer for the inner hash digest
-    stack u64[SHA512_STATE_WORD_SIZE] state; // SHA2 state
-    stack u64[SHA512_ROUNDS_NUM] schedule;   // message schedule
-    stack u8[SHA512_IN] buf;                 // buffer for internal hash output
-    stack u8[SHA512_OUT] hmac;               // buffer for HMAC output
+    stack u8[SHA256_OUT] inner;              // buffer for the inner hash digest
+    stack u32[SHA256_STATE_WORD_SIZE] state; // SHA2 state
+    stack u32[SHA256_ROUNDS_NUM] schedule;   // message schedule
+    stack u8[SHA256_IN] buf;                 // buffer for internal hash output
+    stack u8[SHA256_OUT] hmac;               // buffer for HMAC output
     stack u8[2] sep; // separator between the prefix and the context (and message): zero-byte and context length
 
     inline int i;
 
     // set key = SK.prf || 00..0
     buf[0 : SPX_N] = __copy_nbytes(buf[0 : SPX_N], skprf); // first part of the key is SK.prf
-    for i=SPX_N to SHA512_IN { buf[i] = 0x0; }             // pad the rest of the key with zeroes
+    for i=SPX_N to SHA256_IN { buf[i] = 0x0; }             // pad the rest of the key with zeroes
 
     // compute buf = (key XOR ipad) eight bytes at a time
     // reading a u64 word of a byte array incurs an Endianness byteswap,
     // but we also write a u64 word to a byte array which undoes the byteswap
-    for i=0 to SHA512_IN/8 {
+    for i=0 to SHA256_IN/8 {
         xor  = 0x3636363636363636; // set ipad
         xor ^= buf[:u64 i];        // compute key ^ ipad
         buf[:u64 i] = xor;
@@ -166,20 +165,20 @@ fn PRF_msg(
     // initialise the sch_idx and bits variables
     sch_idx = 0; bits = 0;
 
-    // compute inner = sha512((key xor ipad) || optrand || M)
-    state, schedule, sch_idx, bits = sha512       :: init_iv        (state, schedule, sch_idx, bits);
-    state, schedule, sch_idx, bits = sha512_block :: absorb_fixed   (state, schedule, sch_idx, bits, buf);
-    state, schedule, sch_idx, bits = sha512_n     :: absorb_fixed   (state, schedule, sch_idx, bits, optrand);
-    state, schedule, sch_idx, bits = sha512_2     :: absorb_fixed   (state, schedule, sch_idx, bits, sep);
-    state, schedule, sch_idx, bits = sha512       :: absorb_variable(state, schedule, sch_idx, bits, ctx_ptr, ctx_len);
+    // compute inner = sha256((key xor ipad) || optrand || M)
+    state, schedule, sch_idx, bits = sha256       :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha256_block :: absorb_fixed   (state, schedule, sch_idx, bits, buf);
+    state, schedule, sch_idx, bits = sha256_n     :: absorb_fixed   (state, schedule, sch_idx, bits, optrand);
+    state, schedule, sch_idx, bits = sha256_2     :: absorb_fixed   (state, schedule, sch_idx, bits, sep);
+    state, schedule, sch_idx, bits = sha256       :: absorb_variable(state, schedule, sch_idx, bits, ctx_ptr, ctx_len);
     () = #unspill(msg_ptr, msg_len);
-    state, schedule, sch_idx, bits = sha512       :: absorb_variable(state, schedule, sch_idx, bits, msg_ptr, msg_len);
-    schedule, inner                = sha512       :: finalise       (state, schedule, sch_idx, bits, inner);
+    state, schedule, sch_idx, bits = sha256       :: absorb_variable(state, schedule, sch_idx, bits, msg_ptr, msg_len);
+    schedule, inner                = sha256       :: finalise       (state, schedule, sch_idx, bits, inner);
 
     // compute buf = (key XOR opad) eight bytes at a time
     // reading a u64 word of a byte array incurs an Endianness byteswap,
     // but we also write a u64 word to a byte array which undoes the byteswap
-    for i=0 to SHA512_IN/8 {
+    for i=0 to SHA256_IN/8 {
         // bitwise xor (ipad ^ opad) with buf, as
         // buf = (key xor ipad), so
         // buf xor (ipad ^ opad) = (key xor ipad) xor (ipad ^ opad) = key ^ opad
@@ -191,11 +190,11 @@ fn PRF_msg(
     // initialise the sch_idx and bits variables
     sch_idx = 0; bits = 0;
 
-    // compute hmac = sha512((key xor opad) || inner)
-    state, schedule, sch_idx, bits = sha512        :: init_iv        (state, schedule, sch_idx, bits);
-    state, schedule, sch_idx, bits = sha512_block  :: absorb_fixed   (state, schedule, sch_idx, bits, buf);
-    state, schedule, sch_idx, bits = sha512_digest :: absorb_fixed   (state, schedule, sch_idx, bits, inner);
-    schedule, hmac                 = sha512        :: finalise       (state, schedule, sch_idx, bits, hmac);
+    // compute hmac = sha256((key xor opad) || inner)
+    state, schedule, sch_idx, bits = sha256        :: init_iv        (state, schedule, sch_idx, bits);
+    state, schedule, sch_idx, bits = sha256_block  :: absorb_fixed   (state, schedule, sch_idx, bits, buf);
+    state, schedule, sch_idx, bits = sha256_digest :: absorb_fixed   (state, schedule, sch_idx, bits, inner);
+    schedule, hmac                 = sha256        :: finalise       (state, schedule, sch_idx, bits, hmac);
 
     () = #unspill(out);
 
@@ -358,7 +357,7 @@ fn __F(
     return out;
 }
 
-// H(PK.seed, ADRS, M_2) = Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_2))
+// H(PK.seed, ADRS, M_2) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_2))
 fn H(
     reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
     reg ptr u32[8] adrs,             // ADRS
@@ -374,11 +373,11 @@ fn H(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u64[SHA512_STATE_WORD_SIZE] state;       // SHA-2 state
-    stack u64[SHA512_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
     stack u8[22] adrsc;                            // buffer for ADRS^c
-    stack u8[SHA512_OUT] digest;                   // buffer for the output
-    stack u64[SHA512_ROUNDS_NUM] schedule;         // message schedule
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
@@ -386,23 +385,23 @@ fn H(
     adrsc = __adrs_compress(adrsc, adrs);
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA512_STATE_WORD_SIZE {
-        state_cache[i] = sha2_state_caches[:u64 4 + i]; // get and set one word from the state
+    for i=0 to SHA256_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
 
     // initialise the sch_idx and bits variables
-    sch_idx = 0; bits = SHA512_IN*8;
+    sch_idx = 0; bits = SHA256_IN*8;
     
     () = #spill(in2); // resolves 'conflicting variables in1 and in2'
     
-    // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_2)
+    // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_2)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    state, schedule, sch_idx, bits = sha512    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
-    state, schedule, sch_idx, bits = sha512_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
-    state, schedule, sch_idx, bits = sha512_n  :: absorb_fixed(state, schedule, sch_idx, bits, in1);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, in1);
     () = #unspill(in2);
-    state, schedule, sch_idx, bits = sha512_n  :: absorb_fixed(state, schedule, sch_idx, bits, in2);
-    schedule, digest               = sha512    :: finalise    (state, schedule, sch_idx, bits, digest);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, in2);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -431,7 +430,7 @@ fn __H(
     return out;
 }
 
-// T_len(PK.seed, ADRS, M_len) = Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_len))
+// T_len(PK.seed, ADRS, M_len) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_len))
 fn T_len(
     reg ptr u8[SPX_N] out,            // output: buffer the result gets written to
     reg ptr u32[8] adrs,              // ADRS
@@ -446,11 +445,11 @@ fn T_len(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u64[SHA512_STATE_WORD_SIZE] state;       // SHA-2 state
-    stack u64[SHA512_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
     stack u8[22] adrsc;                            // buffer for ADRS^c
-    stack u8[SHA512_OUT] digest;                   // buffer for the output
-    stack u64[SHA512_ROUNDS_NUM] schedule;         // message schedule
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
@@ -458,21 +457,21 @@ fn T_len(
     adrsc = __adrs_compress(adrsc, adrs);
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA512_STATE_WORD_SIZE {
-        state_cache[i] = sha2_state_caches[:u64 4 + i]; // get and set one word from the state
+    for i=0 to SHA256_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
 
     // initialise the sch_idx and bits variables
-    sch_idx = 0; bits = SHA512_IN*8;
+    sch_idx = 0; bits = SHA256_IN*8;
     
-    // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_len)
+    // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_len)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    state, schedule, sch_idx, bits = sha512    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
-    state, schedule, sch_idx, bits = sha512_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
     for i=0 to SPX_LEN { // absorb all chain values
-    state, schedule, sch_idx, bits = sha512_n  :: absorb_fixed(state, schedule, sch_idx, bits, chains[i*SPX_N : SPX_N]);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, chains[i*SPX_N : SPX_N]);
     }
-    schedule, digest               = sha512    :: finalise    (state, schedule, sch_idx, bits, digest);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -500,7 +499,7 @@ fn __T_len(
     return out;
 }
 
-// T_k(PK.seed, ADRS, M_k) = Trunc_n(SHA-512(PK.seed || toByte(0,128-n) || ADRS^c || M_k))
+// T_k(PK.seed, ADRS, M_k) = Trunc_n(SHA-256(PK.seed || toByte(0,64-n) || ADRS^c || M_k))
 fn T_k(
     reg ptr u8[SPX_N] out,           // output: buffer the result gets written to
     reg ptr u32[8] adrs,             // ADRS
@@ -515,11 +514,11 @@ fn T_k(
     reg u64 bits;    // number of bits consumed
 
     // stack variables
-    stack u64[SHA512_STATE_WORD_SIZE] state;       // SHA-2 state
-    stack u64[SHA512_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state;       // SHA-2 state
+    stack u32[SHA256_STATE_WORD_SIZE] state_cache; // cached SHA-2 state
     stack u8[22] adrsc;                            // buffer for ADRS^c
-    stack u8[SHA512_OUT] digest;                   // buffer for the output
-    stack u64[SHA512_ROUNDS_NUM] schedule;         // message schedule
+    stack u8[SHA256_OUT] digest;                   // buffer for the output
+    stack u32[SHA256_ROUNDS_NUM] schedule;         // message schedule
 
     inline int i;
 
@@ -527,21 +526,21 @@ fn T_k(
     adrsc = __adrs_compress(adrsc, adrs);
 
     // extract the SHA-2 state from the combined state cache
-    for i=0 to SHA512_STATE_WORD_SIZE {
-        state_cache[i] = sha2_state_caches[:u64 4 + i]; // get and set one word from the state
+    for i=0 to SHA256_STATE_WORD_SIZE {
+        state_cache[i] = sha2_state_caches[:u32 i]; // get and set one word from the state
     }
 
     // initialise the sch_idx and bits variables
-    sch_idx = 0; bits = SHA512_IN*8;
+    sch_idx = 0; bits = SHA256_IN*8;
     
-    // compute digest = sha512(PK.seed || zero-padding || ADRS^c || M_k)
+    // compute digest = sha256(PK.seed || zero-padding || ADRS^c || M_k)
     // (cached sha2 state contains the internal state after hashing the first input block consisting of PK.seed || zero-padding)
-    state, schedule, sch_idx, bits = sha512    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
-    state, schedule, sch_idx, bits = sha512_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
+    state, schedule, sch_idx, bits = sha256    :: init_cache  (state, schedule, sch_idx, bits, state_cache);
+    state, schedule, sch_idx, bits = sha256_22 :: absorb_fixed(state, schedule, sch_idx, bits, adrsc);
     for i=0 to SPX_K { // absorb all FORS root values
-    state, schedule, sch_idx, bits = sha512_n  :: absorb_fixed(state, schedule, sch_idx, bits, roots[i*SPX_N : SPX_N]);
+    state, schedule, sch_idx, bits = sha256_n  :: absorb_fixed(state, schedule, sch_idx, bits, roots[i*SPX_N : SPX_N]);
     }
-    schedule, digest               = sha512    :: finalise    (state, schedule, sch_idx, bits, digest);
+    schedule, digest               = sha256    :: finalise    (state, schedule, sch_idx, bits, digest);
 
     () = #unspill(out);
 
@@ -571,7 +570,7 @@ fn __T_k(
 
 /********** PARALLELISED HASHES **********/
 
-// initialise a SHA512 instance from a cached state, and construct and absorb the correct ADRS^c into the state
+// initialise a SHA256 instance from a cached state, and construct and absorb the correct ADRS^c into the state
 fn H_adrs(
     reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
     reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
@@ -587,22 +586,22 @@ fn H_adrs(
     reg u32 index;         // local copy of tree_index, to prevent modifying tree_index
 
     // stack variables
-    stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3;     // ADRS^c for every hash
-    stack u256[PARA_STATE_WORD_SIZE] state_cache; // vectorised cached SHA512 state
-    stack u64 state_word;                         // temporary variable for copying purposes
+    stack u8[22] adrsc0 adrsc1 adrsc2 adrsc3 adrsc4 adrsc5 adrsc6 adrsc7; // ADRS^c for every hash
+    stack u256[PARA_STATE_WORD_SIZE] state_cache;                         // vectorised cached SHA-2 state
+    stack u32 state_word;                                                 // temporary variable for copying purposes
 
     inline int i;
 
-    // extract the SHA512 state from the combined state cache
+    // extract the SHA-2 state from the combined state cache
     for i=0 to PARA_STATE_WORD_SIZE {
-        state_word = sha2_state_caches[:u64 4+i];     // get one word from the state
-        state_vector = #VPBROADCAST_4u64(state_word); // broadcast it to every lane in a 256-bit wide register
+        state_word = sha2_state_caches[:u32 i];       // get one word from the state
+        state_vector = #VPBROADCAST_8u32(state_word); // broadcast it to every lane in a 256-bit wide register
         state_cache[i] = state_vector;                // store the vectorised state word
     }
 
-    // initialise the SHA512 vectorised state
-    bits = SHA512_IN*8; // exactly one block  of input was consumed to get the cached state
-    state, schedule, sch_idx, bits = sha512_parallel::init_cache(state, schedule, sch_idx, bits, state_cache);
+    // initialise the SHA256 vectorised state
+    bits = SHA256_IN*8; // exactly one block  of input was consumed to get the cached state
+    state, schedule, sch_idx, bits = sha256_parallel::init_cache(state, schedule, sch_idx, bits, state_cache);
 
     // compute ARSC^C for the first hash
     adrsc0 = __adrs_compress(adrsc0, adrs);
@@ -614,16 +613,24 @@ fn H_adrs(
         adrsc1[:u32 i] = adrsc0[:u32 i];
         adrsc2[:u32 i] = adrsc0[:u32 i];
         adrsc3[:u32 i] = adrsc0[:u32 i];
+        adrsc4[:u32 i] = adrsc0[:u32 i];
+        adrsc5[:u32 i] = adrsc0[:u32 i];
+        adrsc6[:u32 i] = adrsc0[:u32 i];
+        adrsc7[:u32 i] = adrsc0[:u32 i];
     }
 
     // set tree_index for all ADRS^c instances
     index = tree_index; index += 1; // ADRS already had the correct tree index for adrsc0, so skip setting that
     adrsc1 = __adrsc_set_tree_index(adrsc1, index); index += 1;
     adrsc2 = __adrsc_set_tree_index(adrsc2, index); index += 1;
-    adrsc3 = __adrsc_set_tree_index(adrsc3, index);
+    adrsc3 = __adrsc_set_tree_index(adrsc3, index); index += 1;
+    adrsc4 = __adrsc_set_tree_index(adrsc4, index); index += 1;
+    adrsc5 = __adrsc_set_tree_index(adrsc5, index); index += 1;
+    adrsc6 = __adrsc_set_tree_index(adrsc6, index); index += 1;
+    adrsc7 = __adrsc_set_tree_index(adrsc7, index);
 
     // absorb ADRS^c into the parallelised state
-    state, schedule, sch_idx, bits = sha512_parallel_22::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3);
+    state, schedule, sch_idx, bits = sha256_parallel_22::absorb_fixed(state, schedule, sch_idx, bits, adrsc0, adrsc1, adrsc2, adrsc3, adrsc4, adrsc5, adrsc6, adrsc7);
     
     return state, schedule, sch_idx, bits;
 }
@@ -660,18 +667,22 @@ fn H_children(
 ) -> reg ptr u256[PARA_STATE_WORD_SIZE], reg ptr u256[PARA_ROUNDS_NUM], reg u64, reg u64 // -> state, schedule, sch_idx, bits
 {
     // register variables
-    reg ptr u8[SPX_N] lnode0 lnode1 lnode2 lnode3; // left children
-    reg ptr u8[SPX_N] rnode0 rnode1 rnode2 rnode3; // right children
+    reg ptr u8[SPX_N] lnode0 lnode1 lnode2 lnode3 lnode4 lnode5 lnode6 lnode7; // left children
+    reg ptr u8[SPX_N] rnode0 rnode1 rnode2 rnode3 rnode4 rnode5 rnode6 rnode7; // right children
 
     // get the pointers to all of the left children
     lnode0 = children[(0+0*2) * SPX_N : SPX_N];
     lnode1 = children[(0+1*2) * SPX_N : SPX_N];
     lnode2 = children[(0+2*2) * SPX_N : SPX_N];
     lnode3 = children[(0+3*2) * SPX_N : SPX_N];
+    lnode4 = children[(0+4*2) * SPX_N : SPX_N];
+    lnode5 = children[(0+5*2) * SPX_N : SPX_N];
+    lnode6 = children[(0+6*2) * SPX_N : SPX_N];
+    lnode7 = children[(0+7*2) * SPX_N : SPX_N];
 
     // consume all left children into the parallelised state
     () = #spill(children); // make space in the registers
-    state, schedule, sch_idx, bits = sha512_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, lnode0, lnode1, lnode2, lnode3);
+    state, schedule, sch_idx, bits = sha256_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, lnode0, lnode1, lnode2, lnode3, lnode4, lnode5, lnode6, lnode7);
     () = #unspill(children);
     
     // get the pointers to all of the right children
@@ -679,9 +690,13 @@ fn H_children(
     rnode1 = children[(1+1*2) * SPX_N : SPX_N];
     rnode2 = children[(1+2*2) * SPX_N : SPX_N];
     rnode3 = children[(1+3*2) * SPX_N : SPX_N];
+    rnode4 = children[(1+4*2) * SPX_N : SPX_N];
+    rnode5 = children[(1+5*2) * SPX_N : SPX_N];
+    rnode6 = children[(1+6*2) * SPX_N : SPX_N];
+    rnode7 = children[(1+7*2) * SPX_N : SPX_N];
 
     // consume all right children into the parallelised state
-    state, schedule, sch_idx, bits = sha512_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, rnode0, rnode1, rnode2, rnode3);
+    state, schedule, sch_idx, bits = sha256_parallel_n::absorb_fixed(state, schedule, sch_idx, bits, rnode0, rnode1, rnode2, rnode3, rnode4, rnode5, rnode6, rnode7);
     
     return state, schedule, sch_idx, bits;
 }
@@ -706,7 +721,7 @@ fn __H_children(
     return state, schedule, sch_idx, bits;
 }
 
-// finish the SHA512 computations and write the truncated outputs for every parallel instance
+// finish the SHA256 computations and write the truncated outputs for every parallel instance
 fn H_digests(
     reg ptr u256[PARA_STATE_WORD_SIZE] state, // Intermediate Hash Values (IHVs)
     reg ptr u256[PARA_ROUNDS_NUM] schedule,   // message schedule
@@ -716,11 +731,11 @@ fn H_digests(
 ) -> reg ptr u8[PARA_DEG * SPX_N], reg ptr u256[PARA_ROUNDS_NUM] // -> nodes, schedule // schedule is only returned because it needs to be writable
 {
     // stack variables
-    stack u8[SHA512_OUT] node0 node1 node2 node3;
+    stack u8[SHA256_OUT] node0 node1 node2 node3 node4 node5 node6 node7;
 
     // finalise all digests and write to the output nodes
     () = #spill(nodes); // free up space in the registers
-    schedule, node0, node1, node2, node3 = sha512_parallel::finalise(state, schedule, sch_idx, bits, node0, node1, node2, node3);
+    schedule, node0, node1, node2, node3, node4, node5, node6, node7 = sha256_parallel::finalise(state, schedule, sch_idx, bits, node0, node1, node2, node3, node4, node5, node6, node7);
     () = #unspill(nodes);
     
     // write (and truncate) the nodes to the output array
@@ -728,6 +743,10 @@ fn H_digests(
     nodes[1*SPX_N : SPX_N] = __copy_nbytes(nodes[1*SPX_N : SPX_N], node1[0 : SPX_N]);
     nodes[2*SPX_N : SPX_N] = __copy_nbytes(nodes[2*SPX_N : SPX_N], node2[0 : SPX_N]);
     nodes[3*SPX_N : SPX_N] = __copy_nbytes(nodes[3*SPX_N : SPX_N], node3[0 : SPX_N]);
+    nodes[4*SPX_N : SPX_N] = __copy_nbytes(nodes[4*SPX_N : SPX_N], node4[0 : SPX_N]);
+    nodes[5*SPX_N : SPX_N] = __copy_nbytes(nodes[5*SPX_N : SPX_N], node5[0 : SPX_N]);
+    nodes[6*SPX_N : SPX_N] = __copy_nbytes(nodes[6*SPX_N : SPX_N], node6[0 : SPX_N]);
+    nodes[7*SPX_N : SPX_N] = __copy_nbytes(nodes[7*SPX_N : SPX_N], node7[0 : SPX_N]);
     
     return nodes, schedule;
 }
