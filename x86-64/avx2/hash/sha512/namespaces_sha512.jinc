@@ -20,37 +20,9 @@ namespace sha256_22 {
     require "../sha256/sha256_single/sha256_absorb_fixed.jinc"
 }
 
-namespace sha256_2 {
-    param int INPUT_LENGTH = 2;
-    require "../sha256/sha256_single/sha256_absorb_fixed.jinc"
-}
-
-namespace sha256_mgf1 {
-    param int INPUT_LENGTH = 2*SPX_N + SHA256_OUT + 4;
-    require "../sha256/sha256_single/sha256_absorb_fixed.jinc"
-}
-
 namespace sha256_block {
     param int INPUT_LENGTH = SHA256_IN;
     require "../sha256/sha256_single/sha256_absorb_fixed.jinc"
-}
-
-namespace sha256_digest {
-    param int INPUT_LENGTH = SHA256_OUT;
-    require "../sha256/sha256_single/sha256_absorb_fixed.jinc"
-}
-
-// already provides the namespace 'sha256_parallel' internally
-require "../sha256/sha256_parallel/sha256_parallel.jinc"
-
-namespace sha256_parallel_22 {
-    param int INPUT_LENGTH = 22;
-    require "../sha256/sha256_parallel/sha256_parallel_absorb_fixed.jinc"
-}
-
-namespace sha256_parallel_n {
-    param int INPUT_LENGTH = SPX_N;
-    require "../sha256/sha256_parallel/sha256_parallel_absorb_fixed.jinc"
 }
 
 // already provides the namespace 'sha512' internally
